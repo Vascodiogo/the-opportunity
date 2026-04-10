@@ -1,0 +1,19 @@
+# Environment — never commit secrets
+.env
+
+# Hardhat
+node_modules/
+cache/
+artifacts/
+typechain-types/
+
+# Coverage
+coverage/
+coverage.json
+
+# Gas reporter
+gas-report.txt
+
+# OS
+.DS_Store
+Thumbs.db
