@@ -1,17 +1,13 @@
-// src/App.jsx
-import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { metaMask } from "@wagmi/connectors";
+import { useAccount, useDisconnect } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { shortAddress, ADMIN_ADDRESS } from "./config.js";
 import Dashboard from "./components/Dashboard.jsx";
 
 export default function App() {
   const { address, isConnected } = useAccount();
-  const { connect }    = useConnect();
   const { disconnect } = useDisconnect();
-
   const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
 
-  // ── Not connected ────────────────────────────────────────────────────────
   if (!isConnected) {
     return (
       <div style={{
@@ -43,21 +39,13 @@ export default function App() {
           <p style={{ color: "#94a3b8", marginBottom: 24, fontSize: 14 }}>
             Connect your wallet to manage your subscriptions on Base Sepolia.
           </p>
-          <button
-            className="btn-primary"
-            style={{ width: "100%", padding: "12px 24px", fontSize: 15 }}
-            onClick={() => connect({ connector: metaMask() })}
-          >
-            Connect MetaMask
-          </button>
+          <ConnectButton />
           <p style={{ color: "#334155", fontSize: 12, marginTop: 16 }}>
             Make sure you're on the <strong style={{ color: "#475569" }}>Base Sepolia</strong> network
           </p>
         </div>
 
-        <div style={{
-          display: "flex", gap: 24, fontSize: 12, color: "#334155",
-        }}>
+        <div style={{ display: "flex", gap: 24, fontSize: 12, color: "#334155" }}>
           <span>SubscriptionVault verified ✅</span>
           <span>MerchantRegistry verified ✅</span>
           <span>Base Sepolia</span>
@@ -66,10 +54,8 @@ export default function App() {
     );
   }
 
-  // ── Connected ────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh" }}>
-      {/* Nav */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 24px", height: 58,
@@ -98,24 +84,8 @@ export default function App() {
             }}>Admin</span>
           )}
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "5px 12px", borderRadius: 99,
-            background: "rgba(255,255,255,0.05)",
-            fontSize: 12, color: "#94a3b8", fontFamily: "monospace",
-          }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34d399", display: "inline-block" }} />
-            {shortAddress(address)}
-          </div>
-          <button className="btn-secondary" onClick={() => disconnect()}>
-            Disconnect
-          </button>
-        </div>
+        <ConnectButton />
       </nav>
-
-      {/* Main content */}
       <Dashboard address={address} isAdmin={isAdmin} />
     </div>
   );
