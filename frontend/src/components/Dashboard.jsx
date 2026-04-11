@@ -27,7 +27,7 @@ function StatCard({ label, value, sub, accent }) {
         position: "absolute", top: 0, left: 0, right: 0, height: 2,
         background: accent,
       }} />
-      <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+      <div style={{ fontSize: 11, color: "##94a3b8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
         {label}
       </div>
       <div style={{ fontSize: 26, fontWeight: 700, color: "#f1f5f9", fontFamily: "monospace", letterSpacing: "-0.02em" }}>
@@ -256,7 +256,7 @@ export default function Dashboard({ address, isAdmin }) {
                 </span>
                 <span style={{ color: "#94a3b8" }}>{INTERVAL_NAMES[sub.interval]}</span>
                 <StatusBadge status={sub.status} />
-                <span style={{ color: "#475569", fontSize: 12 }}>
+                <span style={{ color: "##94a3b8", fontSize: 12 }}>
                   {sub.lastPulledAt > 0n
                     ? new Date(Number(sub.lastPulledAt) * 1000).toLocaleDateString()
                     : "Never"}
