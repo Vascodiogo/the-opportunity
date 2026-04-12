@@ -4,10 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network baseSepolia",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network baseMainnet",
+    "verify:sepolia": "hardhat verify --network baseSepolia",
+    "node": "hardhat node",
+    "clean": "hardhat clean",
+    "start": "node scripts/keeper.js",
+    "notifier": "node scripts/notifier.js"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.10",
