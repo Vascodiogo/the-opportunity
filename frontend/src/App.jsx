@@ -1,13 +1,20 @@
+// src/App.jsx
+import { useState } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { shortAddress, ADMIN_ADDRESS } from "./config.js";
 import Dashboard from "./components/Dashboard.jsx";
+import MerchantDashboard from "./components/MerchantDashboard.jsx";
 
 export default function App() {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
 
+  // View switcher — subscriber or merchant
+  const [view, setView] = useState("subscriber");
+
+  // ── Not connected ────────────────────────────────────────────────────────
   if (!isConnected) {
     return (
       <div style={{
@@ -54,8 +61,11 @@ export default function App() {
     );
   }
 
+  // ── Connected ────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh" }}>
+
+      {/* Nav */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 24px", height: 58,
@@ -84,9 +94,44 @@ export default function App() {
             }}>Admin</span>
           )}
         </div>
+
+        {/* View switcher */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6,
+          background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 4 }}>
+          <button
+            onClick={() => setView("subscriber")}
+            style={{
+              background: view === "subscriber" ? "rgba(255,255,255,0.08)" : "none",
+              border: "none", borderRadius: 6, padding: "5px 14px",
+              color: view === "subscriber" ? "#f1f5f9" : "#475569",
+              fontSize: 12, fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            My Subscriptions
+          </button>
+          <button
+            onClick={() => setView("merchant")}
+            style={{
+              background: view === "merchant" ? "rgba(255,255,255,0.08)" : "none",
+              border: "none", borderRadius: 6, padding: "5px 14px",
+              color: view === "merchant" ? "#f1f5f9" : "#475569",
+              fontSize: 12, fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            Merchant Portal
+          </button>
+        </div>
+
         <ConnectButton />
       </nav>
-      <Dashboard address={address} isAdmin={isAdmin} />
+
+      {/* Main content */}
+      {view === "subscriber" && (
+        <Dashboard address={address} isAdmin={isAdmin} />
+      )}
+      {view === "merchant" && (
+        <MerchantDashboard address={address} />
+      )}
     </div>
   );
 }
