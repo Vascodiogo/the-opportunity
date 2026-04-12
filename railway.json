@@ -1,1 +1,1 @@
-{"build":{"builder":"NIXPACKS"},"deploy":{"startCommand":"node scripts/keeper.js","restartPolicyType":"ALWAYS"}}
+{"build":{"builder":"NIXPACKS"},"deploy":{"startCommand":"node scripts/keeper.js","restartPolicyType":"ON_FAILURE","restartPolicyMaxRetries":10}}
