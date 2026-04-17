@@ -12,7 +12,7 @@ import {
 
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http("https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT"),
+  transport: http("https://base-sepolia.g.alchemy.com/v2/Vc2hbwpgkQmd9mCOAQ2uo"),
 });
 
 function StatCard({ label, value, sub, accent }) {
