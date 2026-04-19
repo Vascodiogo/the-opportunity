@@ -4,6 +4,7 @@
   "description": "The Opportunity — Smart Intent Vault. Recurring USDC subscriptions via Safe Smart Accounts on Base.",
   "private": true,
   "scripts": {
+    "start": "node start.js",
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:coverage": "hardhat coverage",
@@ -25,6 +26,7 @@
     "@openzeppelin/contracts": "^5.0.2",
     "@wagmi/connectors": "^8.0.1",
     "ethers": "^6.16.0",
+    "pg": "^8.20.0",
     "viem": "^2.47.10",
     "wagmi": "^3.6.1"
   },
