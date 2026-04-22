@@ -41,6 +41,7 @@ console.log("=".repeat(60));
 
 launch("scripts/keeper.js");
 launch("scripts/notifier.js");
+launch("scripts/api.js");
 
 process.on("SIGINT", () => {
   console.log("\n[LAUNCHER] Shutting down...");

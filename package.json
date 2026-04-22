@@ -26,6 +26,7 @@
     "@openzeppelin/contracts": "^5.0.2",
     "@wagmi/connectors": "^8.0.1",
     "ethers": "^6.16.0",
+    "express": "^5.2.1",
     "pg": "^8.20.0",
     "viem": "^2.47.10",
     "wagmi": "^3.6.1"
