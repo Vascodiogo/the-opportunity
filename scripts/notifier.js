@@ -1,12 +1,13 @@
 // scripts/notifier.js
 // =============================================================================
-//  AuthOnce — Notification Backend v2
+//  AuthOnce — Notification Backend v3
 //
-//  What changed from v1:
-//    - Writes every event to PostgreSQL (subscriptions, payments tables)
-//    - Fires HMAC-signed webhooks to merchant endpoints (not direct emails)
-//    - Email fallback only for merchants with no webhook configured
-//    - AuthOnce never contacts subscribers directly
+//  What changed from v2:
+//    - Switched from WebSocket event listeners to POLLING
+//    - Polls for new events every 30 seconds using getLogs()
+//    - Much more reliable on Alchemy free tier
+//    - Tracks last processed block to avoid duplicate processing
+//    - Auto-reconnects on any RPC failure
 //
 //  Listens to all SubscriptionVault.sol events on Base Sepolia
 // =============================================================================
@@ -16,8 +17,10 @@ const { ethers } = require("ethers");
 const db = require("./db");
 const { dispatchWebhook } = require("./webhook");
 
-const VAULT_ADDRESS = "0x2ED847da7f88231Ac6907196868adF4840A97f49";
-const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL;
+const VAULT_ADDRESS  = "0x2ED847da7f88231Ac6907196868adF4840A97f49";
+const RPC_URL        = process.env.BASE_SEPOLIA_RPC_URL;
+const POLL_INTERVAL  = 30_000; // 30 seconds
+const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
 
 const VAULT_ABI = [
   "event SubscriptionCreated(uint256 indexed id, address indexed owner, address indexed merchant, address safeVault, uint256 amount, uint8 interval, address guardian)",
@@ -40,16 +43,15 @@ function formatUsdc(raw) {
 // Event handlers — each writes to DB then fires webhook
 // -----------------------------------------------------------------------------
 
-async function onSubscriptionCreated(id, owner, merchant, safeVault, amount, interval, guardian, event) {
-  const txHash = event?.log?.transactionHash || null;
-  const blockNumber = event?.log?.blockNumber || null;
+async function onSubscriptionCreated(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, owner, merchant, safeVault, amount, interval, guardian } = parsed.args;
 
   console.log(`\n[EVENT] SubscriptionCreated #${id}`);
   console.log(`  Owner:    ${owner}`);
   console.log(`  Merchant: ${merchant}`);
   console.log(`  Amount:   ${formatUsdc(amount)} USDC / ${INTERVAL_NAME[interval]}`);
 
-  // Write to database
   await db.upsertSubscription({
     id: id.toString(),
     ownerAddress: owner,
@@ -58,12 +60,11 @@ async function onSubscriptionCreated(id, owner, merchant, safeVault, amount, int
     amount: amount.toString(),
     interval: INTERVAL_NAME[interval],
     status: "active",
-    txHash,
-    blockNumber: blockNumber ? Number(blockNumber) : null,
+    txHash: log.transactionHash,
+    blockNumber: Number(log.blockNumber),
     guardianAddress: guardian === ethers.ZeroAddress ? null : guardian,
   });
 
-  // Fire webhook to merchant
   await dispatchWebhook(merchant, "subscription.created", {
     subscription_id: id.toString(),
     vault_address: safeVault,
@@ -72,14 +73,14 @@ async function onSubscriptionCreated(id, owner, merchant, safeVault, amount, int
     amount_usdc: formatUsdc(amount),
     interval: INTERVAL_NAME[interval],
     guardian: guardian === ethers.ZeroAddress ? null : guardian,
-    tx_hash: txHash,
+    tx_hash: log.transactionHash,
     status: "active",
   });
 }
 
-async function onPaymentExecuted(id, amount, merchantReceived, fee, timestamp, event) {
-  const txHash = event?.log?.transactionHash || null;
-  const blockNumber = event?.log?.blockNumber || null;
+async function onPaymentExecuted(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, amount, merchantReceived, fee, timestamp } = parsed.args;
   const date = new Date(Number(timestamp) * 1000).toISOString();
 
   console.log(`\n[EVENT] PaymentExecuted #${id}`);
@@ -87,14 +88,12 @@ async function onPaymentExecuted(id, amount, merchantReceived, fee, timestamp, e
   console.log(`  Merchant: ${formatUsdc(merchantReceived)} USDC`);
   console.log(`  Fee:      ${formatUsdc(fee)} USDC`);
 
-  // Get subscription details for merchant address
   const sub = await db.getSubscription(id.toString());
   if (!sub) {
     console.warn(`[NOTIFIER] No subscription found for id ${id} — skipping`);
     return;
   }
 
-  // Write payment to database
   await db.insertPayment({
     subscriptionId: id.toString(),
     merchantAddress: sub.merchant_address,
@@ -102,16 +101,14 @@ async function onPaymentExecuted(id, amount, merchantReceived, fee, timestamp, e
     amount: amount.toString(),
     merchantReceived: merchantReceived.toString(),
     fee: fee.toString(),
-    txHash,
-    blockNumber: blockNumber ? Number(blockNumber) : null,
+    txHash: log.transactionHash,
+    blockNumber: Number(log.blockNumber),
   });
 
-  // Update lastPulledAt on subscription
   await db.updateSubscriptionStatus(id.toString(), "active", {
     lastPulledAt: new Date(Number(timestamp) * 1000),
   });
 
-  // Fire webhook to merchant
   await dispatchWebhook(sub.merchant_address, "payment.success", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault,
@@ -119,13 +116,15 @@ async function onPaymentExecuted(id, amount, merchantReceived, fee, timestamp, e
     amount_usdc: formatUsdc(amount),
     merchant_received_usdc: formatUsdc(merchantReceived),
     protocol_fee_usdc: formatUsdc(fee),
-    tx_hash: txHash,
-    block_number: blockNumber ? Number(blockNumber) : null,
+    tx_hash: log.transactionHash,
+    block_number: Number(log.blockNumber),
     executed_at: date,
   });
 }
 
-async function onInsufficientFunds(id, required, available, pausedUntil, event) {
+async function onInsufficientFunds(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, required, available, pausedUntil } = parsed.args;
   const gracePeriodEndsAt = new Date(Number(pausedUntil) * 1000).toISOString();
 
   console.log(`\n[EVENT] InsufficientFunds #${id}`);
@@ -136,9 +135,7 @@ async function onInsufficientFunds(id, required, available, pausedUntil, event) 
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
 
-  await db.updateSubscriptionStatus(id.toString(), "paused", {
-    pausedAt: new Date(),
-  });
+  await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
 
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
@@ -151,15 +148,15 @@ async function onInsufficientFunds(id, required, available, pausedUntil, event) 
   });
 }
 
-async function onSubscriptionPaused(id, pausedBy, reason, event) {
+async function onSubscriptionPaused(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, pausedBy } = parsed.args;
   console.log(`\n[EVENT] SubscriptionPaused #${id} by ${pausedBy}`);
 
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
 
-  await db.updateSubscriptionStatus(id.toString(), "paused", {
-    pausedAt: new Date(),
-  });
+  await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
 
   await dispatchWebhook(sub.merchant_address, "subscription.paused", {
     subscription_id: id.toString(),
@@ -170,7 +167,9 @@ async function onSubscriptionPaused(id, pausedBy, reason, event) {
   });
 }
 
-async function onSubscriptionCancelled(id, cancelledBy, event) {
+async function onSubscriptionCancelled(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, cancelledBy } = parsed.args;
   console.log(`\n[EVENT] SubscriptionCancelled #${id} by ${cancelledBy}`);
 
   const sub = await db.getSubscription(id.toString());
@@ -188,7 +187,9 @@ async function onSubscriptionCancelled(id, cancelledBy, event) {
   });
 }
 
-async function onSubscriptionExpired(id, timestamp, event) {
+async function onSubscriptionExpired(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, timestamp } = parsed.args;
   const date = new Date(Number(timestamp) * 1000).toISOString();
   console.log(`\n[EVENT] SubscriptionExpired #${id} at ${date}`);
 
@@ -206,16 +207,16 @@ async function onSubscriptionExpired(id, timestamp, event) {
   });
 }
 
-async function onSubscriptionResumed(id, timestamp, event) {
+async function onSubscriptionResumed(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, timestamp } = parsed.args;
   const date = new Date(Number(timestamp) * 1000).toISOString();
   console.log(`\n[EVENT] SubscriptionResumed #${id} at ${date}`);
 
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
 
-  await db.updateSubscriptionStatus(id.toString(), "active", {
-    pausedAt: null,
-  });
+  await db.updateSubscriptionStatus(id.toString(), "active", { pausedAt: null });
 
   await dispatchWebhook(sub.merchant_address, "subscription.resumed", {
     subscription_id: id.toString(),
@@ -227,38 +228,123 @@ async function onSubscriptionResumed(id, timestamp, event) {
 }
 
 // -----------------------------------------------------------------------------
+// Event topic map
+// -----------------------------------------------------------------------------
+
+const EVENT_HANDLERS = {
+  "SubscriptionCreated":  onSubscriptionCreated,
+  "PaymentExecuted":      onPaymentExecuted,
+  "InsufficientFunds":    onInsufficientFunds,
+  "SubscriptionPaused":   onSubscriptionPaused,
+  "SubscriptionCancelled":onSubscriptionCancelled,
+  "SubscriptionExpired":  onSubscriptionExpired,
+  "SubscriptionResumed":  onSubscriptionResumed,
+};
+
+// -----------------------------------------------------------------------------
+// Polling loop
+// -----------------------------------------------------------------------------
+
+async function pollEvents(provider, iface, topicMap, lastBlock) {
+  try {
+    const currentBlock = await provider.getBlockNumber();
+    const toBlock = currentBlock - BLOCK_LAG;
+
+    if (toBlock <= lastBlock) {
+      return lastBlock; // Nothing new
+    }
+
+    // Fetch all logs from our vault contract
+    const logs = await provider.getLogs({
+      address: VAULT_ADDRESS,
+      fromBlock: lastBlock + 1,
+      toBlock,
+    });
+
+    if (logs.length > 0) {
+      console.log(`[NOTIFIER] Processing ${logs.length} event(s) from blocks ${lastBlock + 1}–${toBlock}`);
+    }
+
+    for (const log of logs) {
+      const topic = log.topics[0];
+      const eventName = topicMap[topic];
+      if (!eventName) continue;
+
+      const handler = EVENT_HANDLERS[eventName];
+      if (!handler) continue;
+
+      try {
+        await handler(log, iface);
+      } catch (err) {
+        console.error(`[NOTIFIER] Error processing ${eventName}:`, err.message);
+      }
+    }
+
+    return toBlock;
+  } catch (err) {
+    console.error(`[NOTIFIER] Poll error:`, err.message);
+    return lastBlock; // Don't advance on error
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Main
 // -----------------------------------------------------------------------------
 
 async function main() {
   if (!RPC_URL) throw new Error("BASE_SEPOLIA_RPC_URL not set in .env");
 
-  // Initialise database schema
   await db.initSchema();
 
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const vault = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, provider);
-
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Notification Backend v2");
+  console.log("  AuthOnce — Notification Backend v3");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  Network:  Base Sepolia`);
+  console.log(`  Mode:     Polling every ${POLL_INTERVAL / 1000}s`);
   console.log(`  DB:       ${process.env.DATABASE_URL ? "PostgreSQL connected" : "NO DATABASE_URL SET"}`);
   console.log("=".repeat(60));
-  console.log("\n  Listening for events...\n");
 
-  vault.on("SubscriptionCreated",  onSubscriptionCreated);
-  vault.on("PaymentExecuted",      onPaymentExecuted);
-  vault.on("InsufficientFunds",    onInsufficientFunds);
-  vault.on("SubscriptionPaused",   onSubscriptionPaused);
-  vault.on("SubscriptionCancelled",onSubscriptionCancelled);
-  vault.on("SubscriptionExpired",  onSubscriptionExpired);
-  vault.on("SubscriptionResumed",  onSubscriptionResumed);
+  // Build topic → event name map
+  const iface = new ethers.Interface(VAULT_ABI);
+  const topicMap = {};
+  for (const eventName of Object.keys(EVENT_HANDLERS)) {
+    const topic = iface.getEvent(eventName).topicHash;
+    topicMap[topic] = eventName;
+  }
+
+  // Start from current block
+  let provider = new ethers.JsonRpcProvider(RPC_URL);
+  let lastBlock = 0;
+
+  try {
+    lastBlock = (await provider.getBlockNumber()) - BLOCK_LAG;
+    console.log(`\n  Starting from block ${lastBlock}\n`);
+  } catch (err) {
+    console.error("[NOTIFIER] Failed to get block number:", err.message);
+    console.log("  Retrying in 10s...");
+    await new Promise(r => setTimeout(r, 10_000));
+  }
+
+  console.log("  Listening for events...\n");
+
+  // Poll loop
+  const poll = async () => {
+    try {
+      // Recreate provider on each poll for reliability
+      provider = new ethers.JsonRpcProvider(RPC_URL);
+      lastBlock = await pollEvents(provider, iface, topicMap, lastBlock);
+    } catch (err) {
+      console.error("[NOTIFIER] Unexpected error:", err.message);
+    }
+    setTimeout(poll, POLL_INTERVAL);
+  };
+
+  // Start polling
+  await poll();
 
   process.on("SIGINT", () => {
     console.log("\n  Shutting down notifier...");
-    vault.removeAllListeners();
     db.pool.end();
     process.exit(0);
   });
