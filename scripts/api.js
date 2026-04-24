@@ -325,7 +325,35 @@ app.get("/api/merchants/:address/payments/export", requireMerchantAuth, async (r
     if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
 
     const limit = Math.min(parseInt(req.query.limit) || 1000, 5000);
-    const payments = await db.getPaymentsByMerchant(address, limit);
+    const year = req.query.year ? parseInt(req.query.year) : null;
+    const month = req.query.month || null;
+
+    let payments;
+    if (year && month) {
+      const [y, m] = month.split("-");
+      const result = await db.query(
+        `SELECT p.*, s.owner_address as subscriber_vault FROM payments p
+         JOIN subscriptions s ON p.subscription_id = s.id
+         WHERE p.merchant_address = $1
+           AND EXTRACT(YEAR FROM p.executed_at) = $2
+           AND EXTRACT(MONTH FROM p.executed_at) = $3
+         ORDER BY p.executed_at DESC LIMIT $4`,
+        [address, parseInt(y), parseInt(m), limit]
+      );
+      payments = result.rows;
+    } else if (year) {
+      const result = await db.query(
+        `SELECT p.*, s.owner_address as subscriber_vault FROM payments p
+         JOIN subscriptions s ON p.subscription_id = s.id
+         WHERE p.merchant_address = $1
+           AND EXTRACT(YEAR FROM p.executed_at) = $2
+         ORDER BY p.executed_at DESC LIMIT $3`,
+        [address, year, limit]
+      );
+      payments = result.rows;
+    } else {
+      payments = await db.getPaymentsByMerchant(address, limit);
+    }
 
     // Build CSV
     const rows = [
@@ -422,6 +450,164 @@ app.get("/api/merchants/:address/summary", requireMerchantAuth, async (req, res)
   } catch (err) {
     console.error("[API] Summary error:", err.message);
     res.status(500).json({ error: "server_error", message: "Failed to fetch summary" });
+  }
+});
+
+
+// =============================================================================
+// ADMIN ENDPOINTS — AuthOnce internal use only
+// Protected by ADMIN_SECRET environment variable
+// =============================================================================
+
+function requireAdminAuth(req, res, next) {
+  const secret = req.headers["x-admin-secret"];
+  if (!secret || secret !== process.env.ADMIN_SECRET) {
+    return res.status(401).json({ error: "unauthorized", message: "Admin access required" });
+  }
+  next();
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/admin/fees/summary
+// AuthOnce protocol fee summary for tax reporting
+// Query: ?year=2026 or ?month=2026-04
+// -----------------------------------------------------------------------------
+app.get("/api/admin/fees/summary", requireAdminAuth, async (req, res) => {
+  try {
+    const year  = req.query.year  ? parseInt(req.query.year)  : null;
+    const month = req.query.month || null;
+
+    let whereClause = "";
+    let params = [];
+
+    if (month) {
+      const [y, m] = month.split("-");
+      whereClause = "WHERE EXTRACT(YEAR FROM executed_at) = $1 AND EXTRACT(MONTH FROM executed_at) = $2";
+      params = [parseInt(y), parseInt(m)];
+    } else if (year) {
+      whereClause = "WHERE EXTRACT(YEAR FROM executed_at) = $1";
+      params = [year];
+    }
+
+    const result = await db.query(`
+      SELECT
+        COUNT(*)::int                     AS payment_count,
+        SUM(fee::numeric)                 AS total_fees_raw,
+        AVG(eur_rate::numeric)            AS avg_eur_rate,
+        SUM(
+          CASE WHEN eur_rate IS NOT NULL
+          THEN (fee::numeric / 1000000) * eur_rate::numeric
+          ELSE NULL END
+        )                                 AS total_fees_eur,
+        MIN(executed_at)                  AS first_payment,
+        MAX(executed_at)                  AS last_payment
+      FROM payments
+      ${whereClause}
+    `, params);
+
+    const row = result.rows[0];
+
+    // Per merchant breakdown
+    const breakdown = await db.query(`
+      SELECT
+        merchant_address,
+        COUNT(*)::int           AS payment_count,
+        SUM(fee::numeric)       AS fees_raw
+      FROM payments
+      ${whereClause}
+      GROUP BY merchant_address
+      ORDER BY fees_raw DESC
+    `, params);
+
+    res.json({
+      period: month || (year ? year.toString() : "all time"),
+      protocol_fees: {
+        payment_count: row.payment_count || 0,
+        total_fees_usdc: row.total_fees_raw
+          ? (parseFloat(row.total_fees_raw) / 1000000).toFixed(6)
+          : "0",
+        total_fees_eur: row.total_fees_eur
+          ? parseFloat(row.total_fees_eur).toFixed(2)
+          : null,
+        avg_eur_rate: row.avg_eur_rate
+          ? parseFloat(row.avg_eur_rate).toFixed(4)
+          : null,
+        first_payment: row.first_payment,
+        last_payment: row.last_payment,
+      },
+      per_merchant: breakdown.rows.map(r => ({
+        merchant_address: r.merchant_address,
+        payment_count: r.payment_count,
+        fees_usdc: (parseFloat(r.fees_raw) / 1000000).toFixed(6),
+      }))
+    });
+  } catch (err) {
+    console.error("[API] Admin fees summary error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/admin/fees/export
+// Download annual fee CSV for Portuguese tax authority (AT)
+// Query: ?year=2026
+// -----------------------------------------------------------------------------
+app.get("/api/admin/fees/export", requireAdminAuth, async (req, res) => {
+  try {
+    const year = req.query.year ? parseInt(req.query.year) : new Date().getFullYear();
+
+    const result = await db.query(`
+      SELECT
+        p.id,
+        p.subscription_id,
+        p.merchant_address,
+        p.amount,
+        p.merchant_received,
+        p.fee,
+        p.eur_rate,
+        p.merchant_received_eur,
+        p.tx_hash,
+        p.executed_at
+      FROM payments p
+      WHERE EXTRACT(YEAR FROM p.executed_at) = $1
+      ORDER BY p.executed_at ASC
+    `, [year]);
+
+    const rows = [
+      ["Payment ID", "Subscription ID", "Merchant Address",
+       "Total Amount USDC", "Merchant Received USDC", "Protocol Fee USDC",
+       "EUR Rate", "Protocol Fee EUR", "Transaction Hash", "Date"].join(",")
+    ];
+
+    for (const p of result.rows) {
+      const feeUsdc = (parseFloat(p.fee) / 1000000).toFixed(6);
+      const feeEur  = p.eur_rate
+        ? (parseFloat(feeUsdc) * parseFloat(p.eur_rate)).toFixed(2)
+        : "";
+
+      rows.push([
+        p.id,
+        p.subscription_id,
+        p.merchant_address,
+        (parseFloat(p.amount) / 1000000).toFixed(6),
+        (parseFloat(p.merchant_received) / 1000000).toFixed(6),
+        feeUsdc,
+        p.eur_rate || "",
+        feeEur,
+        p.tx_hash,
+        new Date(p.executed_at).toISOString(),
+      ].join(","));
+    }
+
+    const csv = rows.join("\n");
+    const filename = `authonce-fees-${year}.csv`;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error("[API] Admin fees export error:", err.message);
+    res.status(500).json({ error: "server_error" });
   }
 });
 
