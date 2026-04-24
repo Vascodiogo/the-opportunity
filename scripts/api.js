@@ -314,6 +314,117 @@ app.post("/api/webhooks/test", requireMerchantAuth, async (req, res) => {
   }
 });
 
+
+// -----------------------------------------------------------------------------
+// GET /api/merchants/:address/payments/export
+// Export payment history as CSV for accountant/tax purposes
+// -----------------------------------------------------------------------------
+app.get("/api/merchants/:address/payments/export", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+
+    const limit = Math.min(parseInt(req.query.limit) || 1000, 5000);
+    const payments = await db.getPaymentsByMerchant(address, limit);
+
+    // Build CSV
+    const rows = [
+      ["Payment ID", "Subscription ID", "Subscriber Vault", "Amount USDC",
+       "Merchant Received USDC", "Merchant Received EUR", "EUR Rate",
+       "Protocol Fee USDC", "Transaction Hash", "Date"].join(",")
+    ];
+
+    for (const p of payments) {
+      rows.push([
+        p.id,
+        p.subscription_id,
+        p.subscriber_vault || p.owner_address,
+        (BigInt(p.amount) / BigInt(10 ** 6)).toString(),
+        (BigInt(p.merchant_received) / BigInt(10 ** 6)).toString(),
+        p.merchant_received_eur || "",
+        p.eur_rate || "",
+        (BigInt(p.fee) / BigInt(10 ** 6)).toString(),
+        p.tx_hash,
+        new Date(p.executed_at).toISOString(),
+      ].join(","));
+    }
+
+    const csv = rows.join("\n");
+    const filename = `authonce-payments-${address.substring(0,8)}-${new Date().toISOString().split("T")[0]}.csv`;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error("[API] CSV export error:", err.message);
+    res.status(500).json({ error: "server_error", message: "Failed to export payments" });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/merchants/:address/summary
+// Monthly revenue summary for accounting
+// Query param: ?month=2026-04 (defaults to current month)
+// -----------------------------------------------------------------------------
+app.get("/api/merchants/:address/summary", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+
+    const month = req.query.month || new Date().toISOString().substring(0, 7);
+    const [year, mon] = month.split("-");
+
+    const result = await db.query(`
+      SELECT
+        COUNT(*)::int                                    AS payment_count,
+        SUM(merchant_received::numeric)                  AS total_received_raw,
+        SUM(fee::numeric)                                AS total_fees_raw,
+        AVG(eur_rate::numeric)                           AS avg_eur_rate,
+        SUM(merchant_received_eur::numeric)              AS total_received_eur,
+        MIN(executed_at)                                 AS first_payment,
+        MAX(executed_at)                                 AS last_payment
+      FROM payments
+      WHERE merchant_address = $1
+        AND EXTRACT(YEAR  FROM executed_at) = $2
+        AND EXTRACT(MONTH FROM executed_at) = $3
+    `, [address, parseInt(year), parseInt(mon)]);
+
+    const row = result.rows[0];
+    const USDC_DECIMALS = BigInt(10 ** 6);
+
+    const totalReceivedUsdc = row.total_received_raw
+      ? (BigInt(Math.round(parseFloat(row.total_received_raw))) / USDC_DECIMALS).toString()
+      : "0";
+    const totalFeesUsdc = row.total_fees_raw
+      ? (BigInt(Math.round(parseFloat(row.total_fees_raw))) / USDC_DECIMALS).toString()
+      : "0";
+
+    // Active subscriptions count
+    const activeSubs = await db.query(
+      "SELECT COUNT(*)::int AS count FROM subscriptions WHERE merchant_address = $1 AND status = $2",
+      [address, "active"]
+    );
+
+    res.json({
+      merchant_address: address,
+      month,
+      summary: {
+        payment_count: row.payment_count || 0,
+        total_received_usdc: totalReceivedUsdc,
+        total_received_eur: row.total_received_eur ? parseFloat(row.total_received_eur).toFixed(2) : null,
+        avg_eur_rate: row.avg_eur_rate ? parseFloat(row.avg_eur_rate).toFixed(4) : null,
+        total_protocol_fees_usdc: totalFeesUsdc,
+        active_subscribers: activeSubs.rows[0].count,
+        first_payment: row.first_payment,
+        last_payment: row.last_payment,
+      }
+    });
+  } catch (err) {
+    console.error("[API] Summary error:", err.message);
+    res.status(500).json({ error: "server_error", message: "Failed to fetch summary" });
+  }
+});
+
 // -----------------------------------------------------------------------------
 // 404 handler
 // -----------------------------------------------------------------------------

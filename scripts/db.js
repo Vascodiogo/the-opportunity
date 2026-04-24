@@ -124,18 +124,23 @@ async function initSchema() {
   // Payments — indexed from PaymentExecuted events
   await query(`
     CREATE TABLE IF NOT EXISTS payments (
-      id                  SERIAL PRIMARY KEY,
-      subscription_id     BIGINT NOT NULL REFERENCES subscriptions(id),
-      merchant_address    TEXT NOT NULL,
-      owner_address       TEXT NOT NULL,
-      amount              TEXT NOT NULL,
-      merchant_received   TEXT NOT NULL,
-      fee                 TEXT NOT NULL,
-      tx_hash             TEXT NOT NULL UNIQUE,
-      block_number        BIGINT,
-      executed_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      id                    SERIAL PRIMARY KEY,
+      subscription_id       BIGINT NOT NULL REFERENCES subscriptions(id),
+      merchant_address      TEXT NOT NULL,
+      owner_address         TEXT NOT NULL,
+      amount                TEXT NOT NULL,
+      merchant_received     TEXT NOT NULL,
+      fee                   TEXT NOT NULL,
+      tx_hash               TEXT NOT NULL UNIQUE,
+      block_number          BIGINT,
+      eur_rate              TEXT,
+      merchant_received_eur TEXT,
+      executed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Add EUR columns to existing payments table if upgrading
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS eur_rate TEXT`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS merchant_received_eur TEXT`);
 
   // Webhook delivery log
   await query(`
@@ -226,17 +231,20 @@ async function getSubscriptionsByMerchant(merchantAddress) {
 async function insertPayment(data) {
   const {
     subscriptionId, merchantAddress, ownerAddress,
-    amount, merchantReceived, fee, txHash, blockNumber
+    amount, merchantReceived, fee, txHash, blockNumber,
+    eurRate, merchantReceivedEur
   } = data;
 
   await query(`
     INSERT INTO payments
       (subscription_id, merchant_address, owner_address, amount,
-       merchant_received, fee, tx_hash, block_number, executed_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+       merchant_received, fee, tx_hash, block_number,
+       eur_rate, merchant_received_eur, executed_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
     ON CONFLICT (tx_hash) DO NOTHING
   `, [subscriptionId, merchantAddress, ownerAddress,
-      amount, merchantReceived, fee, txHash, blockNumber]);
+      amount, merchantReceived, fee, txHash, blockNumber,
+      eurRate || null, merchantReceivedEur || null]);
 }
 
 async function getPaymentsByMerchant(merchantAddress, limit = 50) {

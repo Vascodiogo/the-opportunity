@@ -35,6 +35,19 @@ const VAULT_ABI = [
 const INTERVAL_NAME = ["weekly", "monthly", "yearly"];
 const USDC_DECIMALS = 6n;
 
+
+// Fetch EUR/USD rate from CoinGecko at time of payment
+async function fetchEurRate() {
+  try {
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=eur");
+    const data = await res.json();
+    return data?.["usd-coin"]?.eur || null;
+  } catch (err) {
+    console.warn("[NOTIFIER] Could not fetch EUR rate:", err.message);
+    return null;
+  }
+}
+
 function formatUsdc(raw) {
   return (BigInt(raw.toString()) / BigInt(10 ** Number(USDC_DECIMALS))).toString();
 }
@@ -94,6 +107,11 @@ async function onPaymentExecuted(log, iface) {
     return;
   }
 
+  const eurRate = await fetchEurRate();
+  const merchantReceivedUsdc = parseFloat(formatUsdc(merchantReceived));
+  const merchantReceivedEur = eurRate ? (merchantReceivedUsdc * eurRate).toFixed(2) : null;
+  if (eurRate) console.log(`  EUR rate: ${eurRate} → merchant received €${merchantReceivedEur}`);
+
   await db.insertPayment({
     subscriptionId: id.toString(),
     merchantAddress: sub.merchant_address,
@@ -103,6 +121,8 @@ async function onPaymentExecuted(log, iface) {
     fee: fee.toString(),
     txHash: log.transactionHash,
     blockNumber: Number(log.blockNumber),
+    eurRate: eurRate ? eurRate.toString() : null,
+    merchantReceivedEur,
   });
 
   await db.updateSubscriptionStatus(id.toString(), "active", {
@@ -115,6 +135,8 @@ async function onPaymentExecuted(log, iface) {
     merchant_address: sub.merchant_address,
     amount_usdc: formatUsdc(amount),
     merchant_received_usdc: formatUsdc(merchantReceived),
+    merchant_received_eur: merchantReceivedEur,
+    eur_rate: eurRate,
     protocol_fee_usdc: formatUsdc(fee),
     tx_hash: log.transactionHash,
     block_number: Number(log.blockNumber),
