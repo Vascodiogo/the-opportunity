@@ -31,7 +31,7 @@ const { ethers } = require("ethers");
 // Config — from CLAUDE.md §2
 // -----------------------------------------------------------------------------
 
-const VAULT_ADDRESS    = "0x2ED847da7f88231Ac6907196868adF4840A97f49";
+const VAULT_ADDRESS    = "0x772c7ef7847f375FB239087fd011a61e3429ba9d";
 const RPC_URL          = process.env.BASE_SEPOLIA_RPC_URL;
 const KEEPER_PRIVKEY   = process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS  = 60_000; // Check every 60 seconds

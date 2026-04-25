@@ -17,7 +17,7 @@ const { ethers } = require("ethers");
 const db = require("./db");
 const { dispatchWebhook } = require("./webhook");
 
-const VAULT_ADDRESS  = "0x2ED847da7f88231Ac6907196868adF4840A97f49";
+const VAULT_ADDRESS  = "0x772c7ef7847f375FB239087fd011a61e3429ba9d";
 const RPC_URL        = process.env.BASE_SEPOLIA_RPC_URL;
 const POLL_INTERVAL  = 30_000; // 30 seconds
 const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
