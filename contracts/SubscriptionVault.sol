@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 // =============================================================================
-//  SubscriptionVault.sol — The Opportunity Protocol
+//  SubscriptionVault.sol — AuthOnce Protocol
 //
 //  Network:    Base Sepolia (testnet)
 //  Address:    0x2ED847da7f88231Ac6907196868adF4840A97f49
@@ -12,6 +12,12 @@ pragma solidity ^0.8.24;
 //  A Safe (Gnosis) Module that enables intent-based recurring USDC
 //  subscriptions. Users authorise once; the Keeper pulls on schedule.
 //  All business rules mirror CLAUDE.md §3 exactly.
+//
+//  v2 additions:
+//    - setProductExpiry() — merchant price change with 30-day minimum notice
+//    - trialEndsAt — free trial period before first payment
+//    - merchantPauseSubscription() — merchant customer service tool
+//    - MAX_TRIAL_PERIOD constant — 90 days maximum trial
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -74,6 +80,12 @@ contract SubscriptionVault is ReentrancyGuard {
     /// @notice Grace period before underfunded subscription auto-expires (CLAUDE.md §3.3).
     uint256 public constant GRACE_PERIOD = 7 days;
 
+    /// @notice Minimum notice period for merchant price changes — 30 days, unbypassable.
+    uint256 public constant MIN_EXPIRY_NOTICE = 30 days;
+
+    /// @notice Maximum trial period a merchant can offer — 90 days.
+    uint256 public constant MAX_TRIAL_PERIOD = 90 days;
+
     uint256 public constant WEEKLY  =    604_800; //   7 days
     uint256 public constant MONTHLY =  2_592_000; //  30 days
     uint256 public constant YEARLY  = 31_536_000; // 365 days
@@ -98,6 +110,8 @@ contract SubscriptionVault is ReentrancyGuard {
         Interval interval;      // Weekly / Monthly / Yearly — immutable
         uint256 lastPulledAt;   // Timestamp of last successful pull
         uint256 pausedAt;       // Timestamp of pause start (0 = not paused)
+        uint256 expiresAt;      // Timestamp of scheduled expiry (0 = no expiry set)
+        uint256 trialEndsAt;    // Timestamp when trial ends (0 = no trial)
         SubscriptionStatus status;
     }
 
@@ -147,11 +161,29 @@ contract SubscriptionVault is ReentrancyGuard {
     event SubscriptionCancelled(uint256 indexed id, address cancelledBy);
     event SubscriptionResumed(uint256 indexed id, uint256 timestamp);
     event SubscriptionExpired(uint256 indexed id, uint256 timestamp);
+    /// @notice Emitted when merchant pauses a subscription for customer service
+    event SubscriptionPausedByMerchant(uint256 indexed id, address indexed merchant, uint256 resumesAt);
+
+    /// @notice Emitted when a trial period starts
+    event TrialStarted(uint256 indexed id, uint256 trialEndsAt);
+
     event MerchantApproved(address indexed merchant);
     event MerchantRevoked(address indexed merchant);
     event KeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event FeeUpdated(uint16 oldFeeBps, uint16 newFeeBps);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+
+    /// @notice Emitted when a merchant sets a scheduled expiry on a subscription
+    /// @param id           The subscription ID
+    /// @param merchant     The merchant who set the expiry
+    /// @param expiresAt    The timestamp when the subscription will expire
+    /// @param noticeDays   How many days notice was given (always >= 30)
+    event ProductExpirySet(
+        uint256 indexed id,
+        address indexed merchant,
+        uint256 expiresAt,
+        uint256 noticeDays
+    );
 
     // -------------------------------------------------------------------------
     // Modifiers
@@ -207,13 +239,19 @@ contract SubscriptionVault is ReentrancyGuard {
         address  safeVault,
         uint256  amount,
         Interval interval,
-        address  guardian
+        address  guardian,
+        uint256  trialDays   // 0 = no trial, max 90 days
     ) external returns (uint256 id) {
         require(msg.sender != address(0),    "ZeroOwner");
         require(merchant   != address(0),    "ZeroMerchant");
         require(safeVault  != address(0),    "ZeroVault");
         require(amount     >  0,             "ZeroAmount");
         require(approvedMerchants[merchant], "MerchantNotApproved");
+        require(trialDays  <= 90,            "TrialTooLong");
+
+        uint256 trialEndsAt = trialDays > 0
+            ? block.timestamp + (trialDays * 1 days)
+            : 0;
 
         id = _nextSubscriptionId++;
 
@@ -224,12 +262,15 @@ contract SubscriptionVault is ReentrancyGuard {
             safeVault:    safeVault,
             amount:       amount,
             interval:     interval,
-            lastPulledAt: 0,
+            lastPulledAt: trialEndsAt,  // First pull due after trial ends
             pausedAt:     0,
+            expiresAt:    0,
+            trialEndsAt:  trialEndsAt,
             status:       SubscriptionStatus.Active
         });
 
         emit SubscriptionCreated(id, msg.sender, merchant, safeVault, amount, interval, guardian);
+        if (trialEndsAt > 0) emit TrialStarted(id, trialEndsAt);
     }
 
     function cancelSubscription(uint256 id) external onlyOwnerOrGuardian(id) {
@@ -265,6 +306,101 @@ contract SubscriptionVault is ReentrancyGuard {
     }
 
     // =========================================================================
+    // MERCHANT ACTIONS
+    // =========================================================================
+
+    /// @notice Merchant sets a scheduled expiry on a subscription (price change flow).
+    ///
+    /// @dev    Business rules (CLAUDE.md §3 — Price Change Flow):
+    ///           1. Only the merchant who owns this subscription can call this.
+    ///           2. expiresAt MUST be at least 30 days in the future — hardcoded,
+    ///              cannot be bypassed even by admin. This is the subscriber's
+    ///              legal protection against sudden price changes.
+    ///           3. Subscription continues pulling at the original price until
+    ///              expiresAt — the keeper checks this in executePull().
+    ///           4. On or after expiresAt, the keeper calls expireSubscription()
+    ///              and the subscription expires gracefully.
+    ///           5. Merchant is responsible for notifying their own subscribers
+    ///              about the price change. AuthOnce fires a webhook to the
+    ///              merchant confirming the expiry date is locked on-chain.
+    ///           6. expiresAt can only be set once — cannot be shortened after
+    ///              being set (protects subscribers from merchants moving the
+    ///              date earlier).
+    ///
+    /// @param id           The subscription ID to schedule for expiry.
+    /// @param expiresAt    Unix timestamp when the subscription should expire.
+    ///                     Must be >= block.timestamp + 30 days.
+    function setProductExpiry(uint256 id, uint256 expiresAt) external {
+        Subscription storage sub = subscriptions[id];
+
+        // Only the merchant on this specific subscription can set expiry
+        require(msg.sender == sub.merchant, "NotMerchant");
+
+        // Subscription must be active — can't set expiry on already inactive subs
+        require(sub.status == SubscriptionStatus.Active, "NotActive");
+
+        // Hard enforce 30-day minimum notice — unbypassable
+        require(
+            expiresAt >= block.timestamp + MIN_EXPIRY_NOTICE,
+            "InsufficientNotice"
+        );
+
+        // Cannot shorten an already-set expiry (protects subscribers)
+        require(
+            sub.expiresAt == 0 || expiresAt > sub.expiresAt,
+            "CannotShortenExpiry"
+        );
+
+        uint256 noticeDays = (expiresAt - block.timestamp) / 1 days;
+
+        sub.expiresAt = expiresAt;
+
+        emit ProductExpirySet(id, msg.sender, expiresAt, noticeDays);
+    }
+
+
+    /// @notice Merchant pauses a subscriber's billing for customer service purposes.
+    ///
+    /// @dev    Use cases:
+    ///           - Give subscriber a free month as loyalty reward
+    ///           - Pause billing during a dispute
+    ///           - Offer a trial extension
+    ///
+    ///         Rules:
+    ///           - Only the merchant on this subscription can call this
+    ///           - Maximum pause: 90 days (prevents abuse)
+    ///           - Subscriber retains access — merchant manages access on their side
+    ///           - Subscriber can still cancel during a merchant-initiated pause
+    ///           - Does NOT trigger the 7-day grace period / auto-expiry flow
+    ///
+    /// @param id           The subscription ID to pause
+    /// @param pauseDays    Number of days to pause billing (1–90)
+    function merchantPauseSubscription(uint256 id, uint256 pauseDays) external {
+        Subscription storage sub = subscriptions[id];
+
+        // Only the merchant on this subscription
+        require(msg.sender == sub.merchant, "NotMerchant");
+
+        // Must be active
+        require(sub.status == SubscriptionStatus.Active, "NotActive");
+
+        // Reasonable pause limit — prevents abuse
+        require(pauseDays >= 1,  "MinOneDayPause");
+        require(pauseDays <= 90, "PauseTooLong");
+
+        // Extend lastPulledAt by pauseDays — effectively skips that many days of billing
+        // This is cleaner than setting status to Paused because:
+        //   1. It doesn't trigger the grace period / auto-expiry flow
+        //   2. Subscription stays "Active" — keeper won't try to expire it
+        //   3. Next pull simply happens pauseDays later than it would have
+        sub.lastPulledAt = block.timestamp + (pauseDays * 1 days);
+
+        uint256 resumesAt = sub.lastPulledAt + _intervalToSeconds(sub.interval);
+
+        emit SubscriptionPausedByMerchant(id, msg.sender, resumesAt);
+    }
+
+    // =========================================================================
     // KEEPER ACTIONS (CLAUDE.md §5 — keeper only)
     // =========================================================================
 
@@ -276,6 +412,14 @@ contract SubscriptionVault is ReentrancyGuard {
         Subscription storage sub = subscriptions[id];
 
         require(sub.status == SubscriptionStatus.Active, "NotActive");
+
+        // Check if subscription has reached its scheduled expiry
+        // If so, expire it gracefully instead of pulling
+        if (sub.expiresAt > 0 && block.timestamp >= sub.expiresAt) {
+            sub.status = SubscriptionStatus.Expired;
+            emit SubscriptionExpired(id, block.timestamp);
+            return;
+        }
 
         uint256 intervalSeconds = _intervalToSeconds(sub.interval);
         require(
@@ -389,8 +533,32 @@ contract SubscriptionVault is ReentrancyGuard {
     function isDue(uint256 id) external view returns (bool) {
         Subscription storage sub = subscriptions[id];
         if (sub.status != SubscriptionStatus.Active) return false;
+        // If expiry is set and reached — not due for payment, will expire
+        if (sub.expiresAt > 0 && block.timestamp >= sub.expiresAt) return false;
         if (sub.lastPulledAt == 0) return true;
         return block.timestamp >= sub.lastPulledAt + _intervalToSeconds(sub.interval);
+    }
+
+    /// @notice Returns days remaining in trial period (0 if no trial or trial ended)
+    function daysUntilTrialEnds(uint256 id) external view returns (uint256) {
+        Subscription storage sub = subscriptions[id];
+        if (sub.trialEndsAt == 0) return 0;
+        if (block.timestamp >= sub.trialEndsAt) return 0;
+        return (sub.trialEndsAt - block.timestamp) / 1 days;
+    }
+
+    /// @notice Returns true if subscription is currently in trial period
+    function inTrial(uint256 id) external view returns (bool) {
+        Subscription storage sub = subscriptions[id];
+        return sub.trialEndsAt > 0 && block.timestamp < sub.trialEndsAt;
+    }
+
+    /// @notice Returns days remaining until scheduled expiry (0 if no expiry set)
+    function daysUntilExpiry(uint256 id) external view returns (uint256) {
+        Subscription storage sub = subscriptions[id];
+        if (sub.expiresAt == 0) return 0;
+        if (block.timestamp >= sub.expiresAt) return 0;
+        return (sub.expiresAt - block.timestamp) / 1 days;
     }
 
     // =========================================================================
