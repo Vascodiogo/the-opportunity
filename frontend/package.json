@@ -4,24 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "compile": "hardhat compile",
-    "test": "hardhat test",
-    "test:coverage": "hardhat coverage",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network baseSepolia",
-    "deploy:mainnet": "hardhat run scripts/deploy.js --network baseMainnet",
-    "verify:sepolia": "hardhat verify --network baseSepolia",
-    "node": "hardhat node",
-    "clean": "hardhat clean",
-    "start": "node scripts/keeper.js",
-    "notifier": "node scripts/notifier.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
+    "@privy-io/react-auth": "^3.22.2",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.98.0",
     "@wagmi/connectors": "^8.0.1",
     "ethers": "^6.16.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-router-dom": "^7.14.2",
     "viem": "^2.47.12",
     "wagmi": "^2.19.5"
   },
