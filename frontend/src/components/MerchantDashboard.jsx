@@ -1,5 +1,6 @@
 // src/components/MerchantDashboard.jsx
 import { useState, useEffect, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
@@ -13,7 +14,7 @@ const client = createPublicClient({
   transport: http("https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT"),
 });
 
-const BASE_URL = "https://app.theopportunity.xyz/pay";
+const BASE_URL = "https://app.authonce.io/pay";
 
 function StatCard({ label, value, sub, accent }) {
   return (
@@ -171,7 +172,7 @@ export default function MerchantDashboard({ address }) {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [copied, setCopied] = useState(null);
-
+  const [qrProduct, setQrProduct] = useState(null);
   const loadProducts = useCallback(() => setProducts(JSON.parse(localStorage.getItem(`products_${address}`) || "[]")), [address]);
   const loadWebhooks = useCallback(() => setWebhooks(JSON.parse(localStorage.getItem(`webhooks_${address}`) || "[]")), [address]);
 
@@ -301,6 +302,10 @@ export default function MerchantDashboard({ address }) {
                       style={{ background: copied === p.id ? "rgba(52,211,153,0.12)" : "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: copied === p.id ? "var(--green)" : "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
                       {copied === p.id ? "Copied!" : "Copy Link"}
                     </button>
+                    <button onClick={() => setQrProduct(p)}
+                      style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
+                      QR Code
+                    </button>
                   </div>
                 </div>
               ))}
@@ -372,6 +377,47 @@ export default function MerchantDashboard({ address }) {
 
       {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
       {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} />}
+      {qrProduct && (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+    onClick={() => setQrProduct(null)}>
+    <div id="qr-modal" style={{ background: "var(--bg-card)", borderRadius: 16, padding: 32, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+      onClick={e => e.stopPropagation()}>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{qrProduct.name}</div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>${qrProduct.amount.toFixed(2)} USDC · {INTERVAL_NAMES[qrProduct.interval]}</div>
+      <QRCodeSVG value={`${BASE_URL}/${address}/${qrProduct.name.toLowerCase().replace(/\s+/g, "-")}`} size={200} />
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16, fontFamily: "monospace", wordBreak: "break-all", maxWidth: 240 }}>
+        {BASE_URL}/{shortAddress(address)}/{qrProduct.name.toLowerCase().replace(/\s+/g, "-")}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "center", flexWrap: "wrap" }}>
+        <button onClick={() => {
+          const svg = document.querySelector("#qr-modal svg");
+          const svgData = new XMLSerializer().serializeToString(svg);
+          const canvas = document.createElement("canvas");
+          canvas.width = 200; canvas.height = 200;
+          const ctx = canvas.getContext("2d");
+          const img = new Image();
+          img.onload = () => { ctx.drawImage(img, 0, 0); const a = document.createElement("a"); a.download = `${qrProduct.name}-qr.png`; a.href = canvas.toDataURL(); a.click(); };
+          img.src = "data:image/svg+xml;base64," + btoa(svgData);
+        }} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
+          ⬇ Download
+        </button>
+        <button onClick={() => window.print()} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
+          🖨 Print
+        </button>
+        <button onClick={() => {
+          const url = `${BASE_URL}/${address}/${qrProduct.name.toLowerCase().replace(/\s+/g, "-")}`;
+          const msg = encodeURIComponent(`Subscribe to ${qrProduct.name} — $${qrProduct.amount.toFixed(2)} USDC/${INTERVAL_NAMES[qrProduct.interval]}: ${url}`);
+          window.open(`https://wa.me/?text=${msg}`, "_blank");
+        }} style={{ background: "rgba(37,211,102,0.12)", border: "0.5px solid rgba(37,211,102,0.3)", borderRadius: 8, color: "#25d366", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
+          WhatsApp
+        </button>
+        <button onClick={() => setQrProduct(null)} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

@@ -14,14 +14,14 @@ export const wagmiConfig = createConfig({
   ],
   transports: {
     [baseSepolia.id]: http(
-      "https://base-sepolia.g.alchemy.com/v2/Vc2hbwpgkQmd9mCOAQ2uo"
+      "https://sepolia.base.org"
     ),
   },
 });
 
-export const VAULT_ADDRESS    = "0x2ED847da7f88231Ac6907196868adF4840A97f49";
+export const VAULT_ADDRESS    = "0xA3358266106fd5b610C24AB4E01e5Bf25C36dA7c";
 export const REGISTRY_ADDRESS = "0xE62aF1DcADeF946ecC08978dec565344A63B8f9b";
-export const USDC_ADDRESS     = "0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913";
+export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 export const ADMIN_ADDRESS    = "0x44444D60136Cf62804963fA14d62a55c34a96f8F";
 
 export const VAULT_ABI = [
