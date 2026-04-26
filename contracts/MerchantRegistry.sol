@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
 // =============================================================================
-//  MerchantRegistry.sol — The Opportunity Protocol
+//  MerchantRegistry.sol — AuthOnce Protocol
 //  "The Guest List" — invite-only merchant whitelist
 //
 //  Network:    Base Sepolia (testnet)
@@ -19,13 +19,36 @@ pragma solidity ^0.8.24;
 //  Read by SubscriptionVault.createSubscription() via isApproved().
 //  Revoked merchants cannot receive NEW subscriptions; existing active
 //  subscriptions continue until the subscriber cancels (CLAUDE.md §3.8).
+//
+//  License: Business Source License 1.1
+//  © 2026 Vasco Humberto dos Reis Diogo. All Rights Reserved.
+//  https://authonce.io
 // =============================================================================
 
 contract MerchantRegistry {
 
     // -------------------------------------------------------------------------
+    // Watermark — origin proof baked into bytecode forever
+    // -------------------------------------------------------------------------
+
+    string public constant PROTOCOL      = "AuthOnce Protocol";
+    string public constant ORIGIN_DOMAIN = "authonce.io";
+    string public constant ORIGIN_REPO   = "github.com/Vascodiogo/the-opportunity";
+    string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
+    string public constant LICENSE_SPDX  = "BUSL-1.1";
+
+    // -------------------------------------------------------------------------
     // Events — CLAUDE.md §3.10 (on-chain audit trail)
     // -------------------------------------------------------------------------
+
+    /// @notice Emitted once at deployment — used by monitor.js to detect copies.
+    event ProtocolDeployed(
+        string  protocol,
+        string  version,
+        address indexed deployer,
+        uint256 chainId,
+        uint256 timestamp
+    );
 
     event MerchantApproved(address indexed merchant, address indexed approvedBy);
     event MerchantRevoked(address indexed merchant, address indexed revokedBy);
@@ -70,6 +93,14 @@ contract MerchantRegistry {
     constructor(address _admin) {
         require(_admin != address(0), "Registry: zero address");
         admin = _admin;
+
+        emit ProtocolDeployed(
+            PROTOCOL,
+            "1.0.0",
+            msg.sender,
+            block.chainid,
+            block.timestamp
+        );
     }
 
     // -------------------------------------------------------------------------

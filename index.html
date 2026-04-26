@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuthOnce — Authorize Once. Pay Forever.</title>
+  <meta name="description" content="AuthOnce is a non-custodial Web3 subscription payment protocol on Base Network. Lower fees, no chargebacks, instant settlement. Coming to mainnet Q3 2026." />
+  <meta property="og:title" content="AuthOnce — Authorize Once. Pay Forever." />
+  <meta property="og:description" content="The recurring payment protocol for the stablecoin economy. 0.5% fee. No chargebacks. Instant settlement." />
+  <meta property="og:url" content="https://authonce.io" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:     #0D1117;
+      --ink-2:   #1C2333;
+      --ink-3:   #2D3748;
+      --mist:    #8892A4;
+      --fog:     #C8D0DC;
+      --paper:   #F5F7FA;
+      --white:   #FFFFFF;
+      --blue:    #1A56DB;
+      --blue-lt: #3B82F6;
+      --blue-glow: rgba(26, 86, 219, 0.15);
+      --gold:    #F59E0B;
+      --green:   #10B981;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--ink);
+      color: var(--white);
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ── NOISE OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* ── GLOW ORBS ── */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-1 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(26,86,219,0.18) 0%, transparent 70%);
+      top: -200px; left: -100px;
+      animation: drift1 20s ease-in-out infinite alternate;
+    }
+    .orb-2 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%);
+      bottom: 100px; right: -100px;
+      animation: drift2 25s ease-in-out infinite alternate;
+    }
+    @keyframes drift1 { from { transform: translate(0,0); } to { transform: translate(60px, 40px); } }
+    @keyframes drift2 { from { transform: translate(0,0); } to { transform: translate(-40px, -60px); } }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px);
+      background: rgba(13,17,23,0.7);
+    }
+
+    .nav-logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: var(--white);
+      letter-spacing: -0.02em;
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--blue-lt); }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--mist);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white); }
+
+    .nav-cta {
+      background: var(--blue) !important;
+      color: var(--white) !important;
+      padding: 8px 20px !important;
+      border-radius: 8px !important;
+      font-weight: 500 !important;
+      transition: background 0.2s, transform 0.1s !important;
+    }
+    .nav-cta:hover { background: var(--blue-lt) !important; transform: translateY(-1px); }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(26,86,219,0.12);
+      border: 1px solid rgba(26,86,219,0.3);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--blue-lt);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 40px;
+      animation: fadeUp 0.6s ease both;
+    }
+    .badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--blue-lt);
+      animation: pulse 2s ease infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(48px, 8vw, 96px);
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      color: var(--white);
+      max-width: 900px;
+      margin-bottom: 12px;
+      animation: fadeUp 0.6s 0.1s ease both;
+    }
+
+    .hero-title-italic {
+      font-style: italic;
+      color: var(--blue-lt);
+    }
+
+    .hero-tagline {
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(13px, 2vw, 16px);
+      color: var(--mist);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 48px;
+      animation: fadeUp 0.6s 0.2s ease both;
+    }
+
+    .hero-desc {
+      font-size: clamp(16px, 2.5vw, 20px);
+      font-weight: 300;
+      color: var(--fog);
+      max-width: 600px;
+      line-height: 1.7;
+      margin-bottom: 56px;
+      animation: fadeUp 0.6s 0.3s ease both;
+    }
+
+    /* ── EMAIL FORM ── */
+    .hero-form {
+      display: flex;
+      gap: 12px;
+      max-width: 480px;
+      width: 100%;
+      margin-bottom: 24px;
+      animation: fadeUp 0.6s 0.4s ease both;
+    }
+
+    .hero-form input {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 14px 20px;
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .hero-form input::placeholder { color: var(--mist); }
+    .hero-form input:focus {
+      border-color: rgba(26,86,219,0.6);
+      background: rgba(255,255,255,0.09);
+    }
+
+    .hero-form button {
+      background: var(--blue);
+      border: none;
+      border-radius: 10px;
+      padding: 14px 28px;
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .hero-form button:hover { background: var(--blue-lt); transform: translateY(-1px); }
+    .hero-form button:active { transform: translateY(0); }
+
+    .hero-note {
+      font-size: 13px;
+      color: var(--mist);
+      animation: fadeUp 0.6s 0.5s ease both;
+    }
+
+    .success-msg {
+      display: none;
+      font-size: 14px;
+      color: var(--green);
+      font-weight: 500;
+      padding: 12px 20px;
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 8px;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    }
+
+    /* ── STATS ── */
+    .stats {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      padding: 60px 48px;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      padding: 32px 48px;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.07);
+      animation: fadeUp 0.6s ease both;
+    }
+    .stat:last-child { border-right: none; }
+
+    .stat-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 40px;
+      color: var(--white);
+      letter-spacing: -0.03em;
+      margin-bottom: 6px;
+    }
+    .stat-value span { color: var(--blue-lt); }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--mist);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .section {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 48px;
+    }
+
+    .section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--blue-lt);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(32px, 5vw, 52px);
+      letter-spacing: -0.02em;
+      color: var(--white);
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+
+    .section-title em {
+      font-style: italic;
+      color: var(--blue-lt);
+    }
+
+    .section-sub {
+      font-size: 17px;
+      color: var(--mist);
+      font-weight: 300;
+      max-width: 520px;
+      line-height: 1.7;
+      margin-bottom: 60px;
+    }
+
+    /* ── STEPS ── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .step {
+      background: var(--ink-2);
+      padding: 36px 32px;
+      transition: background 0.2s;
+    }
+    .step:hover { background: var(--ink-3); }
+
+    .step-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--blue-lt);
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+    }
+
+    .step-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px;
+      color: var(--white);
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--mist);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    /* ── FEATURES GRID ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 0;
+    }
+
+    .feature {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px;
+      padding: 32px;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    }
+    .feature:hover {
+      border-color: rgba(26,86,219,0.3);
+      background: rgba(26,86,219,0.05);
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: rgba(26,86,219,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    .feature-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--white);
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--mist);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    /* ── PRICING ── */
+    .pricing-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 48px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .price-main {
+      border-right: 1px solid rgba(255,255,255,0.07);
+      padding-right: 48px;
+    }
+
+    .price-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 72px;
+      color: var(--white);
+      letter-spacing: -0.04em;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .price-value span { color: var(--blue-lt); font-size: 40px; }
+
+    .price-label {
+      font-size: 14px;
+      color: var(--mist);
+      margin-bottom: 24px;
+    }
+
+    .price-compare {
+      font-size: 13px;
+      color: var(--green);
+      font-weight: 500;
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.2);
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 100px;
+    }
+
+    .price-items {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .price-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--fog);
+      line-height: 1.5;
+    }
+
+    .price-check {
+      color: var(--green);
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── CONTRACTS ── */
+    .contracts {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .contract-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px;
+      padding: 16px 20px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .contract-name {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: var(--fog);
+    }
+
+    .contract-addr {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--mist);
+    }
+
+    .contract-badge {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--green);
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.2);
+      padding: 3px 10px;
+      border-radius: 100px;
+      white-space: nowrap;
+    }
+
+    .contract-link {
+      font-size: 12px;
+      color: var(--blue-lt);
+      text-decoration: none;
+      font-family: 'DM Mono', monospace;
+      transition: color 0.2s;
+    }
+    .contract-link:hover { color: var(--white); }
+
+    /* ── CTA SECTION ── */
+    .cta-section {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 100px 48px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .cta-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(36px, 6vw, 64px);
+      letter-spacing: -0.03em;
+      color: var(--white);
+      margin-bottom: 20px;
+      line-height: 1.05;
+    }
+    .cta-title em { font-style: italic; color: var(--blue-lt); }
+
+    .cta-sub {
+      font-size: 17px;
+      color: var(--mist);
+      font-weight: 300;
+      margin-bottom: 48px;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.7;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: var(--white);
+      padding: 16px 36px;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.1s;
+      display: inline-block;
+    }
+    .btn-primary:hover { background: var(--blue-lt); transform: translateY(-2px); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--fog);
+      padding: 16px 36px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 400;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s, transform 0.1s;
+      display: inline-block;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,0.3); color: var(--white); transform: translateY(-2px); }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 40px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--white);
+      text-decoration: none;
+    }
+    .footer-logo span { color: var(--blue-lt); }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+      flex-wrap: wrap;
+    }
+    .footer-links a {
+      color: var(--mist);
+      font-size: 13px;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--white); }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--mist);
+      font-family: 'DM Mono', monospace;
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      nav { padding: 16px 24px; }
+      .nav-links { display: none; }
+      .stats { padding: 40px 24px; }
+      .stat { padding: 24px 20px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .stat:last-child { border-bottom: none; }
+      .section { padding: 60px 24px; }
+      .pricing-card { grid-template-columns: 1fr; gap: 32px; }
+      .price-main { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); padding-right: 0; padding-bottom: 32px; }
+      .cta-section { padding: 60px 24px; }
+      footer { padding: 32px 24px; flex-direction: column; align-items: flex-start; }
+      .hero-form { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <!-- NAV -->
+  <nav>
+    <a href="/" class="nav-logo">Auth<span>Once</span></a>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#for-merchants">For merchants</a></li>
+      <li><a href="#contracts">Live on testnet</a></li>
+      <li><a href="#contact" class="nav-cta">Get early access</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Live on Base Sepolia — Mainnet Q3 2026
+    </div>
+    <h1 class="hero-title">
+      Authorize <span class="hero-title-italic">once.</span><br>Pay forever.
+    </h1>
+    <p class="hero-tagline">The recurring payment protocol for the stablecoin economy</p>
+    <p class="hero-desc">
+      Subscribers pay by credit card. Merchants receive instant USDC settlement — or euros in their bank account. No chargebacks. No card expiry. 0.5% fee.
+    </p>
+
+    <form class="hero-form" id="waitlistForm">
+      <input type="email" id="emailInput" placeholder="your@email.com" required autocomplete="email" />
+      <button type="submit">Get early access</button>
+    </form>
+    <p class="hero-note">Pilot merchants pay zero protocol fee for 3 months — every payment goes to you in full.</p>
+    <div class="success-msg" id="successMsg">
+      ✓ You're on the list. We'll be in touch before mainnet launch.
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat reveal">
+      <div class="stat-value">0.<span>5</span>%</div>
+      <div class="stat-label">Protocol fee per pull</div>
+    </div>
+    <div class="stat reveal">
+      <div class="stat-value">&lt;<span>2s</span></div>
+      <div class="stat-label">Settlement time on Base</div>
+    </div>
+    <div class="stat reveal">
+      <div class="stat-value">$<span>0</span></div>
+      <div class="stat-label">Chargebacks. Ever.</div>
+    </div>
+    <div class="stat reveal">
+      <div class="stat-value">2<span></span></div>
+      <div class="stat-label">Contracts deployed & verified</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- HOW IT WORKS -->
+  <section class="section" id="how-it-works">
+    <p class="section-label reveal">How it works</p>
+    <h2 class="section-title reveal">Simple for subscribers.<br><em>Powerful for merchants.</em></h2>
+    <p class="section-sub reveal">Subscribers pay with their credit card as usual. The rest happens automatically.</p>
+
+    <div class="steps reveal">
+      <div class="step">
+        <p class="step-num">01 —</p>
+        <h3 class="step-title">Pay by card</h3>
+        <p class="step-desc">Subscriber enters their credit card. USDC is purchased automatically and deposited into their self-custodied vault.</p>
+      </div>
+      <div class="step">
+        <p class="step-num">02 —</p>
+        <h3 class="step-title">Authorize once</h3>
+        <p class="step-desc">A one-time smart contract permission is set. This is the only action the subscriber ever takes.</p>
+      </div>
+      <div class="step">
+        <p class="step-num">03 —</p>
+        <h3 class="step-title">Payments flow</h3>
+        <p class="step-desc">AuthOnce executes payments automatically on schedule. Weekly, monthly, or yearly — the subscriber does nothing.</p>
+      </div>
+      <div class="step">
+        <p class="step-num">04 —</p>
+        <h3 class="step-title">Merchant settles</h3>
+        <p class="step-desc">Merchant receives USDC instantly, or converts to euros via a licensed partner. Funds arrive in their bank account.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOR MERCHANTS -->
+  <section class="section" id="for-merchants">
+    <p class="section-label reveal">For merchants</p>
+    <h2 class="section-title reveal">Better payments.<br><em>At a fraction of the cost.</em></h2>
+    <p class="section-sub reveal">No chargebacks. No card expiry failures. Instant global settlement. Three ways to get started.</p>
+
+    <div class="features reveal">
+      <div class="feature">
+        <div class="feature-icon">🔗</div>
+        <h3 class="feature-title">Hosted Pay Links</h3>
+        <p class="feature-desc">Get a unique payment URL in under 5 minutes. Share it anywhere. No website or code required. Perfect for creators and newsletters.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h3 class="feature-title">Checkout Widget</h3>
+        <p class="feature-desc">Drop a Subscribe button into your existing website. Full payment flow handled in a modal. Fires a callback on success.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🛠</div>
+        <h3 class="feature-title">Developer API</h3>
+        <p class="feature-desc">Full REST API with HMAC-signed webhooks. Real-time payment notifications to your backend. Built for SaaS platforms and marketplaces.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🛡</div>
+        <h3 class="feature-title">Zero Chargebacks</h3>
+        <p class="feature-desc">Smart contract payments are irreversible by design. No more revenue reversals arriving months after settlement.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🌍</div>
+        <h3 class="feature-title">Global by Default</h3>
+        <p class="feature-desc">AuthOnce runs on Base Network — a public blockchain accessible to anyone in the world. Any merchant, any subscriber, anywhere.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">💶</div>
+        <h3 class="feature-title">Fiat Settlement</h3>
+        <p class="feature-desc">Receive USDC directly or convert to euros via a licensed partner. Funds settle to your bank account in 1–2 days.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section">
+    <p class="section-label reveal">Pricing</p>
+    <h2 class="section-title reveal">One fee. <em>No surprises.</em></h2>
+    <p class="section-sub reveal">AuthOnce charges 0.5% per successful payment pull. That's it. No monthly fees, no setup costs, no hidden charges.</p>
+
+    <div class="pricing-card reveal">
+      <div class="price-main">
+        <div class="price-value">0.<span>5%</span></div>
+        <div class="price-label">per subscription pull — deducted automatically</div>
+        <div class="price-compare">Up to 6× cheaper than traditional card processors</div>
+      </div>
+      <ul class="price-items">
+        <li class="price-item"><span class="price-check">✓</span> No monthly platform fee</li>
+        <li class="price-item"><span class="price-check">✓</span> No setup or onboarding cost</li>
+        <li class="price-item"><span class="price-check">✓</span> No chargeback fees — ever</li>
+        <li class="price-item"><span class="price-check">✓</span> Optional fiat settlement to bank account</li>
+        <li class="price-item"><span class="price-check">✓</span> Fee ceiling hardcoded at 2% — we can never charge more</li>
+        <li class="price-item"><span class="price-check">✓</span> Zero protocol fee for pilot merchants — first 3 months. No 0.5% deducted from any payment during the trial.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CONTRACTS -->
+  <section class="section" id="contracts">
+    <p class="section-label reveal">Transparency</p>
+    <h2 class="section-title reveal">Live on <em>Base Sepolia.</em></h2>
+    <p class="section-sub reveal">Both core smart contracts are deployed and verified on Base Sepolia testnet. Mainnet launch follows an independent security audit in Q3 2026.</p>
+
+    <div class="contracts reveal">
+      <div class="contract-row">
+        <span class="contract-name">SubscriptionVault.sol</span>
+        <span class="contract-addr">0x2ED847da7f88231Ac6907196868adF4840A97f49</span>
+        <span class="contract-badge">✓ Verified</span>
+        <a href="https://sepolia.basescan.org/address/0x2ED847da7f88231Ac6907196868adF4840A97f49" target="_blank" rel="noopener" class="contract-link">View on Basescan ↗</a>
+      </div>
+      <div class="contract-row">
+        <span class="contract-name">MerchantRegistry.sol</span>
+        <span class="contract-addr">0xE62aF1DcADeF946ecC08978dec565344A63B8f9b</span>
+        <span class="contract-badge">✓ Verified</span>
+        <a href="https://sepolia.basescan.org/address/0xE62aF1DcADeF946ecC08978dec565344A63B8f9b" target="_blank" rel="noopener" class="contract-link">View on Basescan ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section" id="contact">
+    <h2 class="cta-title reveal">Ready to accept<br><em>smarter payments?</em></h2>
+    <p class="cta-sub reveal">Join as a pilot merchant. Zero protocol fee for your first 3 months — every payment goes to you in full. We ask only for honest feedback and a testimonial.</p>
+    <div class="cta-buttons reveal">
+      <a href="mailto:vasco@authonce.io?subject=AuthOnce%20Merchant%20Interest" class="btn-primary">Contact us</a>
+      <a href="https://sepolia.basescan.org/address/0x2ED847da7f88231Ac6907196868adF4840A97f49" target="_blank" rel="noopener" class="btn-secondary">View contracts ↗</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <a href="/" class="footer-logo">Auth<span>Once</span></a>
+    <ul class="footer-links">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#for-merchants">For merchants</a></li>
+      <li><a href="#contracts">Contracts</a></li>
+      <li><a href="mailto:vasco@authonce.io">vasco@authonce.io</a></li>
+    </ul>
+    <p class="footer-copy">© 2026 AuthOnce</p>
+  </footer>
+
+  <script>
+    // Scroll reveal
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add('visible'), i * 80);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    reveals.forEach(el => observer.observe(el));
+
+    // Waitlist form
+    document.getElementById('waitlistForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const email = document.getElementById('emailInput').value;
+      if (!email) return;
+      this.style.display = 'none';
+      document.getElementById('successMsg').style.display = 'block';
+      // In production: send to your backend or a form service like Formspree
+      console.log('Waitlist signup:', email);
+    });
+  </script>
+
+</body>
+</html>

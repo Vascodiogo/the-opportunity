@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
 // =============================================================================
@@ -18,6 +18,10 @@ pragma solidity ^0.8.24;
 //    - trialEndsAt — free trial period before first payment
 //    - merchantPauseSubscription() — merchant customer service tool
 //    - MAX_TRIAL_PERIOD constant — 90 days maximum trial
+//
+//  License: Business Source License 1.1
+//  © 2026 Vasco Humberto dos Reis Diogo. All Rights Reserved.
+//  https://authonce.io
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -68,11 +72,21 @@ abstract contract ReentrancyGuard {
 contract SubscriptionVault is ReentrancyGuard {
 
     // -------------------------------------------------------------------------
+    // Watermark — origin proof baked into bytecode forever
+    // -------------------------------------------------------------------------
+
+    string public constant PROTOCOL      = "AuthOnce Protocol";
+    string public constant ORIGIN_DOMAIN = "authonce.io";
+    string public constant ORIGIN_REPO   = "github.com/Vascodiogo/the-opportunity";
+    string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
+    string public constant LICENSE_SPDX  = "BUSL-1.1";
+
+    // -------------------------------------------------------------------------
     // Constants
     // -------------------------------------------------------------------------
 
     /// @notice USDC on Base. Hardcoded — no other token accepted (CLAUDE.md §3.2).
-    address public constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address public constant USDC = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
 
     /// @notice Hard ceiling on protocol fee: 2% = 200 bps (CLAUDE.md §3.9, §7).
     uint16 public constant MAX_FEE_BPS = 200;
@@ -132,6 +146,15 @@ contract SubscriptionVault is ReentrancyGuard {
     // Events (CLAUDE.md §3.10)
     // -------------------------------------------------------------------------
 
+    /// @notice Emitted once at deployment — used by monitor.js to detect copies.
+    event ProtocolDeployed(
+        string  protocol,
+        string  version,
+        address indexed deployer,
+        uint256 chainId,
+        uint256 timestamp
+    );
+
     event SubscriptionCreated(
         uint256 indexed id,
         address indexed owner,
@@ -161,6 +184,7 @@ contract SubscriptionVault is ReentrancyGuard {
     event SubscriptionCancelled(uint256 indexed id, address cancelledBy);
     event SubscriptionResumed(uint256 indexed id, uint256 timestamp);
     event SubscriptionExpired(uint256 indexed id, uint256 timestamp);
+
     /// @notice Emitted when merchant pauses a subscription for customer service
     event SubscriptionPausedByMerchant(uint256 indexed id, address indexed merchant, uint256 resumesAt);
 
@@ -174,10 +198,6 @@ contract SubscriptionVault is ReentrancyGuard {
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
 
     /// @notice Emitted when a merchant sets a scheduled expiry on a subscription
-    /// @param id           The subscription ID
-    /// @param merchant     The merchant who set the expiry
-    /// @param expiresAt    The timestamp when the subscription will expire
-    /// @param noticeDays   How many days notice was given (always >= 30)
     event ProductExpirySet(
         uint256 indexed id,
         address indexed merchant,
@@ -228,6 +248,14 @@ contract SubscriptionVault is ReentrancyGuard {
         keeper           = _keeper;
         protocolTreasury = _protocolTreasury;
         feeBps           = _feeBps;
+
+        emit ProtocolDeployed(
+            PROTOCOL,
+            "1.0.0",
+            msg.sender,
+            block.chainid,
+            block.timestamp
+        );
     }
 
     // =========================================================================
@@ -310,89 +338,35 @@ contract SubscriptionVault is ReentrancyGuard {
     // =========================================================================
 
     /// @notice Merchant sets a scheduled expiry on a subscription (price change flow).
-    ///
-    /// @dev    Business rules (CLAUDE.md §3 — Price Change Flow):
-    ///           1. Only the merchant who owns this subscription can call this.
-    ///           2. expiresAt MUST be at least 30 days in the future — hardcoded,
-    ///              cannot be bypassed even by admin. This is the subscriber's
-    ///              legal protection against sudden price changes.
-    ///           3. Subscription continues pulling at the original price until
-    ///              expiresAt — the keeper checks this in executePull().
-    ///           4. On or after expiresAt, the keeper calls expireSubscription()
-    ///              and the subscription expires gracefully.
-    ///           5. Merchant is responsible for notifying their own subscribers
-    ///              about the price change. AuthOnce fires a webhook to the
-    ///              merchant confirming the expiry date is locked on-chain.
-    ///           6. expiresAt can only be set once — cannot be shortened after
-    ///              being set (protects subscribers from merchants moving the
-    ///              date earlier).
-    ///
-    /// @param id           The subscription ID to schedule for expiry.
-    /// @param expiresAt    Unix timestamp when the subscription should expire.
-    ///                     Must be >= block.timestamp + 30 days.
     function setProductExpiry(uint256 id, uint256 expiresAt) external {
         Subscription storage sub = subscriptions[id];
 
-        // Only the merchant on this specific subscription can set expiry
         require(msg.sender == sub.merchant, "NotMerchant");
-
-        // Subscription must be active — can't set expiry on already inactive subs
         require(sub.status == SubscriptionStatus.Active, "NotActive");
-
-        // Hard enforce 30-day minimum notice — unbypassable
         require(
             expiresAt >= block.timestamp + MIN_EXPIRY_NOTICE,
             "InsufficientNotice"
         );
-
-        // Cannot shorten an already-set expiry (protects subscribers)
         require(
             sub.expiresAt == 0 || expiresAt > sub.expiresAt,
             "CannotShortenExpiry"
         );
 
         uint256 noticeDays = (expiresAt - block.timestamp) / 1 days;
-
         sub.expiresAt = expiresAt;
 
         emit ProductExpirySet(id, msg.sender, expiresAt, noticeDays);
     }
 
-
     /// @notice Merchant pauses a subscriber's billing for customer service purposes.
-    ///
-    /// @dev    Use cases:
-    ///           - Give subscriber a free month as loyalty reward
-    ///           - Pause billing during a dispute
-    ///           - Offer a trial extension
-    ///
-    ///         Rules:
-    ///           - Only the merchant on this subscription can call this
-    ///           - Maximum pause: 90 days (prevents abuse)
-    ///           - Subscriber retains access — merchant manages access on their side
-    ///           - Subscriber can still cancel during a merchant-initiated pause
-    ///           - Does NOT trigger the 7-day grace period / auto-expiry flow
-    ///
-    /// @param id           The subscription ID to pause
-    /// @param pauseDays    Number of days to pause billing (1–90)
     function merchantPauseSubscription(uint256 id, uint256 pauseDays) external {
         Subscription storage sub = subscriptions[id];
 
-        // Only the merchant on this subscription
         require(msg.sender == sub.merchant, "NotMerchant");
-
-        // Must be active
         require(sub.status == SubscriptionStatus.Active, "NotActive");
-
-        // Reasonable pause limit — prevents abuse
         require(pauseDays >= 1,  "MinOneDayPause");
         require(pauseDays <= 90, "PauseTooLong");
 
-        // Extend lastPulledAt by pauseDays — effectively skips that many days of billing
-        // This is cleaner than setting status to Paused because:
-        //   1. It doesn't trigger the grace period / auto-expiry flow
-        //   2. Subscription stays "Active" — keeper won't try to expire it
-        //   3. Next pull simply happens pauseDays later than it would have
         sub.lastPulledAt = block.timestamp + (pauseDays * 1 days);
 
         uint256 resumesAt = sub.lastPulledAt + _intervalToSeconds(sub.interval);
@@ -413,8 +387,6 @@ contract SubscriptionVault is ReentrancyGuard {
 
         require(sub.status == SubscriptionStatus.Active, "NotActive");
 
-        // Check if subscription has reached its scheduled expiry
-        // If so, expire it gracefully instead of pulling
         if (sub.expiresAt > 0 && block.timestamp >= sub.expiresAt) {
             sub.status = SubscriptionStatus.Expired;
             emit SubscriptionExpired(id, block.timestamp);
@@ -427,11 +399,9 @@ contract SubscriptionVault is ReentrancyGuard {
             "NotDueYet"
         );
 
-        // Hard spending cap — enforced on-chain regardless of what keeper sends
         require(pullAmount <= sub.amount, "ExceedsCap");
         require(pullAmount > 0,           "ZeroAmount");
 
-        // Check vault balance
         uint256 currentVaultBalance = IERC20(USDC).balanceOf(sub.safeVault);
 
         if (currentVaultBalance < pullAmount) {
@@ -442,11 +412,9 @@ contract SubscriptionVault is ReentrancyGuard {
             return;
         }
 
-        // Calculate fee split (CLAUDE.md §3.9)
         uint256 fee              = (pullAmount * feeBps) / 10_000;
         uint256 merchantReceives = pullAmount - fee;
 
-        // Transfer to merchant via Safe module
         bytes memory merchantCall = abi.encodeWithSelector(
             IERC20.transfer.selector,
             sub.merchant,
@@ -457,7 +425,6 @@ contract SubscriptionVault is ReentrancyGuard {
         );
         require(merchantSuccess, "MerchantTransferFailed");
 
-        // Transfer fee to protocol treasury
         if (fee > 0) {
             bytes memory feeCall = abi.encodeWithSelector(
                 IERC20.transfer.selector,
@@ -533,7 +500,6 @@ contract SubscriptionVault is ReentrancyGuard {
     function isDue(uint256 id) external view returns (bool) {
         Subscription storage sub = subscriptions[id];
         if (sub.status != SubscriptionStatus.Active) return false;
-        // If expiry is set and reached — not due for payment, will expire
         if (sub.expiresAt > 0 && block.timestamp >= sub.expiresAt) return false;
         if (sub.lastPulledAt == 0) return true;
         return block.timestamp >= sub.lastPulledAt + _intervalToSeconds(sub.interval);
