@@ -1,6 +1,9 @@
 // scripts/deploy.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Deployment script for SubscriptionVault.sol → Base Sepolia Testnet
+// Deployment script for:
+//   - SubscriptionVault.sol
+//   - MerchantRegistry.sol
+// Target: Base Sepolia Testnet
 //
 // Before running:
 //   1. Copy .env.example → .env and fill in all values
@@ -46,7 +49,7 @@ async function main() {
   // 1. Validate environment
   validateEnv();
 
-  // 2. Get the deployer wallet (first account from hardhat.config.js → accounts[])
+  // 2. Get the deployer wallet
   const [deployer] = await hre.ethers.getSigners();
 
   // 3. Print pre-deployment summary
@@ -56,7 +59,7 @@ async function main() {
   const balanceEth = hre.ethers.formatEther(balance);
 
   console.log("\n╔══════════════════════════════════════════════════════════════╗");
-  console.log("║         The Opportunity — SubscriptionVault Deployment       ║");
+  console.log("║           AuthOnce Protocol — Full Deployment                ║");
   console.log("╚══════════════════════════════════════════════════════════════╝\n");
   console.log("  Network:           ", network, `(chainId: ${chainId})`);
   console.log("  Deployer:          ", deployer.address);
@@ -74,52 +77,74 @@ async function main() {
     await new Promise((r) => setTimeout(r, 5000));
   }
 
-  // 5. Deploy SubscriptionVault
-  //    Constructor args (CLAUDE.md §3):
-  //      _admin            → deployer (transfer to multisig post-deploy on mainnet)
-  //      _keeper           → Gelato task wallet
-  //      _protocolTreasury → from .env
-  //      _feeBps           → 50 (0.5%)
-  console.log("  Deploying SubscriptionVault...");
+  // ─── Deploy MerchantRegistry ────────────────────────────────────────────────
+
+  console.log("  [1/2] Deploying MerchantRegistry...");
+
+  const MerchantRegistry = await hre.ethers.getContractFactory("MerchantRegistry");
+  const registry = await MerchantRegistry.deploy(deployer.address);
+  await registry.waitForDeployment();
+  const registryAddress = await registry.getAddress();
+  const registryTx      = registry.deploymentTransaction();
+
+  console.log("  ✅  MerchantRegistry deployed!\n");
+  console.log("  ┌─────────────────────────────────────────────────────────────┐");
+  console.log("  │  MERCHANT REGISTRY ADDRESS                                  │");
+  console.log(`  │  ${registryAddress}                  │`);
+  console.log("  └─────────────────────────────────────────────────────────────┘");
+  console.log("  Transaction hash: ", registryTx.hash);
+  console.log("  Basescan URL:     ", `https://sepolia.basescan.org/address/${registryAddress}\n`);
+
+  // ─── Deploy SubscriptionVault ───────────────────────────────────────────────
+
+  console.log("  [2/2] Deploying SubscriptionVault...");
 
   const SubscriptionVault = await hre.ethers.getContractFactory("SubscriptionVault");
-
   const vault = await SubscriptionVault.deploy(
-    deployer.address,           // admin — YOU. Transfer to multisig after deploy.
-    GELATO_KEEPER_ADDRESS,      // keeper — Gelato task wallet
-    PROTOCOL_TREASURY_ADDRESS,  // protocolTreasury — from .env
-    INITIAL_FEE_BPS             // feeBps — 50 = 0.5%
+    deployer.address,
+    GELATO_KEEPER_ADDRESS,
+    PROTOCOL_TREASURY_ADDRESS,
+    INITIAL_FEE_BPS
   );
-
-  // 6. Wait for the deployment transaction to be mined
   await vault.waitForDeployment();
-  const contractAddress = await vault.getAddress();
-  const deployTx        = vault.deploymentTransaction();
+  const vaultAddress = await vault.getAddress();
+  const vaultTx      = vault.deploymentTransaction();
 
-  // 7. Print results
-  console.log("\n  ✅  SubscriptionVault deployed successfully!\n");
+  console.log("  ✅  SubscriptionVault deployed!\n");
   console.log("  ┌─────────────────────────────────────────────────────────────┐");
-  console.log("  │  CONTRACT ADDRESS                                           │");
-  console.log(`  │  ${contractAddress}                  │`);
-  console.log("  └─────────────────────────────────────────────────────────────┘\n");
-  console.log("  Transaction hash: ", deployTx.hash);
-  console.log("  Basescan URL:     ", `https://sepolia.basescan.org/address/${contractAddress}`);
+  console.log("  │  SUBSCRIPTION VAULT ADDRESS                                 │");
+  console.log(`  │  ${vaultAddress}                  │`);
+  console.log("  └─────────────────────────────────────────────────────────────┘");
+  console.log("  Transaction hash: ", vaultTx.hash);
+  console.log("  Basescan URL:     ", `https://sepolia.basescan.org/address/${vaultAddress}\n`);
 
-  // 8. Post-deploy checklist
-  console.log("\n──────────────────────────────────────────────────────────────────");
+  // ─── Post-deploy summary ────────────────────────────────────────────────────
+
+  console.log("══════════════════════════════════════════════════════════════════");
+  console.log("  🎉  DEPLOYMENT COMPLETE — AuthOnce Protocol v1.0.0");
+  console.log("══════════════════════════════════════════════════════════════════\n");
   console.log("  📋  POST-DEPLOY CHECKLIST");
   console.log("──────────────────────────────────────────────────────────────────");
-  console.log("\n  1. Record the contract address in CLAUDE.md §2:");
-  console.log(`     SubscriptionVault.sol: ${contractAddress}`);
-  console.log("\n  2. Verify the contract on Basescan:");
-  console.log(`     npx hardhat verify --network baseSepolia ${contractAddress} \\`);
+  console.log("\n  1. Record both addresses in CLAUDE.md §2:");
+  console.log(`     MerchantRegistry.sol:  ${registryAddress}`);
+  console.log(`     SubscriptionVault.sol: ${vaultAddress}`);
+
+  console.log("\n  2. Verify MerchantRegistry on Basescan:");
+  console.log(`     npx hardhat verify --network baseSepolia ${registryAddress} \\`);
+  console.log(`       "${deployer.address}"`);
+
+  console.log("\n  3. Verify SubscriptionVault on Basescan:");
+  console.log(`     npx hardhat verify --network baseSepolia ${vaultAddress} \\`);
   console.log(`       "${deployer.address}" \\`);
   console.log(`       "${GELATO_KEEPER_ADDRESS}" \\`);
   console.log(`       "${PROTOCOL_TREASURY_ADDRESS}" \\`);
   console.log(`       ${INITIAL_FEE_BPS}`);
-  console.log("\n  3. Approve at least one test merchant:");
-  console.log("     Call approveMerchant(address) on the deployed contract.");
-  console.log("\n  4. Transfer admin to a multisig before mainnet.\n");
+
+  console.log("\n  4. Approve your test merchant on MerchantRegistry:");
+  console.log("     Call approveMerchant(address) via Basescan Write tab.");
+
+  console.log("\n  5. Commit new addresses to GitHub:");
+  console.log('     git add . && git commit -m "Redeploy v1.0.0 with BUSL-1.1 watermark" && git push\n');
 }
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
