@@ -2,7 +2,7 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
 
-const VAULT_ADDRESS   = "0xA3358266106fd5b610C24AB4E01e5Bf25C36dA7c";
+const VAULT_ADDRESS   = "0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA"; // v1.0.0 BUSL-1.1
 const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL;
 const KEEPER_PRIVKEY  = process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;
@@ -84,7 +84,6 @@ async function processDueSubscriptions(vault, ids) {
       const now            = Math.floor(Date.now() / 1000);
       const gracePeriodEnd = pausedAt + GRACE_PERIOD_SECONDS;
 
-      // Grace period over — expireGracePeriodSubscriptions handles this
       if (now > gracePeriodEnd) continue;
 
       const balance  = await vault.vaultBalance(id);

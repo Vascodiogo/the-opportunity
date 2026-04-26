@@ -17,7 +17,7 @@ const { ethers } = require("ethers");
 const db = require("./db");
 const { dispatchWebhook } = require("./webhook");
 
-const VAULT_ADDRESS  = "0xA3358266106fd5b610C24AB4E01e5Bf25C36dA7c";
+const VAULT_ADDRESS  = "0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA"; // v1.0.0 BUSL-1.1
 const RPC_URL        = process.env.BASE_SEPOLIA_RPC_URL;
 const POLL_INTERVAL  = 30_000; // 30 seconds
 const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
@@ -276,7 +276,6 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
       return lastBlock; // Nothing new
     }
 
-    // Fetch all logs from our vault contract
     const logs = await provider.getLogs({
       address: VAULT_ADDRESS,
       fromBlock: lastBlock + 1,
@@ -305,7 +304,7 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
     return toBlock;
   } catch (err) {
     console.error(`[NOTIFIER] Poll error:`, err.message);
-    return lastBlock; // Don't advance on error
+    return lastBlock;
   }
 }
 
@@ -327,7 +326,6 @@ async function main() {
   console.log(`  DB:       ${process.env.DATABASE_URL ? "PostgreSQL connected" : "NO DATABASE_URL SET"}`);
   console.log("=".repeat(60));
 
-  // Build topic → event name map
   const iface = new ethers.Interface(VAULT_ABI);
   const topicMap = {};
   for (const eventName of Object.keys(EVENT_HANDLERS)) {
@@ -335,7 +333,6 @@ async function main() {
     topicMap[topic] = eventName;
   }
 
-  // Start from current block
   let provider = new ethers.JsonRpcProvider(RPC_URL);
   let lastBlock = 0;
 
@@ -350,10 +347,8 @@ async function main() {
 
   console.log("  Listening for events...\n");
 
-  // Poll loop
   const poll = async () => {
     try {
-      // Recreate provider on each poll for reliability
       provider = new ethers.JsonRpcProvider(RPC_URL);
       lastBlock = await pollEvents(provider, iface, topicMap, lastBlock);
     } catch (err) {
@@ -362,7 +357,6 @@ async function main() {
     setTimeout(poll, POLL_INTERVAL);
   };
 
-  // Start polling
   await poll();
 
   process.on("SIGINT", () => {
