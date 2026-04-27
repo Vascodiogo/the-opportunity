@@ -1,4 +1,6 @@
 // src/App.jsx — AuthOnce Protocol
+import AdminLogin from "./components/AdminLogin.jsx";
+import AdminDashboard from "./components/AdminDashboard.jsx";
 import { useState, useEffect } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -12,6 +14,9 @@ export default function App() {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem("admin_token") || "");
+  const [adminEmail, setAdminEmail] = useState(() => sessionStorage.getItem("admin_email") || "");
+  const isAdminRoute = window.location.pathname.startsWith("/admin");
   const [view, setView] = useState("subscriber");
   const [showApp, setShowApp] = useState(false);
 
@@ -51,6 +56,10 @@ export default function App() {
 
   // Show landing page if not connected and not explicitly launched
   if (!isConnected && !showApp) {
+    if (isAdminRoute) {
+  if (!adminToken) return <AdminLogin isDark={isDark} onLogin={(token) => { setAdminToken(token); setAdminEmail(sessionStorage.getItem("admin_email") || ""); }} />;
+  return <AdminDashboard token={adminToken} email={adminEmail} isDark={isDark} onLogout={() => { sessionStorage.removeItem("admin_token"); sessionStorage.removeItem("admin_email"); setAdminToken(""); setAdminEmail(""); }} />;
+}
     return (
       <LandingPage
         lang={lang}
