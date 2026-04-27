@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <circle cx="100" cy="100" r="90" stroke="url(#ringGrad)" stroke-width="6" fill="none"/>
+  <path d="M100 30 L155 58 L155 110 Q155 148 100 172 Q45 148 45 110 L45 58 Z" fill="url(#shieldGrad)" opacity="0.15"/>
+  <rect x="72" y="98" width="56" height="44" rx="8" fill="url(#lockGrad)"/>
+  <path d="M84 98 L84 82 Q84 62 100 62 Q116 62 116 82 L116 98" stroke="url(#shackleGrad)" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <circle cx="100" cy="116" r="7" fill="#080c14" opacity="0.6"/>
+  <rect x="97" y="120" width="6" height="10" rx="3" fill="#080c14" opacity="0.6"/>
+  <defs>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="45" y1="30" x2="155" y2="172" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="lockGrad" x1="72" y1="98" x2="128" y2="142" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="shackleGrad" x1="84" y1="62" x2="116" y2="98" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+</svg>
