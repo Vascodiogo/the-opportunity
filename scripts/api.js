@@ -2,8 +2,6 @@
 // =============================================================================
 //  AuthOnce — Merchant Registration API
 //
-//  Express.js REST API for merchant onboarding and management.
-//
 //  Endpoints:
 //    POST   /api/merchants/register     — Register a new merchant
 //    GET    /api/merchants/:address     — Get merchant profile
@@ -12,15 +10,30 @@
 //    GET    /api/merchants/:address/payments      — Get payment history
 //    POST   /api/webhooks/test          — Test webhook delivery
 //    GET    /api/health                 — Health check
+//
+//  Admin endpoints (JWT auth):
+//    POST   /api/admin/login            — Email/password login → JWT token
+//    GET    /api/admin/me               — Verify token
+//    GET    /api/admin/stats            — Protocol overview stats
+//    GET    /api/admin/fees/summary     — Fee summary
+//    GET    /api/admin/fees/export      — CSV export
 // =============================================================================
 
 require("dotenv").config();
 const express = require("express");
 const crypto  = require("crypto");
+const bcrypt  = require("bcryptjs");
+const jwt     = require("jsonwebtoken");
 const db      = require("./db");
 
 const app  = express();
 const PORT = process.env.API_PORT || 3001;
+
+// Admin config
+const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    || "vasco@authonce.io";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const JWT_SECRET     = process.env.JWT_SECRET     || process.env.ADMIN_SECRET || "dev-secret-change-me";
+const TOKEN_EXPIRY   = "12h";
 
 // -----------------------------------------------------------------------------
 // Middleware
@@ -28,23 +41,21 @@ const PORT = process.env.API_PORT || 3001;
 
 app.use(express.json());
 
-// CORS — allow all origins for now (restrict in production)
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merchant-Address");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merchant-Address, X-Admin-Secret");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
-// Simple request logger
 app.use((req, res, next) => {
   console.log(`[API] ${req.method} ${req.path}`);
   next();
 });
 
 // -----------------------------------------------------------------------------
-// Auth middleware — verify merchant wallet address header
+// Auth middleware — merchant wallet
 // -----------------------------------------------------------------------------
 
 function requireMerchantAuth(req, res, next) {
@@ -57,7 +68,39 @@ function requireMerchantAuth(req, res, next) {
 }
 
 // -----------------------------------------------------------------------------
-// Utility — generate webhook secret
+// Auth middleware — admin (JWT)
+// Supports both new JWT tokens and legacy ADMIN_SECRET header
+// -----------------------------------------------------------------------------
+
+function requireAdminAuth(req, res, next) {
+  // New: JWT Bearer token
+  const authHeader = req.headers["authorization"];
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.role !== "admin") {
+        return res.status(403).json({ error: "forbidden", message: "Admin access only." });
+      }
+      req.admin = decoded;
+      return next();
+    } catch (err) {
+      return res.status(401).json({ error: "invalid_token", message: "Token expired or invalid." });
+    }
+  }
+
+  // Legacy: X-Admin-Secret header (keep working for existing scripts)
+  const secret = req.headers["x-admin-secret"];
+  if (secret && secret === process.env.ADMIN_SECRET) {
+    req.admin = { email: ADMIN_EMAIL, role: "admin" };
+    return next();
+  }
+
+  return res.status(401).json({ error: "unauthorized", message: "Admin authentication required." });
+}
+
+// -----------------------------------------------------------------------------
+// Utility
 // -----------------------------------------------------------------------------
 
 function generateWebhookSecret() {
@@ -81,50 +124,117 @@ app.get("/api/health", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// POST /api/admin/login — Email/password → JWT token
+// -----------------------------------------------------------------------------
+app.post("/api/admin/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "missing_fields", message: "Email and password required." });
+  }
+
+  if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    return res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password." });
+  }
+
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).json({ error: "server_error", message: "ADMIN_PASSWORD not configured in environment." });
+  }
+
+  if (!JWT_SECRET || JWT_SECRET === "dev-secret-change-me") {
+    console.warn("[ADMIN] WARNING: Using default JWT_SECRET — set a real secret in Railway environment variables.");
+  }
+
+  // Support plain text (dev) and bcrypt hash (production)
+  let valid = false;
+  if (ADMIN_PASSWORD.startsWith("$2")) {
+    valid = await bcrypt.compare(password, ADMIN_PASSWORD);
+  } else {
+    valid = password === ADMIN_PASSWORD;
+  }
+
+  if (!valid) {
+    console.warn(`[ADMIN] Failed login attempt for ${email}`);
+    return res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password." });
+  }
+
+  const token = jwt.sign(
+    { email: ADMIN_EMAIL, role: "admin" },
+    JWT_SECRET,
+    { expiresIn: TOKEN_EXPIRY }
+  );
+
+  console.log(`[ADMIN] Login: ${email}`);
+  res.json({ token, email: ADMIN_EMAIL, expires_in: TOKEN_EXPIRY });
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/admin/me — verify token
+// -----------------------------------------------------------------------------
+app.get("/api/admin/me", requireAdminAuth, (req, res) => {
+  res.json({ email: req.admin.email, role: req.admin.role });
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/admin/stats — protocol overview
+// -----------------------------------------------------------------------------
+app.get("/api/admin/stats", requireAdminAuth, async (req, res) => {
+  try {
+    const [subResult, payResult] = await Promise.all([
+      db.pool.query("SELECT COUNT(*) as total, status FROM subscriptions GROUP BY status"),
+      db.pool.query("SELECT COUNT(*) as total, COALESCE(SUM(merchant_received::numeric), 0) as volume FROM payments"),
+    ]);
+
+    const statusCounts = {};
+    subResult.rows.forEach(r => { statusCounts[r.status] = parseInt(r.total); });
+
+    res.json({
+      subscriptions: {
+        active:    statusCounts.active    || 0,
+        paused:    statusCounts.paused    || 0,
+        cancelled: statusCounts.cancelled || 0,
+        expired:   statusCounts.expired   || 0,
+        total:     Object.values(statusCounts).reduce((a, b) => a + parseInt(b), 0),
+      },
+      payments: {
+        total:        parseInt(payResult.rows[0]?.total || 0),
+        volume_usdc:  parseFloat(payResult.rows[0]?.volume || 0) / 1e6,
+      },
+    });
+  } catch (err) {
+    console.error("[ADMIN] Stats error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // POST /api/merchants/register
-// Register a new merchant or update existing
 // -----------------------------------------------------------------------------
 app.post("/api/merchants/register", async (req, res) => {
   try {
     const {
-      wallet_address,
-      business_name,
-      email,
-      webhook_url,
-      settlement_preference, // "usdc" or "fiat"
-      iban,
-      bic,
-      account_holder,
+      wallet_address, business_name, email, webhook_url,
+      settlement_preference, iban, bic, account_holder,
     } = req.body;
 
-    // Validate wallet address
     if (!wallet_address || !wallet_address.startsWith("0x") || wallet_address.length !== 42) {
       return res.status(400).json({ error: "invalid_wallet", message: "Valid Ethereum wallet address required" });
     }
 
-    // Validate settlement preference
     if (settlement_preference && !["usdc", "fiat"].includes(settlement_preference)) {
       return res.status(400).json({ error: "invalid_settlement", message: "settlement_preference must be 'usdc' or 'fiat'" });
     }
 
-    // If fiat settlement, IBAN and BIC required
     if (settlement_preference === "fiat" && (!iban || !bic)) {
       return res.status(400).json({ error: "missing_bank_details", message: "IBAN and BIC required for fiat settlement" });
     }
 
-    // Generate webhook secret if webhook URL provided
     const webhookSecret = webhook_url ? generateWebhookSecret() : null;
 
-    // Save to database (IBAN encrypted automatically in db.js)
     await db.upsertMerchant(wallet_address.toLowerCase(), {
-      businessName: business_name,
-      email,
-      webhookUrl: webhook_url,
-      webhookSecret,
-      settlementPreference: settlement_preference || "usdc",
-      ibanPlaintext: iban || null,
-      bic: bic || null,
-      accountHolder: account_holder || null,
+      businessName: business_name, email, webhookUrl: webhook_url,
+      webhookSecret, settlementPreference: settlement_preference || "usdc",
+      ibanPlaintext: iban || null, bic: bic || null, accountHolder: account_holder || null,
     });
 
     const response = {
@@ -137,7 +247,6 @@ app.post("/api/merchants/register", async (req, res) => {
       },
     };
 
-    // Return webhook secret only once at registration
     if (webhookSecret) {
       response.webhook_secret = webhookSecret;
       response.message = "Save your webhook secret — it will not be shown again.";
@@ -152,13 +261,10 @@ app.post("/api/merchants/register", async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // GET /api/merchants/:address
-// Get merchant profile
 // -----------------------------------------------------------------------------
 app.get("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
-
-    // Only allow merchant to view their own profile
     if (address !== req.merchantAddress) {
       return res.status(403).json({ error: "forbidden", message: "You can only view your own merchant profile" });
     }
@@ -168,7 +274,6 @@ app.get("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
       return res.status(404).json({ error: "not_found", message: "Merchant not found" });
     }
 
-    // Never expose encrypted IBAN or webhook secret in response
     res.json({
       wallet_address: merchant.wallet_address,
       business_name: merchant.business_name,
@@ -187,29 +292,21 @@ app.get("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // PUT /api/merchants/:address
-// Update merchant profile
 // -----------------------------------------------------------------------------
 app.put("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
-
     if (address !== req.merchantAddress) {
       return res.status(403).json({ error: "forbidden" });
     }
 
     const { business_name, email, webhook_url, settlement_preference, iban, bic, account_holder } = req.body;
-
     const webhookSecret = webhook_url ? generateWebhookSecret() : undefined;
 
     await db.upsertMerchant(address, {
-      businessName: business_name,
-      email,
-      webhookUrl: webhook_url,
-      webhookSecret,
-      settlementPreference: settlement_preference,
-      ibanPlaintext: iban,
-      bic,
-      accountHolder: account_holder,
+      businessName: business_name, email, webhookUrl: webhook_url,
+      webhookSecret, settlementPreference: settlement_preference,
+      ibanPlaintext: iban, bic, accountHolder: account_holder,
     });
 
     const response = { success: true, message: "Merchant profile updated" };
@@ -227,250 +324,95 @@ app.put("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // GET /api/merchants/:address/subscriptions
-// Get all subscriptions for a merchant
 // -----------------------------------------------------------------------------
 app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
-
     if (address !== req.merchantAddress) {
       return res.status(403).json({ error: "forbidden" });
     }
 
-    const subscriptions = await db.getSubscriptionsByMerchant(address);
+    const { status, limit = 50, offset = 0 } = req.query;
+    const subs = await db.getMerchantSubscriptions(address, { status, limit: parseInt(limit), offset: parseInt(offset) });
 
     res.json({
       merchant_address: address,
-      total: subscriptions.length,
-      subscriptions: subscriptions.map(s => ({
+      subscriptions: subs.map(s => ({
         subscription_id: s.id,
-        vault_address: s.safe_vault,
-        amount_usdc: (BigInt(s.amount) / BigInt(10 ** 6)).toString(),
-        interval: s.interval,
+        vault_address: s.owner_address,
         status: s.status,
+        amount_usdc: (parseFloat(s.amount) / 1e6).toFixed(2),
+        interval: s.interval,
         last_pulled_at: s.last_pulled_at,
         created_at: s.created_at,
-      }))
+      })),
+      count: subs.length,
     });
   } catch (err) {
-    console.error("[API] Get subscriptions error:", err.message);
-    res.status(500).json({ error: "server_error", message: "Failed to fetch subscriptions" });
+    console.error("[API] Subscriptions error:", err.message);
+    res.status(500).json({ error: "server_error" });
   }
 });
 
 // -----------------------------------------------------------------------------
 // GET /api/merchants/:address/payments
-// Get payment history for a merchant
 // -----------------------------------------------------------------------------
 app.get("/api/merchants/:address/payments", requireMerchantAuth, async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
-
     if (address !== req.merchantAddress) {
       return res.status(403).json({ error: "forbidden" });
     }
 
-    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const payments = await db.getPaymentsByMerchant(address, limit);
+    const { limit = 50, offset = 0 } = req.query;
+    const payments = await db.getMerchantPayments(address, { limit: parseInt(limit), offset: parseInt(offset) });
 
     res.json({
       merchant_address: address,
-      total: payments.length,
       payments: payments.map(p => ({
         payment_id: p.id,
         subscription_id: p.subscription_id,
-        vault_address: p.subscriber_vault || p.owner_address,
-        amount_usdc: (BigInt(p.amount) / BigInt(10 ** 6)).toString(),
-        merchant_received_usdc: (BigInt(p.merchant_received) / BigInt(10 ** 6)).toString(),
-        protocol_fee_usdc: (BigInt(p.fee) / BigInt(10 ** 6)).toString(),
+        vault_address: p.owner_address,
+        amount_usdc: (parseFloat(p.amount) / 1e6).toFixed(2),
+        merchant_received_usdc: (parseFloat(p.merchant_received) / 1e6).toFixed(2),
+        protocol_fee_usdc: (parseFloat(p.fee) / 1e6).toFixed(4),
+        merchant_received_eur: p.merchant_received_eur,
         tx_hash: p.tx_hash,
         executed_at: p.executed_at,
-      }))
+      })),
+      count: payments.length,
     });
   } catch (err) {
-    console.error("[API] Get payments error:", err.message);
-    res.status(500).json({ error: "server_error", message: "Failed to fetch payments" });
+    console.error("[API] Payments error:", err.message);
+    res.status(500).json({ error: "server_error" });
   }
 });
 
 // -----------------------------------------------------------------------------
 // POST /api/webhooks/test
-// Send a test webhook to verify merchant endpoint is working
 // -----------------------------------------------------------------------------
 app.post("/api/webhooks/test", requireMerchantAuth, async (req, res) => {
   try {
-    const { dispatchWebhook } = require("./webhook");
+    const merchant = await db.getMerchant(req.merchantAddress);
+    if (!merchant?.webhook_url) {
+      return res.status(400).json({ error: "no_webhook", message: "No webhook URL configured" });
+    }
 
+    const { dispatchWebhook } = require("./webhook");
     await dispatchWebhook(req.merchantAddress, "webhook.test", {
       message: "This is a test webhook from AuthOnce",
-      merchant_address: req.merchantAddress,
       timestamp: new Date().toISOString(),
     });
 
     res.json({ success: true, message: "Test webhook dispatched" });
   } catch (err) {
-    console.error("[API] Test webhook error:", err.message);
-    res.status(500).json({ error: "server_error", message: "Failed to send test webhook" });
+    console.error("[API] Webhook test error:", err.message);
+    res.status(500).json({ error: "server_error" });
   }
 });
-
-
-// -----------------------------------------------------------------------------
-// GET /api/merchants/:address/payments/export
-// Export payment history as CSV for accountant/tax purposes
-// -----------------------------------------------------------------------------
-app.get("/api/merchants/:address/payments/export", requireMerchantAuth, async (req, res) => {
-  try {
-    const address = req.params.address.toLowerCase();
-    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
-
-    const limit = Math.min(parseInt(req.query.limit) || 1000, 5000);
-    const year = req.query.year ? parseInt(req.query.year) : null;
-    const month = req.query.month || null;
-
-    let payments;
-    if (year && month) {
-      const [y, m] = month.split("-");
-      const result = await db.query(
-        `SELECT p.*, s.owner_address as subscriber_vault FROM payments p
-         JOIN subscriptions s ON p.subscription_id = s.id
-         WHERE p.merchant_address = $1
-           AND EXTRACT(YEAR FROM p.executed_at) = $2
-           AND EXTRACT(MONTH FROM p.executed_at) = $3
-         ORDER BY p.executed_at DESC LIMIT $4`,
-        [address, parseInt(y), parseInt(m), limit]
-      );
-      payments = result.rows;
-    } else if (year) {
-      const result = await db.query(
-        `SELECT p.*, s.owner_address as subscriber_vault FROM payments p
-         JOIN subscriptions s ON p.subscription_id = s.id
-         WHERE p.merchant_address = $1
-           AND EXTRACT(YEAR FROM p.executed_at) = $2
-         ORDER BY p.executed_at DESC LIMIT $3`,
-        [address, year, limit]
-      );
-      payments = result.rows;
-    } else {
-      payments = await db.getPaymentsByMerchant(address, limit);
-    }
-
-    // Build CSV
-    const rows = [
-      ["Payment ID", "Subscription ID", "Subscriber Vault", "Amount USDC",
-       "Merchant Received USDC", "Merchant Received EUR", "EUR Rate",
-       "Protocol Fee USDC", "Transaction Hash", "Date"].join(",")
-    ];
-
-    for (const p of payments) {
-      rows.push([
-        p.id,
-        p.subscription_id,
-        p.subscriber_vault || p.owner_address,
-        (BigInt(p.amount) / BigInt(10 ** 6)).toString(),
-        (BigInt(p.merchant_received) / BigInt(10 ** 6)).toString(),
-        p.merchant_received_eur || "",
-        p.eur_rate || "",
-        (BigInt(p.fee) / BigInt(10 ** 6)).toString(),
-        p.tx_hash,
-        new Date(p.executed_at).toISOString(),
-      ].join(","));
-    }
-
-    const csv = rows.join("\n");
-    const filename = `authonce-payments-${address.substring(0,8)}-${new Date().toISOString().split("T")[0]}.csv`;
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
-  } catch (err) {
-    console.error("[API] CSV export error:", err.message);
-    res.status(500).json({ error: "server_error", message: "Failed to export payments" });
-  }
-});
-
-// -----------------------------------------------------------------------------
-// GET /api/merchants/:address/summary
-// Monthly revenue summary for accounting
-// Query param: ?month=2026-04 (defaults to current month)
-// -----------------------------------------------------------------------------
-app.get("/api/merchants/:address/summary", requireMerchantAuth, async (req, res) => {
-  try {
-    const address = req.params.address.toLowerCase();
-    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
-
-    const month = req.query.month || new Date().toISOString().substring(0, 7);
-    const [year, mon] = month.split("-");
-
-    const result = await db.query(`
-      SELECT
-        COUNT(*)::int                                    AS payment_count,
-        SUM(merchant_received::numeric)                  AS total_received_raw,
-        SUM(fee::numeric)                                AS total_fees_raw,
-        AVG(eur_rate::numeric)                           AS avg_eur_rate,
-        SUM(merchant_received_eur::numeric)              AS total_received_eur,
-        MIN(executed_at)                                 AS first_payment,
-        MAX(executed_at)                                 AS last_payment
-      FROM payments
-      WHERE merchant_address = $1
-        AND EXTRACT(YEAR  FROM executed_at) = $2
-        AND EXTRACT(MONTH FROM executed_at) = $3
-    `, [address, parseInt(year), parseInt(mon)]);
-
-    const row = result.rows[0];
-    const USDC_DECIMALS = BigInt(10 ** 6);
-
-    const totalReceivedUsdc = row.total_received_raw
-      ? (BigInt(Math.round(parseFloat(row.total_received_raw))) / USDC_DECIMALS).toString()
-      : "0";
-    const totalFeesUsdc = row.total_fees_raw
-      ? (BigInt(Math.round(parseFloat(row.total_fees_raw))) / USDC_DECIMALS).toString()
-      : "0";
-
-    // Active subscriptions count
-    const activeSubs = await db.query(
-      "SELECT COUNT(*)::int AS count FROM subscriptions WHERE merchant_address = $1 AND status = $2",
-      [address, "active"]
-    );
-
-    res.json({
-      merchant_address: address,
-      month,
-      summary: {
-        payment_count: row.payment_count || 0,
-        total_received_usdc: totalReceivedUsdc,
-        total_received_eur: row.total_received_eur ? parseFloat(row.total_received_eur).toFixed(2) : null,
-        avg_eur_rate: row.avg_eur_rate ? parseFloat(row.avg_eur_rate).toFixed(4) : null,
-        total_protocol_fees_usdc: totalFeesUsdc,
-        active_subscribers: activeSubs.rows[0].count,
-        first_payment: row.first_payment,
-        last_payment: row.last_payment,
-      }
-    });
-  } catch (err) {
-    console.error("[API] Summary error:", err.message);
-    res.status(500).json({ error: "server_error", message: "Failed to fetch summary" });
-  }
-});
-
-
-// =============================================================================
-// ADMIN ENDPOINTS — AuthOnce internal use only
-// Protected by ADMIN_SECRET environment variable
-// =============================================================================
-
-function requireAdminAuth(req, res, next) {
-  const secret = req.headers["x-admin-secret"];
-  if (!secret || secret !== process.env.ADMIN_SECRET) {
-    return res.status(401).json({ error: "unauthorized", message: "Admin access required" });
-  }
-  next();
-}
 
 // -----------------------------------------------------------------------------
 // GET /api/admin/fees/summary
-// AuthOnce protocol fee summary for tax reporting
-// Query: ?year=2026 or ?month=2026-04
 // -----------------------------------------------------------------------------
 app.get("/api/admin/fees/summary", requireAdminAuth, async (req, res) => {
   try {
@@ -494,44 +436,27 @@ app.get("/api/admin/fees/summary", requireAdminAuth, async (req, res) => {
         COUNT(*)::int                     AS payment_count,
         SUM(fee::numeric)                 AS total_fees_raw,
         AVG(eur_rate::numeric)            AS avg_eur_rate,
-        SUM(
-          CASE WHEN eur_rate IS NOT NULL
-          THEN (fee::numeric / 1000000) * eur_rate::numeric
-          ELSE NULL END
-        )                                 AS total_fees_eur,
+        SUM(CASE WHEN eur_rate IS NOT NULL THEN (fee::numeric / 1000000) * eur_rate::numeric ELSE NULL END) AS total_fees_eur,
         MIN(executed_at)                  AS first_payment,
         MAX(executed_at)                  AS last_payment
-      FROM payments
-      ${whereClause}
+      FROM payments ${whereClause}
     `, params);
 
     const row = result.rows[0];
 
-    // Per merchant breakdown
     const breakdown = await db.query(`
-      SELECT
-        merchant_address,
-        COUNT(*)::int           AS payment_count,
-        SUM(fee::numeric)       AS fees_raw
-      FROM payments
-      ${whereClause}
-      GROUP BY merchant_address
-      ORDER BY fees_raw DESC
+      SELECT merchant_address, COUNT(*)::int AS payment_count, SUM(fee::numeric) AS fees_raw
+      FROM payments ${whereClause}
+      GROUP BY merchant_address ORDER BY fees_raw DESC
     `, params);
 
     res.json({
       period: month || (year ? year.toString() : "all time"),
       protocol_fees: {
         payment_count: row.payment_count || 0,
-        total_fees_usdc: row.total_fees_raw
-          ? (parseFloat(row.total_fees_raw) / 1000000).toFixed(6)
-          : "0",
-        total_fees_eur: row.total_fees_eur
-          ? parseFloat(row.total_fees_eur).toFixed(2)
-          : null,
-        avg_eur_rate: row.avg_eur_rate
-          ? parseFloat(row.avg_eur_rate).toFixed(4)
-          : null,
+        total_fees_usdc: row.total_fees_raw ? (parseFloat(row.total_fees_raw) / 1000000).toFixed(6) : "0",
+        total_fees_eur: row.total_fees_eur ? parseFloat(row.total_fees_eur).toFixed(2) : null,
+        avg_eur_rate: row.avg_eur_rate ? parseFloat(row.avg_eur_rate).toFixed(4) : null,
         first_payment: row.first_payment,
         last_payment: row.last_payment,
       },
@@ -549,62 +474,40 @@ app.get("/api/admin/fees/summary", requireAdminAuth, async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // GET /api/admin/fees/export
-// Download annual fee CSV for Portuguese tax authority (AT)
-// Query: ?year=2026
 // -----------------------------------------------------------------------------
 app.get("/api/admin/fees/export", requireAdminAuth, async (req, res) => {
   try {
     const year = req.query.year ? parseInt(req.query.year) : new Date().getFullYear();
 
     const result = await db.query(`
-      SELECT
-        p.id,
-        p.subscription_id,
-        p.merchant_address,
-        p.amount,
-        p.merchant_received,
-        p.fee,
-        p.eur_rate,
-        p.merchant_received_eur,
-        p.tx_hash,
-        p.executed_at
+      SELECT p.id, p.subscription_id, p.merchant_address, p.amount, p.merchant_received,
+             p.fee, p.eur_rate, p.merchant_received_eur, p.tx_hash, p.executed_at
       FROM payments p
       WHERE EXTRACT(YEAR FROM p.executed_at) = $1
       ORDER BY p.executed_at ASC
     `, [year]);
 
     const rows = [
-      ["Payment ID", "Subscription ID", "Merchant Address",
-       "Total Amount USDC", "Merchant Received USDC", "Protocol Fee USDC",
-       "EUR Rate", "Protocol Fee EUR", "Transaction Hash", "Date"].join(",")
+      ["Payment ID","Subscription ID","Merchant Address",
+       "Total Amount USDC","Merchant Received USDC","Protocol Fee USDC",
+       "EUR Rate","Protocol Fee EUR","Transaction Hash","Date"].join(",")
     ];
 
     for (const p of result.rows) {
       const feeUsdc = (parseFloat(p.fee) / 1000000).toFixed(6);
-      const feeEur  = p.eur_rate
-        ? (parseFloat(feeUsdc) * parseFloat(p.eur_rate)).toFixed(2)
-        : "";
-
+      const feeEur  = p.eur_rate ? (parseFloat(feeUsdc) * parseFloat(p.eur_rate)).toFixed(2) : "";
       rows.push([
-        p.id,
-        p.subscription_id,
-        p.merchant_address,
+        p.id, p.subscription_id, p.merchant_address,
         (parseFloat(p.amount) / 1000000).toFixed(6),
         (parseFloat(p.merchant_received) / 1000000).toFixed(6),
-        feeUsdc,
-        p.eur_rate || "",
-        feeEur,
-        p.tx_hash,
+        feeUsdc, p.eur_rate || "", feeEur, p.tx_hash,
         new Date(p.executed_at).toISOString(),
       ].join(","));
     }
 
-    const csv = rows.join("\n");
-    const filename = `authonce-fees-${year}.csv`;
-
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
+    res.setHeader("Content-Disposition", `attachment; filename="authonce-fees-${year}.csv"`);
+    res.send(rows.join("\n"));
   } catch (err) {
     console.error("[API] Admin fees export error:", err.message);
     res.status(500).json({ error: "server_error" });
@@ -623,13 +526,13 @@ app.use((req, res) => {
 // -----------------------------------------------------------------------------
 async function main() {
   await db.initSchema();
-
   app.listen(PORT, () => {
     console.log("=".repeat(60));
-    console.log("  AuthOnce — Merchant API");
+    console.log("  AuthOnce — Merchant & Admin API");
     console.log("=".repeat(60));
     console.log(`  Listening on port ${PORT}`);
-    console.log(`  Health: http://localhost:${PORT}/api/health`);
+    console.log(`  Health:      http://localhost:${PORT}/api/health`);
+    console.log(`  Admin login: http://localhost:${PORT}/api/admin/login`);
     console.log("=".repeat(60));
   });
 }
