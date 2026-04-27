@@ -513,23 +513,7 @@ app.get("/api/admin/fees/export", requireAdminAuth, async (req, res) => {
     res.status(500).json({ error: "server_error" });
   }
 });
-app.post("/api/merchants/notify-admin", async (req, res) => {
-  try {
-    const { business_name, email, wallet_address, website, use_case } = req.body;
-    const { Resend } = require("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: "AuthOnce <monitor@authonce.io>",
-      to: process.env.ADMIN_EMAIL || "vasco@authonce.io",
-      subject: `New merchant application: ${business_name}`,
-      text: `New merchant application\n\nBusiness: ${business_name}\nEmail: ${email}\nWallet: ${wallet_address}\nWebsite: ${website || "N/A"}\n\nUse case:\n${use_case}`,
-    });
-    res.json({ success: true });
-  } catch (err) {
-    console.error("[API] Notify admin error:", err.message);
-    res.status(500).json({ error: "server_error" });
-  }
-});
+
 // -----------------------------------------------------------------------------
 // 404 handler
 // -----------------------------------------------------------------------------
