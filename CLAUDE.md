@@ -36,8 +36,8 @@
 | Copy Monitor | monitor.js | Watches for unauthorized contract deployments |
 
 **Key contract addresses (Base Sepolia testnet — v1.0.0 BUSL-1.1):**
-- `SubscriptionVault.sol`: `0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA` ✅ deployed + verified
-- `MerchantRegistry.sol`: `0x1fA825065260a4e775AbD8D2596B1869904e446A` ✅ deployed + verified
+- `SubscriptionVault.sol`: `0xED9a4322030b2523cBB4eD5479539a3afEe30afA` ✅ v3 configurable grace period
+- `MerchantRegistry.sol`: `0x3124a01D023FA6F0AFDE1e89c6727FE3D0fAa3d5` ✅ v3
 - Deployer / Admin (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
 - Protocol Treasury (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
 - Gelato Keeper (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
