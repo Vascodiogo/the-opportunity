@@ -8,56 +8,104 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://the-opportunity-produc
 
 // ─── How It Works ─────────────────────────────────────────────────────────────
 function HowItWorks({ lang, isDark }) {
-  const text   = isDark ? "#f1f5f9" : "#0f172a";
-  const muted  = isDark ? "#64748b" : "#94a3b8";
-  const border = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
-  const accent = "#34d399";
-  const blue   = "#3b82f6";
+  const border  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+  const text    = isDark ? "#f1f5f9" : "#0f172a";
+  const muted   = isDark ? "#64748b" : "#94a3b8";
+  const subtle  = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+  const accent  = "#34d399";
+  const tealBg  = isDark ? "rgba(29,158,117,0.12)" : "rgba(29,158,117,0.08)";
+  const amberBg = isDark ? "rgba(186,117,23,0.15)" : "rgba(186,117,23,0.08)";
+  const amber   = "#BA7517";
+  const teal    = "#1D9E75";
 
-  const steps = lang === "en" ? [
-    { n: "01", icon: "✦", title: "Apply",         sub: "Submit your business details — wallet optional" },
-    { n: "02", icon: "✓", title: "Get approved",  sub: "We review and whitelist your wallet personally" },
-    { n: "03", icon: "⟐", title: "Share your link", sub: "authonce.io/pay/yourname — ready instantly" },
-    { n: "04", icon: "◈", title: "Get paid",       sub: "99.5% of every subscription goes to you" },
+  const labels = lang === "en" ? [
+    { n: "01", title: "Apply",            sub: "Submit your business details", note: "Wallet optional" },
+    { n: "02", title: "Get approved",     sub: "We review and whitelist you",  note: "Within 48 hours" },
+    { n: "03", title: "Share your link",  sub: "authonce.io/pay/yourname",     note: "No website needed" },
+    { n: "04", title: "Get paid",         sub: "USDC direct to your wallet",   note: "Every billing cycle" },
   ] : [
-    { n: "01", icon: "✦", title: "Candidatar",      sub: "Envie os seus dados — carteira opcional" },
-    { n: "02", icon: "✓", title: "Ser aprovado",    sub: "Analisamos e aprovamos pessoalmente" },
-    { n: "03", icon: "⟐", title: "Partilhar o link", sub: "authonce.io/pay/seunome — pronto imediatamente" },
-    { n: "04", icon: "◈", title: "Receber",          sub: "99,5% de cada subscrição vai para si" },
+    { n: "01", title: "Registar",         sub: "Envie os seus dados",          note: "Carteira opcional" },
+    { n: "02", title: "Ser aprovado",     sub: "Analisamos e aprovamos",       note: "Em 48 horas" },
+    { n: "03", title: "Partilhar o link", sub: "authonce.io/pay/seunome",      note: "Sem website" },
+    { n: "04", title: "Receber",          sub: "USDC direto para si",          note: "Cada ciclo" },
   ];
 
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-      gap: 0,
-    }}>
-      {steps.map((step, i) => (
-        <div key={i} style={{
-          padding: "32px 28px",
-          borderRight: i < steps.length - 1 ? `0.5px solid ${border}` : "none",
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontSize: 10, fontWeight: 700, color: accent,
-            letterSpacing: "0.12em", marginBottom: 16,
-            fontFamily: "'DM Mono', monospace",
-          }}>{step.n}</div>
-          <div style={{
-            width: 52, height: 52, borderRadius: "50%",
-            background: `linear-gradient(135deg, ${accent}20, ${blue}20)`,
-            border: `0.5px solid ${accent}40`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 16px", fontSize: 18, color: accent,
-          }}>{step.icon}</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: text, marginBottom: 8, letterSpacing: "-0.01em" }}>
-            {step.title}
-          </div>
-          <div style={{ fontSize: 12, color: muted, lineHeight: 1.6, fontWeight: 300 }}>
-            {step.sub}
-          </div>
-        </div>
-      ))}
+    <div style={{ overflowX: "auto" }}>
+      <svg
+        viewBox="0 0 680 280"
+        style={{ width: "100%", display: "block" }}
+        aria-label="How AuthOnce works in 4 steps"
+      >
+        {/* Arrow marker */}
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </marker>
+        </defs>
+
+        {/* Step separators */}
+        {[170,340,510].map(x => (
+          <line key={x} x1={x} y1="40" x2={x} y2="248" stroke={border} strokeWidth="0.5"/>
+        ))}
+
+        {/* ── STEP 1 — Apply (form) ── */}
+        <text x="85" y="56" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: teal, letterSpacing: "0.12em", fontFamily: "monospace" }}>01</text>
+        <rect x="48" y="68" width="74" height="86" rx="6" fill="none" stroke={subtle} strokeWidth="1"/>
+        <rect x="58" y="80" width="54" height="7" rx="2" fill={teal} opacity="0.8"/>
+        <rect x="58" y="94" width="36" height="5" rx="1.5" fill={subtle}/>
+        <rect x="58" y="106" width="42" height="5" rx="1.5" fill={subtle}/>
+        <rect x="58" y="118" width="30" height="5" rx="1.5" fill={subtle}/>
+        <rect x="58" y="132" width="44" height="10" rx="3" fill={teal} opacity="0.7"/>
+        <line x1="96" y1="72" x2="110" y2="66" stroke={muted} strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="93" y1="75" x2="96" y2="72" stroke={muted} strokeWidth="1.5" strokeLinecap="round"/>
+        <text x="85" y="176" textAnchor="middle" style={{ fontSize: 14, fontWeight: 600, fill: text }}>{labels[0].title}</text>
+        <text x="85" y="194" textAnchor="middle" style={{ fontSize: 12, fill: muted }}>{labels[0].sub}</text>
+        <text x="85" y="212" textAnchor="middle" style={{ fontSize: 11, fill: muted, opacity: 0.6 }}>{labels[0].note}</text>
+
+        {/* Arrow 1→2 */}
+        <line x1="130" y1="111" x2="150" y2="111" stroke={subtle} strokeWidth="1" markerEnd="url(#arr)"/>
+
+        {/* ── STEP 2 — Approved (shield + check) ── */}
+        <text x="255" y="56" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: teal, letterSpacing: "0.12em", fontFamily: "monospace" }}>02</text>
+        <path d="M255 68 L228 81 L228 109 Q228 131 255 142 Q282 131 282 109 L282 81 Z" fill={tealBg} stroke={subtle} strokeWidth="1"/>
+        <path d="M243 105 L251 113 L268 96" fill="none" stroke={teal} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <text x="255" y="176" textAnchor="middle" style={{ fontSize: 14, fontWeight: 600, fill: text }}>{labels[1].title}</text>
+        <text x="255" y="194" textAnchor="middle" style={{ fontSize: 12, fill: muted }}>{labels[1].sub}</text>
+        <text x="255" y="212" textAnchor="middle" style={{ fontSize: 11, fill: muted, opacity: 0.6 }}>{labels[1].note}</text>
+
+        {/* Arrow 2→3 */}
+        <line x1="300" y1="105" x2="320" y2="105" stroke={subtle} strokeWidth="1" markerEnd="url(#arr)"/>
+
+        {/* ── STEP 3 — Share link (chain + URL bar) ── */}
+        <text x="425" y="56" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: teal, letterSpacing: "0.12em", fontFamily: "monospace" }}>03</text>
+        <rect x="390" y="86" width="36" height="16" rx="8" fill="none" stroke={subtle} strokeWidth="1.5"/>
+        <rect x="414" y="94" width="36" height="16" rx="8" fill="none" stroke={subtle} strokeWidth="1.5"/>
+        <rect x="388" y="120" width="74" height="18" rx="4" fill={tealBg} stroke={subtle} strokeWidth="0.8"/>
+        <text x="425" y="133" textAnchor="middle" style={{ fontSize: 9, fill: muted, fontFamily: "monospace" }}>authonce.io/pay/you</text>
+        <line x1="450" y1="88" x2="462" y2="76" stroke={muted} strokeWidth="1.2" strokeLinecap="round" markerEnd="url(#arr)"/>
+        <text x="425" y="176" textAnchor="middle" style={{ fontSize: 14, fontWeight: 600, fill: text }}>{labels[2].title}</text>
+        <text x="425" y="194" textAnchor="middle" style={{ fontSize: 12, fill: muted }}>{labels[2].sub}</text>
+        <text x="425" y="212" textAnchor="middle" style={{ fontSize: 11, fill: muted, opacity: 0.6 }}>{labels[2].note}</text>
+
+        {/* Arrow 3→4 */}
+        <line x1="472" y1="111" x2="492" y2="111" stroke={subtle} strokeWidth="1" markerEnd="url(#arr)"/>
+
+        {/* ── STEP 4 — Get paid (coin stack) ── */}
+        <text x="595" y="56" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: amber, letterSpacing: "0.12em", fontFamily: "monospace" }}>04</text>
+        <ellipse cx="595" cy="138" rx="28" ry="8" fill={amberBg} stroke={amber} strokeWidth="0.5" opacity="0.7"/>
+        <rect x="567" y="118" width="56" height="20" fill={amberBg}/>
+        <ellipse cx="595" cy="118" rx="28" ry="8" fill={amberBg} stroke={amber} strokeWidth="0.5" opacity="0.85"/>
+        <rect x="567" y="100" width="56" height="18" fill={amberBg}/>
+        <ellipse cx="595" cy="100" rx="28" ry="8" fill={amberBg} stroke={amber} strokeWidth="0.8"/>
+        <text x="595" y="105" textAnchor="middle" dominantBaseline="central" style={{ fontSize: 14, fontWeight: 500, fill: amber }}>€</text>
+        <line x1="595" y1="70" x2="595" y2="88" stroke={amber} strokeWidth="1.5" markerEnd="url(#arr)"/>
+        <text x="595" y="66" textAnchor="middle" style={{ fontSize: 10, fill: amber }}>99.5%</text>
+        <text x="595" y="176" textAnchor="middle" style={{ fontSize: 14, fontWeight: 600, fill: text }}>{labels[3].title}</text>
+        <text x="595" y="194" textAnchor="middle" style={{ fontSize: 12, fill: muted }}>{labels[3].sub}</text>
+        <text x="595" y="212" textAnchor="middle" style={{ fontSize: 11, fill: muted, opacity: 0.6 }}>{labels[3].note}</text>
+
+      </svg>
     </div>
   );
 }
