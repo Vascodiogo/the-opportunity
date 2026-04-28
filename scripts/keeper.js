@@ -2,7 +2,7 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
 
-const VAULT_ADDRESS   = "0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA"; // v1.0.0 BUSL-1.1
+const VAULT_ADDRESS = "0xED9a4322030b2523cBB4eD5479539a3afEe30afA"; // v3 — configurable grace period
 const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL;
 const KEEPER_PRIVKEY  = process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;

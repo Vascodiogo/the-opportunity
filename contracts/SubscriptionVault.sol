@@ -5,7 +5,7 @@ pragma solidity ^0.8.24;
 //  SubscriptionVault.sol — AuthOnce Protocol
 //
 //  Network:    Base Sepolia (testnet)
-//  Address:    0x2ED847da7f88231Ac6907196868adF4840A97f49
+//  Address:    0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA
 //  Compiler:   Solidity v0.8.24, optimizer: true, 200 runs,
 //              viaIR: true, evmVersion: paris
 //
@@ -18,6 +18,10 @@ pragma solidity ^0.8.24;
 //    - trialEndsAt — free trial period before first payment
 //    - merchantPauseSubscription() — merchant customer service tool
 //    - MAX_TRIAL_PERIOD constant — 90 days maximum trial
+//
+//  v3 additions:
+//    - gracePeriodDays — configurable per subscription (1–30 days, default 7)
+//    - Removed hardcoded GRACE_PERIOD constant
 //
 //  License: Business Source License 1.1
 //  © 2026 Vasco Humberto dos Reis Diogo. All Rights Reserved.
@@ -91,8 +95,14 @@ contract SubscriptionVault is ReentrancyGuard {
     /// @notice Hard ceiling on protocol fee: 2% = 200 bps (CLAUDE.md §3.9, §7).
     uint16 public constant MAX_FEE_BPS = 200;
 
-    /// @notice Grace period before underfunded subscription auto-expires (CLAUDE.md §3.3).
-    uint256 public constant GRACE_PERIOD = 7 days;
+    /// @notice Minimum grace period a merchant can set — 1 day.
+    uint256 public constant MIN_GRACE_DAYS = 1;
+
+    /// @notice Maximum grace period a merchant can set — 30 days.
+    uint256 public constant MAX_GRACE_DAYS = 30;
+
+    /// @notice Default grace period if merchant does not specify — 7 days.
+    uint256 public constant DEFAULT_GRACE_DAYS = 7;
 
     /// @notice Minimum notice period for merchant price changes — 30 days, unbypassable.
     uint256 public constant MIN_EXPIRY_NOTICE = 30 days;
@@ -126,6 +136,7 @@ contract SubscriptionVault is ReentrancyGuard {
         uint256 pausedAt;       // Timestamp of pause start (0 = not paused)
         uint256 expiresAt;      // Timestamp of scheduled expiry (0 = no expiry set)
         uint256 trialEndsAt;    // Timestamp when trial ends (0 = no trial)
+        uint256 gracePeriodDays;// Grace period in days before auto-expiry (1–30)
         SubscriptionStatus status;
     }
 
@@ -190,6 +201,9 @@ contract SubscriptionVault is ReentrancyGuard {
 
     /// @notice Emitted when a trial period starts
     event TrialStarted(uint256 indexed id, uint256 trialEndsAt);
+
+    /// @notice Emitted when grace period is set at subscription creation
+    event GracePeriodSet(uint256 indexed id, uint256 gracePeriodDays);
 
     event MerchantApproved(address indexed merchant);
     event MerchantRevoked(address indexed merchant);
@@ -268,7 +282,8 @@ contract SubscriptionVault is ReentrancyGuard {
         uint256  amount,
         Interval interval,
         address  guardian,
-        uint256  trialDays   // 0 = no trial, max 90 days
+        uint256  trialDays,       // 0 = no trial, max 90 days
+        uint256  gracePeriodDays_ // 0 = use default (7 days), max 30 days
     ) external returns (uint256 id) {
         require(msg.sender != address(0),    "ZeroOwner");
         require(merchant   != address(0),    "ZeroMerchant");
@@ -276,6 +291,13 @@ contract SubscriptionVault is ReentrancyGuard {
         require(amount     >  0,             "ZeroAmount");
         require(approvedMerchants[merchant], "MerchantNotApproved");
         require(trialDays  <= 90,            "TrialTooLong");
+        require(
+            gracePeriodDays_ == 0 ||
+            (gracePeriodDays_ >= MIN_GRACE_DAYS && gracePeriodDays_ <= MAX_GRACE_DAYS),
+            "InvalidGracePeriod"
+        );
+
+        uint256 graceDays = gracePeriodDays_ == 0 ? DEFAULT_GRACE_DAYS : gracePeriodDays_;
 
         uint256 trialEndsAt = trialDays > 0
             ? block.timestamp + (trialDays * 1 days)
@@ -293,11 +315,13 @@ contract SubscriptionVault is ReentrancyGuard {
             lastPulledAt: trialEndsAt,  // First pull due after trial ends
             pausedAt:     0,
             expiresAt:    0,
-            trialEndsAt:  trialEndsAt,
-            status:       SubscriptionStatus.Active
+            trialEndsAt:      trialEndsAt,
+            gracePeriodDays:  graceDays,
+            status:           SubscriptionStatus.Active
         });
 
         emit SubscriptionCreated(id, msg.sender, merchant, safeVault, amount, interval, guardian);
+        emit GracePeriodSet(id, graceDays);
         if (trialEndsAt > 0) emit TrialStarted(id, trialEndsAt);
     }
 
@@ -325,7 +349,7 @@ contract SubscriptionVault is ReentrancyGuard {
         require(msg.sender == sub.owner, "NotOwner");
         require(sub.status == SubscriptionStatus.Paused, "NotPaused");
         require(
-            sub.pausedAt == 0 || block.timestamp <= sub.pausedAt + GRACE_PERIOD,
+            sub.pausedAt == 0 || block.timestamp <= sub.pausedAt + (sub.gracePeriodDays * 1 days),
             "GracePeriodExpired"
         );
         sub.status   = SubscriptionStatus.Active;
@@ -407,7 +431,7 @@ contract SubscriptionVault is ReentrancyGuard {
         if (currentVaultBalance < pullAmount) {
             sub.status   = SubscriptionStatus.Paused;
             sub.pausedAt = block.timestamp;
-            emit InsufficientFunds(id, pullAmount, currentVaultBalance, block.timestamp + GRACE_PERIOD);
+            emit InsufficientFunds(id, pullAmount, currentVaultBalance, block.timestamp + (sub.gracePeriodDays * 1 days));
             emit SubscriptionPaused(id, address(this), "insufficient_funds");
             return;
         }
@@ -445,7 +469,7 @@ contract SubscriptionVault is ReentrancyGuard {
         Subscription storage sub = subscriptions[id];
         require(sub.status == SubscriptionStatus.Paused, "NotPaused");
         require(sub.pausedAt > 0,                        "NeverPaused");
-        require(block.timestamp > sub.pausedAt + GRACE_PERIOD, "GraceStillActive");
+        require(block.timestamp > sub.pausedAt + (sub.gracePeriodDays * 1 days), "GraceStillActive");
         sub.status = SubscriptionStatus.Expired;
         emit SubscriptionExpired(id, block.timestamp);
     }

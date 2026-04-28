@@ -17,7 +17,7 @@ const { ethers } = require("ethers");
 const db = require("./db");
 const { dispatchWebhook } = require("./webhook");
 
-const VAULT_ADDRESS  = "0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA"; // v1.0.0 BUSL-1.1
+const VAULT_ADDRESS = "0xED9a4322030b2523cBB4eD5479539a3afEe30afA"; // v3 configurable grace period
 const RPC_URL        = process.env.BASE_SEPOLIA_RPC_URL;
 const POLL_INTERVAL  = 30_000; // 30 seconds
 const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
