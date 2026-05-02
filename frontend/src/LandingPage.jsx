@@ -165,12 +165,12 @@ function ApplyForm({ lang, isDark }) {
       }}>
         <div style={{ fontSize: 40, marginBottom: 16 }}>✓</div>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: accent, margin: "0 0 12px" }}>
-          {lang === "en" ? "Application received!" : "Candidatura recebida!"}
+          {lang === "en" ? "Application received!" : "Registo recebido!"}
         </h3>
         <p style={{ color: muted, fontSize: 14, margin: 0, fontWeight: 300 }}>
           {lang === "en"
             ? "We'll review your application and get back to you within 48 hours."
-            : "Vamos analisar a sua candidatura e responder em 48 horas."}
+            : "Vamos analisar o seu registo e responder em 48 horas."}
         </p>
       </div>
     );
@@ -268,13 +268,13 @@ function ApplyForm({ lang, isDark }) {
       }}>
         {status === "loading"
           ? (lang === "en" ? "Submitting…" : "A enviar…")
-          : (lang === "en" ? "Apply for founding merchant access →" : "Candidatar-me como comerciante fundador →")}
+          : (lang === "en" ? "Apply for founding merchant access →" : "Registar-me como parceiro fundador →")}
       </button>
 
       <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 12, marginBottom: 0 }}>
         {lang === "en"
           ? "We review every application personally. You'll hear from us within 48 hours."
-          : "Analisamos cada candidatura pessoalmente. Responderemos em 48 horas."}
+          : "Analisamos cada registo pessoalmente. Responderemos em 48 horas."}
       </p>
     </form>
   );
@@ -331,7 +331,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             border: "none", borderRadius: 8, padding: "8px 20px",
             color: "#080c14", fontSize: 13, fontWeight: 700, cursor: "pointer",
           }}>
-            {lang === "en" ? "Apply Today →" : "Candidatar →"}
+            {lang === "en" ? "Apply Today →" : "Registar →"}
           </button>
         </div>
       </nav>
@@ -362,7 +362,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               Without the complexity.
             </span></>
           ) : (
-            <>Aceite pagamentos cripto recorrentes.<br/>
+            <>Aceite pagamentos Crypto recorrentes.<br/>
             <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               Sem a complexidade.
             </span></>
@@ -381,7 +381,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           color: "#080c14", fontSize: 16, fontWeight: 700, cursor: "pointer",
           letterSpacing: "-0.01em",
         }}>
-          {lang === "en" ? "Apply Today →" : "Candidatar Hoje →"}
+          {lang === "en" ? "Apply Today →" : "Registar Hoje →"}
         </button>
       </section>
 
@@ -419,7 +419,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <p style={{ textAlign: "center", color: muted, fontSize: 13, marginTop: 20, fontStyle: "italic", fontWeight: 300 }}>
           {lang === "en"
             ? "Founding merchants are approved personally by the AuthOnce team within 48 hours."
-            : "Os comerciantes fundadores são aprovados pessoalmente pela equipa AuthOnce em 48 horas."}
+            : "Os parceiros fundadores são aprovados pessoalmente pela equipa AuthOnce em 48 horas."}
         </p>
       </section>
 
@@ -443,7 +443,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <p style={{ color: muted, fontSize: 14, lineHeight: 1.7, margin: "0 0 24px", fontWeight: 300 }}>
               {lang === "en"
                 ? "Standard protocol fee is 0.5% per transaction. No monthly fee. No setup fee. No contract. Founding merchants get 0% for their first 3 months."
-                : "A taxa padrão do protocolo é 0,5% por transação. Sem taxa mensal. Sem taxa de adesão. Sem contrato. Os comerciantes fundadores pagam 0% nos primeiros 3 meses."}
+                : "A taxa padrão do protocolo é 0,5% por transação. Sem taxa mensal. Sem taxa de adesão. Sem contrato. Os parceiros fundadores pagam 0% nos primeiros 3 meses."}
             </p>
             <div style={{ display: "flex", gap: 28 }}>
               {[
@@ -552,15 +552,15 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Apply today" : "Candidatar hoje"}
+              {lang === "en" ? "Apply today" : "Registar hoje"}
             </p>
             <h2 style={{ fontSize: 32, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Become a founding merchant" : "Torne-se um comerciante fundador"}
+              {lang === "en" ? "Become a founding merchant" : "Torne-se um parceiro fundador"}
             </h2>
             <p style={{ color: muted, fontSize: 15, margin: 0, fontWeight: 300 }}>
               {lang === "en"
                 ? "We review every application personally. First 10 approved merchants get 0% fees for 3 months."
-                : "Analisamos cada candidatura pessoalmente. Os primeiros 10 aprovados pagam 0% de taxas durante 3 meses."}
+                : "Analisamos cada registo pessoalmente. Os primeiros 10 aprovados pagam 0% de taxas durante 3 meses."}
             </p>
           </div>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, padding: 36 }}>
@@ -585,9 +585,21 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               {lang === "en" ? "The future of recurring payments." : "O futuro dos pagamentos recorrentes."}
             </span>
           </div>
-          <div style={{ display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
-            <a href="mailto:vasco@authonce.io" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
-              vasco@authonce.io
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <a href="mailto:support@authonce.io" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+              support@authonce.io
+            </a>
+            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+              {lang === "en" ? "Terms" : "Termos"}
+            </a>
+            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+              {lang === "en" ? "Privacy" : "Privacidade"}
+            </a>
+            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+              {lang === "en" ? "Refunds" : "Reembolsos"}
             </a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>BUSL-1.1</span>
