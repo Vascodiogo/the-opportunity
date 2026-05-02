@@ -165,7 +165,8 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_payments_subscription ON payments(subscription_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_payments_merchant ON payments(merchant_address)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_merchant ON webhook_deliveries(merchant_address)`);
-
+  await pool.query("ALTER TABLE merchants ADD COLUMN IF NOT EXISTS stripe_account_id TEXT, ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMPTZ");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_merchants_stripe_account_id ON merchants(stripe_account_id) WHERE stripe_account_id IS NOT NULL");
   console.log("[DB] Schema ready ✓");
 }
 
