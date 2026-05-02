@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legal — AuthOnce</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #080c14; --card: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07); --text: #f1f5f9;
+    --muted: #64748b; --accent: #34d399; --blue: #3b82f6;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-weight: 300; line-height: 1.8; font-size: 15px; }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 0 40px; height: 64px; border-bottom: 0.5px solid var(--border); background: rgba(8,12,20,0.95); backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 100; }
+  .logo { font-size: 17px; font-weight: 700; text-decoration: none; color: var(--text); }
+  .logo span { color: var(--accent); }
+  .lang-toggle { display: flex; gap: 8px; }
+  .lang-btn { background: none; border: 0.5px solid var(--border); border-radius: 6px; padding: 4px 12px; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .lang-btn.active { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.3); color: var(--accent); }
+  .container { max-width: 760px; margin: 0 auto; padding: 60px 40px 120px; }
+  .doc-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.04); border-radius: 10px; padding: 4px; margin-bottom: 48px; }
+  .doc-tab { flex: 1; background: none; border: none; border-radius: 7px; padding: 8px 16px; color: var(--muted); font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .doc-tab.active { background: rgba(255,255,255,0.08); color: var(--text); }
+  .doc { display: none; }
+  .doc.active { display: block; }
+  .doc-header { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 0.5px solid var(--border); }
+  .doc-label { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px; }
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
+  .effective { font-size: 13px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  h2 { font-size: 16px; font-weight: 600; color: var(--text); margin: 36px 0 12px; letter-spacing: -0.01em; }
+  p { color: var(--muted); margin-bottom: 16px; }
+  ul { color: var(--muted); padding-left: 20px; margin-bottom: 16px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); text-decoration: none; }
+  .notice { background: rgba(251,191,36,0.08); border: 0.5px solid rgba(251,191,36,0.25); border-radius: 10px; padding: 16px 20px; margin: 24px 0; font-size: 13px; color: #fbbf24; }
+  .warning { background: rgba(239,68,68,0.08); border: 0.5px solid rgba(239,68,68,0.25); border-radius: 10px; padding: 16px 20px; margin: 24px 0; font-size: 13px; color: #f87171; font-weight: 600; letter-spacing: 0.02em; }
+  .definitions { background: rgba(255,255,255,0.03); border: 0.5px solid var(--border); border-radius: 10px; padding: 20px 24px; margin: 24px 0; }
+  .definitions dt { font-weight: 600; color: var(--text); font-size: 13px; margin-top: 12px; }
+  .definitions dd { color: var(--muted); font-size: 13px; margin-left: 0; margin-bottom: 4px; }
+  footer { border-top: 0.5px solid var(--border); padding: 32px 40px; text-align: center; font-size: 12px; color: var(--muted); }
+  [lang-content] { display: none; }
+  [lang-content].visible { display: block; }
+  span[lang-inline] { display: none; }
+  span[lang-inline].visible { display: inline; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">Auth<span>Once</span></a>
+  <div class="lang-toggle">
+    <button class="lang-btn active" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" onclick="setLang('pt')">PT</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="doc-tabs">
+    <button class="doc-tab active" onclick="showDoc('tos')">
+      <span lang-inline="en" class="visible">Terms of Service</span>
+      <span lang-inline="pt">Termos de Serviço</span>
+    </button>
+    <button class="doc-tab" onclick="showDoc('privacy')">
+      <span lang-inline="en" class="visible">Privacy Policy</span>
+      <span lang-inline="pt">Política de Privacidade</span>
+    </button>
+    <button class="doc-tab" onclick="showDoc('refund')">
+      <span lang-inline="en" class="visible">Refund Policy</span>
+      <span lang-inline="pt">Política de Reembolso</span>
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       TERMS OF SERVICE
+  ══════════════════════════════════════════════════════════════ -->
+  <div id="doc-tos" class="doc active">
+    <div class="doc-header">
+      <div class="doc-label">Legal</div>
+      <h1><span lang-inline="en" class="visible">Terms of Service</span><span lang-inline="pt">Termos de Serviço</span></h1>
+      <div class="effective">
+        <span lang-inline="en" class="visible">Effective: May 2, 2026 · Version 0.1 (testnet draft)</span>
+        <span lang-inline="pt">Vigência: 2 de maio de 2026 · Versão 0.1 (rascunho testnet)</span>
+      </div>
+    </div>
+
+    <div class="warning">
+      <span lang-inline="en" class="visible">⚠ AUTHONCE IS CURRENTLY OPERATING ON TESTNET ONLY. NO REAL FUNDS ARE AT RISK. THESE TERMS WILL BE UPDATED AND FORMALLY REVIEWED BY A QUALIFIED LAWYER PRIOR TO MAINNET LAUNCH (PLANNED Q3 2026).</span>
+      <span lang-inline="pt">⚠ O AUTHONCE OPERA ATUALMENTE APENAS EM TESTNET. NÃO HÁ FUNDOS REAIS EM RISCO. ESTES TERMOS SERÃO ATUALIZADOS E FORMALMENTE REVISTOS POR ADVOGADO QUALIFICADO ANTES DO LANÇAMENTO NO MAINNET (PREVISTO T3 2026).</span>
+    </div>
+
+    <!-- EN -->
+    <div lang-content="en" class="visible">
+
+      <h2>1. Definitions</h2>
+      <div class="definitions">
+        <dl>
+          <dt>"AuthOnce"</dt><dd>The platform and protocol operated by Vasco Humberto dos Reis Diogo, accessible at authonce.io.</dd>
+          <dt>"Merchant"</dt><dd>A business or individual approved by AuthOnce to accept recurring payments via the platform.</dd>
+          <dt>"Subscriber"</dt><dd>A person who authorises recurring payments to a Merchant via AuthOnce.</dd>
+          <dt>"Protocol Fee"</dt><dd>The fee charged by AuthOnce per successful transaction, as published on authonce.io at the time of registration.</dd>
+          <dt>"Testnet"</dt><dd>A test environment using no real funds, used during development and testing.</dd>
+          <dt>"Mainnet"</dt><dd>The live production environment on Base Network, planned for Q3 2026.</dd>
+          <dt>"On-chain"</dt><dd>Transactions recorded permanently on Base Network blockchain.</dd>
+        </dl>
+      </div>
+
+      <h2>2. About AuthOnce</h2>
+      <p>AuthOnce is a non-custodial subscription payment infrastructure platform. AuthOnce provides software infrastructure that enables Merchants to collect recurring payments from Subscribers via MB Way, Multibanco, credit card, SEPA Direct Debit, and USDC on Base Network. AuthOnce provides software infrastructure only and does not provide financial, investment, legal, or tax advice.</p>
+
+      <h2>3. Acceptance of Terms</h2>
+      <p>By accessing authonce.io or using AuthOnce services, you confirm that you are at least 18 years of age, have the legal authority to accept these terms, and agree to be bound by them. If you do not agree, do not use our services. These terms are available in English and Portuguese. In case of conflict between translations, the English version prevails.</p>
+
+      <h2>4. Services Provided</h2>
+      <p>AuthOnce provides:</p>
+      <ul>
+        <li>A platform for Merchants to create and manage recurring subscription products</li>
+        <li>Payment processing infrastructure via Stripe Connect (fiat) and Base Network (USDC)</li>
+        <li>Subscriber management tools and notification services</li>
+        <li>A merchant dashboard, hosted payment pages, embeddable widget, and REST API</li>
+      </ul>
+
+      <h2>5. Merchant Registration and Eligibility</h2>
+      <p>Merchant access is by invitation only. By registering, the Merchant represents and warrants that:</p>
+      <ul>
+        <li>They have full legal authority to bind their business to these terms</li>
+        <li>Their business and all activities are legal in their jurisdiction</li>
+        <li>They will not use AuthOnce to process illegal, fraudulent, or prohibited transactions</li>
+        <li>They are not located in, or acting on behalf of persons in, OFAC-sanctioned regions</li>
+        <li>All information provided during registration is accurate and complete</li>
+      </ul>
+
+      <h2>6. Fees</h2>
+      <p>AuthOnce charges a Protocol Fee per successful transaction, as displayed on authonce.io at the time of Merchant registration. Stripe processing fees are separate and charged by Stripe directly under Stripe's own terms. AuthOnce reserves the right to update fees with 30 days written notice to Merchants.</p>
+
+      <h2>7. Non-Custodial Architecture</h2>
+      <p>AuthOnce provides software infrastructure only and does not hold, control, or have access to user funds at any time. Fiat payments flow directly between Subscribers and Merchants via Stripe Connect. USDC payments flow directly on-chain via Base Network smart contracts. AuthOnce facilitates the technical execution of pre-authorised payment instructions but is not a payment service provider, custodian, or financial institution.</p>
+
+      <h2>8. Merchant Obligations</h2>
+      <p>Merchants using AuthOnce agree to:</p>
+      <ul>
+        <li>Comply with all applicable laws including consumer protection, AML, and tax regulations</li>
+        <li>Maintain their own Stripe Connect account and comply with Stripe's terms of service</li>
+        <li>Clearly communicate subscription terms, pricing, and cancellation rights to Subscribers</li>
+        <li>Handle all disputes with their Subscribers directly and independently</li>
+        <li>Be solely responsible for their own AML/KYC compliance obligations</li>
+        <li>Be solely responsible for determining and paying all applicable taxes including VAT</li>
+        <li>Not use AuthOnce for illegal goods or services, money laundering, or financial fraud</li>
+      </ul>
+
+      <h2>9. Prohibited Uses</h2>
+      <p>AuthOnce may not be used for:</p>
+      <ul>
+        <li>Illegal goods or services of any kind</li>
+        <li>Money laundering, terrorist financing, or financial fraud</li>
+        <li>Services restricted in OFAC-sanctioned regions (Iran, North Korea, Russia, Syria, Cuba, Belarus)</li>
+        <li>Adult content, gambling, weapons, or controlled substances</li>
+        <li>Any activity that violates applicable law in the Merchant's or Subscriber's jurisdiction</li>
+      </ul>
+
+      <h2>10. Disputes Between Merchants and Subscribers</h2>
+      <p>Disputes arising from commercial relationships between Merchants and Subscribers are exclusively the responsibility of those parties. AuthOnce is payment infrastructure and does not mediate, arbitrate, or accept liability for commercial disputes. AuthOnce may be contacted at <a href="mailto:support@authonce.io">support@authonce.io</a> solely in cases of suspected platform fraud, platform abuse, or technical errors caused by the AuthOnce protocol itself.</p>
+
+      <h2>11. Intellectual Property</h2>
+      <p>AuthOnce and its protocol are protected under the Business Source License 1.1 (BUSL-1.1). Commercial use, copying, forking, or deployment of the AuthOnce protocol without explicit written permission is prohibited until January 1, 2030. After that date, the protocol converts to open-source under GPL v2.</p>
+
+      <h2>12. Wallet Security</h2>
+      <p>You are solely responsible for the security of your wallet address and private keys. AuthOnce cannot recover lost wallets, reverse blockchain transactions, or restore access to wallet addresses. On-chain transactions are final and irreversible.</p>
+
+      <h2>13. Service Availability</h2>
+      <p>AuthOnce is currently operating on testnet. No guarantee of uptime, availability, or continuity of service is made during the testnet period. For mainnet, AuthOnce will publish a service level policy prior to launch. AuthOnce is not liable for losses caused by service unavailability, blockchain network outages, or third-party service failures.</p>
+
+      <h2>14. Account Termination</h2>
+      <p>AuthOnce reserves the right to suspend or revoke Merchant access with 14 days written notice. In cases of fraud, illegal activity, or material breach of these terms, access may be revoked immediately without prior notice. Existing active subscriptions will be honoured during any transition period.</p>
+
+      <h2>15. Protocol Changes</h2>
+      <p>AuthOnce reserves the right to modify, update, or discontinue any part of the service with 30 days written notice to Merchants. Smart contracts deployed on mainnet cannot be modified — this is by design and provides Merchants and Subscribers with immutability guarantees.</p>
+
+      <h2>16. Updates to These Terms</h2>
+      <p>AuthOnce may update these terms at any time. Merchants will be notified by email at least 14 days before material changes take effect. Continued use of the platform after the effective date constitutes acceptance of the updated terms.</p>
+
+      <h2>17. No Financial Advice</h2>
+      <p>Nothing on authonce.io or in any AuthOnce communication constitutes financial, investment, legal, or tax advice. The use of USDC, blockchain technology, and digital assets carries risk. Use of the AuthOnce protocol is entirely at your own risk.</p>
+
+      <h2>18. Force Majeure</h2>
+      <p>AuthOnce is not liable for any failure or delay in performance caused by events beyond our reasonable control, including but not limited to: blockchain network outages, Stripe or third-party service failures, natural disasters, regulatory changes, government actions, or acts of war.</p>
+
+      <h2>19. Indemnification</h2>
+      <p>Merchants agree to indemnify, defend, and hold harmless AuthOnce and its operator from and against any claims, liabilities, damages, losses, and expenses (including legal fees) arising from: their use of the platform, their business operations, their Subscribers, their violation of these terms, or their violation of any applicable law.</p>
+
+      <h2>20. Limitation of Liability</h2>
+      <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, AUTHONCE'S TOTAL LIABILITY TO ANY PARTY SHALL NOT EXCEED €100 OR THE TOTAL AMOUNT PAID BY THAT PARTY TO AUTHONCE IN THE THREE MONTHS PRECEDING THE CLAIM, WHICHEVER IS LOWER. AUTHONCE SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES WHATSOEVER, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+
+      <h2>21. No Class Action</h2>
+      <p>Any disputes must be brought on an individual basis only. You waive any right to participate in class action lawsuits or class-wide arbitration against AuthOnce.</p>
+
+      <h2>22. Governing Law</h2>
+      <p>These terms are governed by the laws of Portugal and the European Union. Mandatory EU consumer protection provisions apply regardless of any other governing law. [Note: governing jurisdiction to be confirmed by legal counsel prior to mainnet launch.]</p>
+
+      <h2>23. Severability</h2>
+      <p>If any provision of these terms is found to be invalid or unenforceable by a court of competent jurisdiction, that provision shall be modified to the minimum extent necessary to make it enforceable, and the remaining provisions shall continue in full force and effect.</p>
+
+      <h2>24. Entire Agreement</h2>
+      <p>These Terms of Service, together with the Privacy Policy and Refund Policy, constitute the entire agreement between AuthOnce and the user with respect to the subject matter herein, and supersede all prior and contemporaneous agreements, understandings, and communications.</p>
+
+      <h2>25. Contact</h2>
+      <p>For questions about these terms: <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+
+    </div>
+
+    <!-- PT -->
+    <div lang-content="pt">
+
+      <h2>1. Definições</h2>
+      <div class="definitions">
+        <dl>
+          <dt>"AuthOnce"</dt><dd>A plataforma e protocolo operados por Vasco Humberto dos Reis Diogo, acessível em authonce.io.</dd>
+          <dt>"Comerciante"</dt><dd>Uma empresa ou indivíduo aprovado pelo AuthOnce para aceitar pagamentos recorrentes através da plataforma.</dd>
+          <dt>"Subscritor"</dt><dd>Uma pessoa que autoriza pagamentos recorrentes a um Comerciante através do AuthOnce.</dd>
+          <dt>"Taxa de Protocolo"</dt><dd>A taxa cobrada pelo AuthOnce por transação bem-sucedida, publicada em authonce.io no momento do registo.</dd>
+          <dt>"Testnet"</dt><dd>Ambiente de teste sem fundos reais, utilizado durante o desenvolvimento.</dd>
+          <dt>"Mainnet"</dt><dd>O ambiente de produção live na Base Network, previsto para T3 2026.</dd>
+          <dt>"On-chain"</dt><dd>Transações registadas permanentemente na blockchain Base Network.</dd>
+        </dl>
+      </div>
+
+      <h2>2. Sobre o AuthOnce</h2>
+      <p>O AuthOnce é uma plataforma de infraestrutura de pagamentos recorrentes não custodial. O AuthOnce fornece infraestrutura de software que permite a Comerciantes cobrar pagamentos recorrentes de Subscritores através de MB Way, Multibanco, cartão de crédito, SEPA Direct Debit e USDC na Base Network. O AuthOnce fornece apenas infraestrutura de software e não presta aconselhamento financeiro, de investimento, jurídico ou fiscal.</p>
+
+      <h2>3. Aceitação dos Termos</h2>
+      <p>Ao aceder a authonce.io ou utilizar os serviços do AuthOnce, confirma que tem pelo menos 18 anos de idade, tem autoridade legal para aceitar estes termos e concorda em ficar vinculado por eles. Se não concordar, não utilize os nossos serviços. Estes termos estão disponíveis em inglês e português. Em caso de conflito entre traduções, prevalece a versão inglesa.</p>
+
+      <h2>4. Serviços Fornecidos</h2>
+      <p>O AuthOnce fornece:</p>
+      <ul>
+        <li>Uma plataforma para Comerciantes criarem e gerirem produtos de subscrição recorrente</li>
+        <li>Infraestrutura de processamento de pagamentos via Stripe Connect (fiat) e Base Network (USDC)</li>
+        <li>Ferramentas de gestão de Subscritores e serviços de notificação</li>
+        <li>Dashboard do comerciante, páginas de pagamento alojadas, widget incorporável e API REST</li>
+      </ul>
+
+      <h2>5. Registo e Elegibilidade do Comerciante</h2>
+      <p>O acesso de Comerciantes é por convite apenas. Ao registar-se, o Comerciante declara e garante que:</p>
+      <ul>
+        <li>Tem plena autoridade legal para vincular a sua empresa a estes termos</li>
+        <li>A sua empresa e todas as atividades são legais na sua jurisdição</li>
+        <li>Não utilizará o AuthOnce para processar transações ilegais, fraudulentas ou proibidas</li>
+        <li>Não está localizado em, nem age em nome de pessoas em, regiões sancionadas pela OFAC</li>
+        <li>Todas as informações fornecidas durante o registo são precisas e completas</li>
+      </ul>
+
+      <h2>6. Taxas</h2>
+      <p>O AuthOnce cobra uma Taxa de Protocolo por transação bem-sucedida, conforme publicado em authonce.io no momento do registo do Comerciante. As taxas de processamento da Stripe são separadas e cobradas diretamente pela Stripe. O AuthOnce reserva-se o direito de atualizar as taxas com 30 dias de aviso prévio por escrito aos Comerciantes.</p>
+
+      <h2>7. Arquitetura Não Custodial</h2>
+      <p>O AuthOnce fornece apenas infraestrutura de software e não detém, controla nem tem acesso aos fundos dos utilizadores em nenhum momento. Os pagamentos em fiat fluem diretamente entre Subscritores e Comerciantes via Stripe Connect. Os pagamentos em USDC fluem diretamente on-chain via contratos inteligentes da Base Network. O AuthOnce facilita a execução técnica de instruções de pagamento pré-autorizadas, mas não é um prestador de serviços de pagamento, custodiante ou instituição financeira.</p>
+
+      <h2>8. Obrigações dos Comerciantes</h2>
+      <p>Os Comerciantes que utilizam o AuthOnce comprometem-se a:</p>
+      <ul>
+        <li>Cumprir todas as leis aplicáveis, incluindo proteção do consumidor, AML e regulamentos fiscais</li>
+        <li>Manter a sua própria conta Stripe Connect e cumprir os termos da Stripe</li>
+        <li>Comunicar claramente os termos de subscrição, preços e direitos de cancelamento aos Subscritores</li>
+        <li>Tratar todos os litígios com os seus Subscritores direta e independentemente</li>
+        <li>Ser o único responsável pelas suas obrigações de conformidade AML/KYC</li>
+        <li>Ser o único responsável pela determinação e pagamento de todos os impostos aplicáveis incluindo IVA</li>
+        <li>Não utilizar o AuthOnce para bens ou serviços ilegais, branqueamento de capitais ou fraude financeira</li>
+      </ul>
+
+      <h2>9. Utilizações Proibidas</h2>
+      <p>O AuthOnce não pode ser utilizado para:</p>
+      <ul>
+        <li>Bens ou serviços ilegais de qualquer tipo</li>
+        <li>Branqueamento de capitais, financiamento do terrorismo ou fraude financeira</li>
+        <li>Serviços restritos em regiões sancionadas pela OFAC (Irão, Coreia do Norte, Rússia, Síria, Cuba, Bielorrússia)</li>
+        <li>Conteúdo adulto, jogos de azar, armas ou substâncias controladas</li>
+        <li>Qualquer atividade que viole a lei aplicável na jurisdição do Comerciante ou Subscritor</li>
+      </ul>
+
+      <h2>10. Litígios Entre Comerciantes e Subscritores</h2>
+      <p>Os litígios decorrentes de relações comerciais entre Comerciantes e Subscritores são da exclusiva responsabilidade dessas partes. O AuthOnce é infraestrutura de pagamentos e não medeia, arbitra nem aceita responsabilidade por litígios comerciais. O AuthOnce pode ser contactado em <a href="mailto:support@authonce.io">support@authonce.io</a> apenas em casos de suspeita de fraude na plataforma, abuso da plataforma ou erros técnicos causados pelo próprio protocolo AuthOnce.</p>
+
+      <h2>11. Propriedade Intelectual</h2>
+      <p>O AuthOnce e o seu protocolo estão protegidos sob a Business Source License 1.1 (BUSL-1.1). O uso comercial, cópia, fork ou implementação do protocolo AuthOnce sem permissão escrita explícita é proibido até 1 de janeiro de 2030. Após essa data, o protocolo converte-se para open-source sob GPL v2.</p>
+
+      <h2>12. Segurança da Carteira</h2>
+      <p>É o único responsável pela segurança do seu endereço de carteira e chaves privadas. O AuthOnce não pode recuperar carteiras perdidas, reverter transações blockchain ou restaurar acesso a endereços de carteira. As transações on-chain são finais e irreversíveis.</p>
+
+      <h2>13. Disponibilidade do Serviço</h2>
+      <p>O AuthOnce opera atualmente em testnet. Não é dada qualquer garantia de uptime, disponibilidade ou continuidade do serviço durante o período de testnet. O AuthOnce não é responsável por perdas causadas por indisponibilidade do serviço, interrupções da rede blockchain ou falhas de serviços de terceiros.</p>
+
+      <h2>14. Rescisão de Conta</h2>
+      <p>O AuthOnce reserva-se o direito de suspender ou revogar o acesso do Comerciante com 14 dias de aviso prévio por escrito. Em casos de fraude, atividade ilegal ou violação material destes termos, o acesso pode ser revogado imediatamente sem aviso prévio.</p>
+
+      <h2>15. Alterações ao Protocolo</h2>
+      <p>O AuthOnce reserva-se o direito de modificar, atualizar ou descontinuar qualquer parte do serviço com 30 dias de aviso prévio por escrito aos Comerciantes. Os contratos inteligentes implementados no mainnet não podem ser modificados — isto é por design e fornece garantias de imutabilidade.</p>
+
+      <h2>16. Atualizações a Estes Termos</h2>
+      <p>O AuthOnce pode atualizar estes termos a qualquer momento. Os Comerciantes serão notificados por email pelo menos 14 dias antes de alterações materiais entrarem em vigor. O uso continuado da plataforma após a data de vigência constitui aceitação dos termos atualizados.</p>
+
+      <h2>17. Sem Aconselhamento Financeiro</h2>
+      <p>Nada em authonce.io ou em qualquer comunicação do AuthOnce constitui aconselhamento financeiro, de investimento, jurídico ou fiscal. O uso do protocolo AuthOnce é inteiramente por sua própria conta e risco.</p>
+
+      <h2>18. Força Maior</h2>
+      <p>O AuthOnce não é responsável por qualquer falha ou atraso causado por eventos fora do nosso controlo razoável, incluindo: interrupções da rede blockchain, falhas da Stripe ou de terceiros, desastres naturais, alterações regulatórias ou atos governamentais.</p>
+
+      <h2>19. Indemnização</h2>
+      <p>Os Comerciantes concordam em indemnizar e isentar o AuthOnce e o seu operador de quaisquer reclamações, responsabilidades, danos, perdas e despesas (incluindo honorários legais) decorrentes do seu uso da plataforma, das suas operações comerciais, dos seus Subscritores ou da sua violação destes termos.</p>
+
+      <h2>20. Limitação de Responsabilidade</h2>
+      <p>NA MÁXIMA EXTENSÃO PERMITIDA PELA LEI APLICÁVEL, A RESPONSABILIDADE TOTAL DO AUTHONCE PERANTE QUALQUER PARTE NÃO EXCEDERÁ €100 OU O MONTANTE TOTAL PAGO POR ESSA PARTE AO AUTHONCE NOS TRÊS MESES ANTERIORES À RECLAMAÇÃO, O QUE FOR INFERIOR. O AUTHONCE NÃO SERÁ RESPONSÁVEL POR QUAISQUER DANOS INDIRETOS, INCIDENTAIS, ESPECIAIS, CONSEQUENCIAIS OU PUNITIVOS.</p>
+
+      <h2>21. Sem Ação Coletiva</h2>
+      <p>Quaisquer litígios devem ser apresentados apenas numa base individual. Renuncia a qualquer direito de participar em ações coletivas contra o AuthOnce.</p>
+
+      <h2>22. Lei Aplicável</h2>
+      <p>Estes termos são regidos pelas leis de Portugal e da União Europeia. As disposições obrigatórias de proteção do consumidor da UE aplicam-se independentemente de qualquer outra lei aplicável. [Nota: jurisdição a confirmar por advogado antes do lançamento no mainnet.]</p>
+
+      <h2>23. Divisibilidade</h2>
+      <p>Se qualquer disposição destes termos for considerada inválida ou inexequível, essa disposição será modificada na medida mínima necessária para a tornar executável, e as disposições restantes continuarão em pleno vigor.</p>
+
+      <h2>24. Acordo Integral</h2>
+      <p>Estes Termos de Serviço, juntamente com a Política de Privacidade e a Política de Reembolso, constituem o acordo integral entre o AuthOnce e o utilizador e substituem todos os acordos e comunicações anteriores.</p>
+
+      <h2>25. Contacto</h2>
+      <p>Para questões sobre estes termos: <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       PRIVACY POLICY
+  ══════════════════════════════════════════════════════════════ -->
+  <div id="doc-privacy" class="doc">
+    <div class="doc-header">
+      <div class="doc-label">Legal</div>
+      <h1><span lang-inline="en" class="visible">Privacy Policy</span><span lang-inline="pt">Política de Privacidade</span></h1>
+      <div class="effective">
+        <span lang-inline="en" class="visible">Effective: May 2, 2026 · GDPR compliant draft · Version 0.1</span>
+        <span lang-inline="pt">Vigência: 2 de maio de 2026 · Rascunho RGPD · Versão 0.1</span>
+      </div>
+    </div>
+
+    <div class="warning">
+      <span lang-inline="en" class="visible">⚠ DRAFT PENDING LEGAL REVIEW. AUTHONCE IS ON TESTNET ONLY.</span>
+      <span lang-inline="pt">⚠ RASCUNHO PENDENTE DE REVISÃO LEGAL. AUTHONCE ESTÁ APENAS EM TESTNET.</span>
+    </div>
+
+    <!-- EN -->
+    <div lang-content="en" class="visible">
+
+      <h2>1. Data Controller</h2>
+      <p>AuthOnce is operated by Vasco Humberto dos Reis Diogo. Upon company incorporation, the data controller will be updated to AuthOnce Lda. (Portugal). Contact: <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+
+      <h2>2. Data Minimisation Principle</h2>
+      <p>AuthOnce collects the absolute minimum data required to operate. We never store personal identity information (PII) — this remains with our regulated partners who hold appropriate authorisations. The primary identifier for any user in our system is their wallet address, which is pseudonymous.</p>
+
+      <h2>3. What We Collect</h2>
+      <p><strong>For Merchants:</strong></p>
+      <ul>
+        <li>Business name and email address</li>
+        <li>Wallet address (pseudonymous identifier)</li>
+        <li>Website URL</li>
+        <li>Webhook endpoint URLs (stored encrypted)</li>
+        <li>API keys (stored as irreversible hashes — we cannot read them)</li>
+        <li>Use case description provided during application</li>
+      </ul>
+      <p><strong>What we do NOT store:</strong></p>
+      <ul>
+        <li>Subscriber names or email addresses</li>
+        <li>Credit card details (held by Stripe only)</li>
+        <li>IP addresses (used transiently for geofencing checks only, never logged or retained)</li>
+        <li>Government ID or KYC data (held by Stripe only)</li>
+        <li>Bank account details (held by Stripe only)</li>
+        <li>Any data not strictly necessary for platform operation</li>
+      </ul>
+
+      <h2>4. How We Use Data</h2>
+      <ul>
+        <li>To process and manage recurring payment subscriptions</li>
+        <li>To send payment notifications to Merchants and Subscribers</li>
+        <li>To enforce geofencing for OFAC-sanctioned regions (legal compliance)</li>
+        <li>To provide Merchant dashboard functionality and API access</li>
+        <li>To prevent fraud and ensure platform security</li>
+        <li>To use anonymised, aggregated data to improve the platform</li>
+      </ul>
+
+      <h2>5. Legal Basis (GDPR Article 6)</h2>
+      <ul>
+        <li><strong>Contract performance (Art. 6(1)(b))</strong> — to provide the AuthOnce service to Merchants</li>
+        <li><strong>Legal obligation (Art. 6(1)(c))</strong> — OFAC sanctions compliance</li>
+        <li><strong>Legitimate interests (Art. 6(1)(f))</strong> — fraud prevention and platform security</li>
+      </ul>
+
+      <h2>6. Blockchain and Immutability</h2>
+      <p>Transaction records recorded on Base Network are technically immutable by the nature of blockchain technology and cannot be deleted by AuthOnce or any party. This is a fundamental technical property of the system, not a policy choice. Wallet addresses recorded on-chain are pseudonymous but publicly visible.</p>
+
+      <h2>7. Data Retention</h2>
+      <p>Merchant account data is retained for the duration of the commercial relationship plus the minimum period required by applicable law (minimum 10 years for tax compliance under Portuguese law). When a Merchant account is closed, personal data is deleted or anonymised within 30 days, except where retention is required by law.</p>
+
+      <h2>8. No Sale of Data</h2>
+      <p>AuthOnce does not and will never sell, rent, or trade personal data to any third party for commercial purposes. Period.</p>
+
+      <h2>9. Third-Party Processors</h2>
+      <ul>
+        <li><strong>Stripe</strong> — payment processing, KYC, and identity verification. <a href="https://stripe.com/privacy" target="_blank">Stripe Privacy Policy</a></li>
+        <li><strong>Privy</strong> — embedded wallet and subscriber authentication (planned). <a href="https://privy.io/privacy" target="_blank">Privy Privacy Policy</a></li>
+        <li><strong>Railway</strong> — backend infrastructure hosting (EU/US servers)</li>
+        <li><strong>Netlify</strong> — frontend hosting</li>
+        <li><strong>Zoho</strong> — email communications</li>
+        <li><strong>Resend</strong> — transactional email delivery</li>
+        <li><strong>Cloudflare</strong> — DNS, CDN, and DDoS protection</li>
+      </ul>
+
+      <h2>10. Your Rights (GDPR)</h2>
+      <p>Under GDPR, you have the right to:</p>
+      <ul>
+        <li><strong>Access</strong> — request a copy of the personal data we hold about you</li>
+        <li><strong>Rectification</strong> — correct inaccurate or incomplete data</li>
+        <li><strong>Erasure</strong> — request deletion of your data (subject to legal retention requirements)</li>
+        <li><strong>Restriction</strong> — request we limit processing of your data</li>
+        <li><strong>Portability</strong> — receive your data in a structured, machine-readable format</li>
+        <li><strong>Objection</strong> — object to processing based on legitimate interests</li>
+      </ul>
+      <p>To exercise these rights, contact <a href="mailto:support@authonce.io">support@authonce.io</a>. We will respond within 30 days.</p>
+
+      <h2>11. Data Breach Notification</h2>
+      <p>In the event of a personal data breach that poses a risk to your rights and freedoms, AuthOnce will notify the relevant supervisory authority within 72 hours of becoming aware of the breach, and affected individuals without undue delay, as required by GDPR Article 33 and 34.</p>
+
+      <h2>12. Children's Privacy</h2>
+      <p>AuthOnce is not directed at children under 18 years of age. We do not knowingly collect personal data from minors. If we become aware that personal data from a minor has been collected without parental consent, we will delete it immediately.</p>
+
+      <h2>13. Cookies</h2>
+      <p>AuthOnce uses only essential cookies required for authentication and session management. No advertising, tracking, or analytics cookies are used. You cannot opt out of essential cookies as they are required for the platform to function.</p>
+
+      <h2>14. International Transfers</h2>
+      <p>Some of our third-party processors operate in the United States. Where personal data is transferred outside the European Economic Area, we ensure appropriate safeguards are in place in accordance with GDPR Chapter V.</p>
+
+      <h2>15. Updates to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. Material changes will be communicated by email with at least 14 days notice. The current version is always available at authonce.io/legal.</p>
+
+      <h2>16. Contact and Complaints</h2>
+      <p>For privacy questions or to exercise your rights: <a href="mailto:support@authonce.io">support@authonce.io</a>. You also have the right to lodge a complaint with your national data protection supervisory authority (in Portugal: CNPD — Comissão Nacional de Proteção de Dados, www.cnpd.pt).</p>
+
+    </div>
+
+    <!-- PT -->
+    <div lang-content="pt">
+
+      <h2>1. Responsável pelo Tratamento</h2>
+      <p>O AuthOnce é operado por Vasco Humberto dos Reis Diogo. Após a constituição da empresa, o responsável pelo tratamento será atualizado para AuthOnce Lda. (Portugal). Contacto: <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+
+      <h2>2. Princípio da Minimização de Dados</h2>
+      <p>O AuthOnce recolhe o mínimo absoluto de dados necessários para operar. Nunca armazenamos informações de identidade pessoal (PII) — estas permanecem com os nossos parceiros regulamentados. O identificador principal de qualquer utilizador no nosso sistema é o seu endereço de carteira, que é pseudónimo.</p>
+
+      <h2>3. O Que Recolhemos</h2>
+      <p><strong>Para Comerciantes:</strong></p>
+      <ul>
+        <li>Nome da empresa e endereço de email</li>
+        <li>Endereço de carteira (identificador pseudónimo)</li>
+        <li>URL do website</li>
+        <li>URLs de webhook (armazenados encriptados)</li>
+        <li>Chaves de API (armazenadas como hashes irreversíveis — não as podemos ler)</li>
+        <li>Descrição de uso fornecida durante a candidatura</li>
+      </ul>
+      <p><strong>O que NÃO armazenamos:</strong></p>
+      <ul>
+        <li>Nomes ou emails de Subscritores</li>
+        <li>Dados de cartão de crédito (apenas na Stripe)</li>
+        <li>Endereços IP (usados transitoriamente apenas para verificações de geofencing, nunca registados)</li>
+        <li>Documento de identidade ou dados KYC (apenas na Stripe)</li>
+        <li>Dados de conta bancária (apenas na Stripe)</li>
+      </ul>
+
+      <h2>4. Como Utilizamos os Dados</h2>
+      <ul>
+        <li>Para processar e gerir subscrições de pagamento recorrente</li>
+        <li>Para enviar notificações de pagamento a Comerciantes e Subscritores</li>
+        <li>Para aplicar geofencing em regiões sancionadas pela OFAC</li>
+        <li>Para fornecer funcionalidades do dashboard do Comerciante e acesso à API</li>
+        <li>Para prevenir fraudes e garantir a segurança da plataforma</li>
+        <li>Para utilizar dados anonimizados e agregados para melhorar a plataforma</li>
+      </ul>
+
+      <h2>5. Base Legal (RGPD Artigo 6)</h2>
+      <ul>
+        <li><strong>Execução do contrato (Art. 6(1)(b))</strong> — para fornecer o serviço AuthOnce aos Comerciantes</li>
+        <li><strong>Obrigação legal (Art. 6(1)(c))</strong> — conformidade com sanções OFAC</li>
+        <li><strong>Interesses legítimos (Art. 6(1)(f))</strong> — prevenção de fraude e segurança da plataforma</li>
+      </ul>
+
+      <h2>6. Blockchain e Imutabilidade</h2>
+      <p>Os registos de transações na Base Network são tecnicamente imutáveis pela natureza da tecnologia blockchain e não podem ser eliminados pelo AuthOnce ou por qualquer parte. Esta é uma propriedade técnica fundamental do sistema, não uma escolha de política.</p>
+
+      <h2>7. Retenção de Dados</h2>
+      <p>Os dados da conta do Comerciante são retidos durante a relação comercial mais o período mínimo exigido pela lei aplicável (mínimo 10 anos para conformidade fiscal ao abrigo da lei portuguesa). Quando uma conta de Comerciante é encerrada, os dados pessoais são eliminados ou anonimizados no prazo de 30 dias, exceto quando a retenção é exigida por lei.</p>
+
+      <h2>8. Não Venda de Dados</h2>
+      <p>O AuthOnce não vende, arrenda nem negoceia dados pessoais a terceiros para fins comerciais. Nunca.</p>
+
+      <h2>9. Processadores Terceiros</h2>
+      <ul>
+        <li><strong>Stripe</strong> — processamento de pagamentos, KYC e verificação de identidade. <a href="https://stripe.com/privacy" target="_blank">Política de Privacidade da Stripe</a></li>
+        <li><strong>Privy</strong> — carteira incorporada e autenticação de Subscritores (planeado)</li>
+        <li><strong>Railway</strong> — alojamento de infraestrutura backend</li>
+        <li><strong>Netlify</strong> — alojamento de frontend</li>
+        <li><strong>Zoho</strong> — comunicações por email</li>
+        <li><strong>Resend</strong> — entrega de email transacional</li>
+        <li><strong>Cloudflare</strong> — DNS, CDN e proteção DDoS</li>
+      </ul>
+
+      <h2>10. Os Seus Direitos (RGPD)</h2>
+      <p>Ao abrigo do RGPD, tem direito a: acesso, retificação, apagamento, limitação do tratamento, portabilidade e oposição. Contacte <a href="mailto:support@authonce.io">support@authonce.io</a> para exercer estes direitos. Responderemos no prazo de 30 dias.</p>
+
+      <h2>11. Notificação de Violação de Dados</h2>
+      <p>Em caso de violação de dados pessoais que represente um risco para os seus direitos, o AuthOnce notificará a autoridade de supervisão competente no prazo de 72 horas e os indivíduos afetados sem demora injustificada, conforme exigido pelo RGPD.</p>
+
+      <h2>12. Privacidade de Menores</h2>
+      <p>O AuthOnce não se destina a menores de 18 anos. Não recolhemos conscientemente dados pessoais de menores. Se tomarmos conhecimento de que dados de um menor foram recolhidos sem consentimento parental, eliminá-los-emos imediatamente.</p>
+
+      <h2>13. Cookies</h2>
+      <p>O AuthOnce utiliza apenas cookies essenciais para autenticação e gestão de sessões. Não são utilizados cookies de publicidade, rastreamento ou análise.</p>
+
+      <h2>14. Transferências Internacionais</h2>
+      <p>Alguns dos nossos processadores terceiros operam nos Estados Unidos. Quando os dados pessoais são transferidos para fora do Espaço Económico Europeu, asseguramos que estão em vigor salvaguardas adequadas em conformidade com o Capítulo V do RGPD.</p>
+
+      <h2>15. Atualizações a Esta Política</h2>
+      <p>Podemos atualizar esta Política de Privacidade periodicamente. Alterações materiais serão comunicadas por email com pelo menos 14 dias de antecedência.</p>
+
+      <h2>16. Contacto e Reclamações</h2>
+      <p>Para questões de privacidade: <a href="mailto:support@authonce.io">support@authonce.io</a>. Tem também o direito de apresentar uma reclamação à CNPD — Comissão Nacional de Proteção de Dados: <a href="https://www.cnpd.pt" target="_blank">www.cnpd.pt</a></p>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       REFUND POLICY
+  ══════════════════════════════════════════════════════════════ -->
+  <div id="doc-refund" class="doc">
+    <div class="doc-header">
+      <div class="doc-label">Legal</div>
+      <h1><span lang-inline="en" class="visible">Refund Policy</span><span lang-inline="pt">Política de Reembolso</span></h1>
+      <div class="effective">
+        <span lang-inline="en" class="visible">Effective: May 2, 2026 · Version 0.1</span>
+        <span lang-inline="pt">Vigência: 2 de maio de 2026 · Versão 0.1</span>
+      </div>
+    </div>
+
+    <div class="warning">
+      <span lang-inline="en" class="visible">⚠ DRAFT PENDING LEGAL REVIEW. ENSURE COMPLIANCE WITH EU CONSUMER PROTECTION LAW BEFORE MAINNET LAUNCH.</span>
+      <span lang-inline="pt">⚠ RASCUNHO PENDENTE DE REVISÃO LEGAL. GARANTIR CONFORMIDADE COM LEI DE PROTEÇÃO DO CONSUMIDOR DA UE ANTES DO MAINNET.</span>
+    </div>
+
+    <!-- EN -->
+    <div lang-content="en" class="visible">
+
+      <h2>1. Scope</h2>
+      <p>This Refund Policy applies to subscription payments processed through the AuthOnce platform. AuthOnce is payment infrastructure — refund decisions for goods and services belong exclusively to the Merchant. AuthOnce is not responsible for refunds issued or refused by Merchants.</p>
+
+      <h2>2. Subscription Cancellation</h2>
+      <p>Subscribers may cancel their subscription at any time by using the cancellation link provided in their payment confirmation email or notification. Cancellation takes effect immediately and prevents all future charges. No action from the Merchant is required to process the cancellation.</p>
+
+      <h2>3. Refunds for Current Billing Period</h2>
+      <p>AuthOnce does not automatically issue refunds for the current billing period already paid. When a Subscriber cancels, they retain access to the Merchant's service until the end of the current billing period, after which no further charges are made. Merchants may choose to issue pro-rata refunds at their own discretion.</p>
+
+      <h2>4. EU Right of Withdrawal (14 Days)</h2>
+      <p>Under EU Directive 2011/83/EU and Portuguese consumer law (DL 24/2014), consumers have a 14-day right of withdrawal for digital services. However, by activating a subscription, the Subscriber explicitly requests that the service begins immediately and acknowledges that the right of withdrawal is waived once the digital service has commenced, in accordance with Article 16(m) of the Directive.</p>
+
+      <h2>5. Failed Payments and Grace Period</h2>
+      <p>If a payment fails, the subscription enters a grace period of 1 to 30 days, as configured by the Merchant (default: 7 days). The Subscriber is notified and given the opportunity to resolve the payment. No charges are made during the grace period. If the payment is not resolved within the grace period, the subscription is automatically cancelled with no further charges.</p>
+
+      <h2>6. Merchant-Initiated Refunds</h2>
+      <p>Merchants may issue partial or full refunds to their Subscribers at their own discretion through the AuthOnce merchant dashboard or their Stripe account. Each Merchant is solely responsible for their own refund policies and for compliance with all applicable consumer protection laws in their jurisdiction.</p>
+
+      <h2>7. Disputes</h2>
+      <p>Disputes regarding charges are exclusively between the Subscriber and the Merchant. Subscribers should contact their Merchant directly for any refund requests. AuthOnce does not mediate commercial disputes and cannot override Merchant refund decisions. AuthOnce may be contacted at <a href="mailto:support@authonce.io">support@authonce.io</a> solely in cases of suspected platform fraud or technical errors caused by the AuthOnce protocol.</p>
+
+      <h2>8. Protocol Fee</h2>
+      <p>The AuthOnce Protocol Fee is automatically deducted at the time of each successful transaction. The Protocol Fee is non-refundable under any circumstances, including in cases of disputed transactions, chargebacks, or Merchant-issued refunds. In the event of a full Merchant refund to a Subscriber, the Protocol Fee is not refunded to the Merchant.</p>
+
+      <h2>9. Technical Errors</h2>
+      <p>In the event of a demonstrable technical error caused solely by the AuthOnce protocol that results in an incorrect charge, AuthOnce will investigate and, if confirmed, facilitate a remedy in coordination with Stripe. Such cases should be reported immediately to <a href="mailto:support@authonce.io">support@authonce.io</a> with full details.</p>
+
+      <h2>10. On-Chain Transactions</h2>
+      <p>USDC payments executed on Base Network are irreversible by nature of blockchain technology. AuthOnce cannot reverse, cancel, or refund on-chain transactions once confirmed. Merchants receiving USDC payments are responsible for issuing any refunds through separate on-chain transfers at their own discretion.</p>
+
+      <h2>11. Contact</h2>
+      <p>For questions about this policy: <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+
+    </div>
+
+    <!-- PT -->
+    <div lang-content="pt">
+
+      <h2>1. Âmbito</h2>
+      <p>Esta Política de Reembolso aplica-se aos pagamentos de subscrição processados através da plataforma AuthOnce. O AuthOnce é infraestrutura de pagamentos — as decisões de reembolso por bens e serviços pertencem exclusivamente ao Comerciante. O AuthOnce não é responsável por reembolsos emitidos ou recusados por Comerciantes.</p>
+
+      <h2>2. Cancelamento de Subscrição</h2>
+      <p>Os Subscritores podem cancelar a sua subscrição a qualquer momento utilizando o link de cancelamento fornecido no email de confirmação de pagamento. O cancelamento tem efeito imediato e impede todos os pagamentos futuros. Não é necessária qualquer ação do Comerciante para processar o cancelamento.</p>
+
+      <h2>3. Reembolsos do Período de Faturação Atual</h2>
+      <p>O AuthOnce não emite automaticamente reembolsos pelo período de faturação atual já pago. Quando um Subscritor cancela, mantém acesso ao serviço do Comerciante até ao fim do período de faturação atual, após o qual não são efetuadas mais cobranças. Os Comerciantes podem optar por emitir reembolsos pro-rata a seu critério.</p>
+
+      <h2>4. Direito de Rescisão da UE (14 Dias)</h2>
+      <p>Ao abrigo da Diretiva UE 2011/83/UE e da lei portuguesa do consumidor (DL 24/2014), os consumidores têm um direito de rescisão de 14 dias para serviços digitais. No entanto, ao ativar uma subscrição, o Subscritor solicita expressamente que o serviço comece imediatamente e reconhece que o direito de rescisão é renunciado uma vez iniciado o serviço digital, em conformidade com o Artigo 16(m) da Diretiva.</p>
+
+      <h2>5. Pagamentos Falhados e Período de Carência</h2>
+      <p>Se um pagamento falhar, a subscrição entra num período de carência de 1 a 30 dias, conforme configurado pelo Comerciante (padrão: 7 dias). O Subscritor é notificado e tem a oportunidade de resolver o pagamento. Não são efetuadas cobranças durante o período de carência. Se o pagamento não for resolvido dentro do período de carência, a subscrição é automaticamente cancelada sem cobranças adicionais.</p>
+
+      <h2>6. Reembolsos Iniciados pelo Comerciante</h2>
+      <p>Os Comerciantes podem emitir reembolsos parciais ou totais aos seus Subscritores a seu critério através do dashboard do comerciante AuthOnce ou da sua conta Stripe. Cada Comerciante é o único responsável pelas suas próprias políticas de reembolso e pelo cumprimento de todas as leis de proteção do consumidor aplicáveis.</p>
+
+      <h2>7. Litígios</h2>
+      <p>Os litígios relativos a cobranças são exclusivamente entre o Subscritor e o Comerciante. Os Subscritores devem contactar o seu Comerciante diretamente para qualquer pedido de reembolso. O AuthOnce não medeia litígios comerciais e não pode sobrepor-se às decisões de reembolso do Comerciante.</p>
+
+      <h2>8. Taxa de Protocolo</h2>
+      <p>A Taxa de Protocolo AuthOnce é automaticamente deduzida no momento de cada transação bem-sucedida. A Taxa de Protocolo não é reembolsável em nenhuma circunstância, incluindo em casos de transações contestadas, estornos ou reembolsos emitidos pelo Comerciante.</p>
+
+      <h2>9. Erros Técnicos</h2>
+      <p>Em caso de erro técnico demonstrável causado exclusivamente pelo protocolo AuthOnce que resulte numa cobrança incorreta, o AuthOnce investigará e, se confirmado, facilitará uma solução em coordenação com a Stripe. Tais casos devem ser reportados imediatamente para <a href="mailto:support@authonce.io">support@authonce.io</a>.</p>
+
+      <h2>10. Transações On-Chain</h2>
+      <p>Os pagamentos em USDC executados na Base Network são irreversíveis pela natureza da tecnologia blockchain. O AuthOnce não pode reverter, cancelar ou reembolsar transações on-chain uma vez confirmadas.</p>
+
+      <h2>11. Contacto</h2>
+      <p>Para questões sobre esta política: <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <p>© 2026 AuthOnce · <a href="/">authonce.io</a> · <a href="mailto:support@authonce.io">support@authonce.io</a> · Subject to legal review before mainnet</p>
+</footer>
+
+<script>
+  let currentLang = 'en';
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.lang-btn[onclick="setLang('${lang}')"]`).classList.add('active');
+    document.querySelectorAll('[lang-content]').forEach(el => {
+      el.classList.toggle('visible', el.getAttribute('lang-content') === lang);
+    });
+    document.querySelectorAll('span[lang-inline]').forEach(el => {
+      el.classList.toggle('visible', el.getAttribute('lang-inline') === lang);
+    });
+  }
+
+  function showDoc(doc) {
+    document.querySelectorAll('.doc').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.doc-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('doc-' + doc).classList.add('active');
+    document.querySelectorAll('.doc-tab')[['tos','privacy','refund'].indexOf(doc)].classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  setLang('en');
+</script>
+</body>
+</html>

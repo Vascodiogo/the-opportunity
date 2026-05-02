@@ -117,7 +117,127 @@
 
 ---
 
-## 4. Core Data Structures
+## 4. Product Roadmap (Versions)
+
+| Version | Model | Market | Status |
+|---|---|---|---|
+| v1 | USDC subscriptions on-chain | Crypto-native merchants | ✅ Built on testnet |
+| v2 | MB Way + Multibanco via Stripe Connect | Portuguese mass market | 🔲 In development |
+| v3 | Euro stablecoin (Bison Bank) | Post-stablecoin launch Q2 2026 | ⏳ Future |
+| v4 | Prepaid wallets — pay per use | Transactional businesses | ⏳ Long term |
+| v5 | On-chain identity + universal subscription profile | All merchants, all markets | ⏳ Long term |
+
+### v5 — On-Chain Identity Vision (AuthOnce Identity)
+
+**The concept:** Every subscriber has one encrypted identity profile stored in their mobile wallet (phone = wallet). No company stores their data. The user owns and controls everything.
+
+**How it works:**
+- User sets up profile once — name, email, phone, encrypted in their wallet
+- Any AuthOnce merchant can request specific fields
+- User approves exactly what to share (selective disclosure)
+- Merchant receives verified confirmation — never stores raw data
+- Subscription created on-chain instantly
+
+**Selective disclosure — what merchants can see:**
+
+| Field | Gym | Doctor | Newsletter | SaaS |
+|---|---|---|---|---|
+| Name | ✅ | ✅ | ✅ | ✅ |
+| Email | ✅ | ✅ | ✅ | ✅ |
+| Phone | ✅ | ✅ | ❌ | ❌ |
+| Address | ❌ | ✅ | ❌ | ❌ |
+| Age verification | ✅ | ✅ | ❌ | ❌ |
+| Payment history | ✅ | ❌ | ❌ | ✅ |
+
+Merchants can require specific fields. Subscribers can decline. If subscriber declines required fields, merchant can refuse the subscription. Both parties have sovereignty.
+
+**Physical terminal use case (v5):**
+- Merchant uses existing tablet or phone (no new hardware)
+- Member scans QR code or taps phone (NFC)
+- Identity verified on-chain instantly
+- Works for gyms, clinics, coworking, events, hotels
+- Monetised independently of subscriptions (per-verification fee + monthly licence)
+- Future: partner with Sumup or Sibs for hardware terminals
+
+**Portable payment history:**
+- Subscriber's on-chain record proves payment reliability
+- New merchant can see "24 months on-time payments" — no credit check needed
+- Creates subscriber reputation system — doesn't exist anywhere today
+
+**Network effect:**
+- More merchants → more subscriber profiles
+- More profiles → more merchants want AuthOnce
+- Same flywheel as Visa — network IS the moat
+
+**What data can be sold:**
+- The profile data itself — NEVER. User owns it. Selling it = Meta model. Destroys trust.
+- Access to verified interactions — YES. Merchant pays for infrastructure. Visa model.
+
+**Legal considerations for v5 (add to lawyer checklist):**
+- Name/email/phone verification — GDPR only, no special authorization
+- Age verification — may require authorization depending on use case
+- KYC/financial data — regulated, requires authorization
+- Medical data — GDPR Article 9, special category
+- PSD2 implications for payment credentials
+
+---
+
+## 5. Revenue Streams
+
+| Stream | Model | Timing |
+|---|---|---|
+| Subscription fees | 0.5% per pull | Now (testnet) → mainnet Q3 2026 |
+| Terminal licence | €10–20/month per location | v5 post-mainnet |
+| Per-verification fee | €0.05–0.10 per check | v5 post-mainnet |
+| Developer API (identity) | €49–199/month tiered | v5 post-mainnet |
+| Euro stablecoin routing | Revenue share with Bison | Post-Bison stablecoin launch |
+
+**Developer API pricing tiers:**
+- Free: up to 100 verifications/month
+- Startup: €49/month — up to 2,000 verifications
+- Growth: €199/month — up to 10,000 verifications
+- Enterprise: custom — unlimited + SLA
+
+**Exit valuation model:**
+- €500K ARR → €2.5–5M exit (5–10x revenue multiple)
+- €1M ARR → €5–10M exit
+- 5 revenue streams + network effect → premium multiple
+
+---
+
+## 6. Competitor Positioning
+
+AuthOnce is NOT competing with POS systems. Target merchants are subscription businesses:
+
+| Merchant type | POS? | AuthOnce fit? |
+|---|---|---|
+| Gym / fitness studio | Maybe | ✅ Perfect |
+| Online newsletter | No | ✅ Perfect |
+| SaaS product | No | ✅ Perfect |
+| Streaming service | No | ✅ Perfect |
+| Coffee shop | Yes | ❌ Wrong fit (v4 prepaid wallets later) |
+| Supermarket | Yes | ❌ Wrong fit |
+
+**Real competitors for Portuguese merchants (MB Way subscriptions):**
+
+| Solution | MB Way | Multibanco | Monthly fee | Per transaction |
+|---|---|---|---|---|
+| Stripe standalone | ✅ | ✅ | €0 | 1.5% + €0.25 |
+| Easypay (Portuguese) | ✅ | ✅ | €10–30/month | 0.5–1.5% |
+| Ifthenpay (Portuguese) | ✅ | ✅ | Setup fee | ~1% |
+| **AuthOnce + Stripe** | ✅ | ✅ | **€0** | **0.5% + 1.5%** |
+
+**AuthOnce wins on:** No monthly fee, no chargebacks, on-chain audit trail, founding offer (0% 3 months), non-custodial, future-proof.
+
+**Bison Digital Assets — NOT in the payment flow:**
+- Bison is optional for merchants who want USDC → EUR conversion
+- Not needed for MB Way/Multibanco flow (Stripe handles EUR directly)
+- Revisit post-mainnet when AuthOnce has real USDC volume and leverage
+- Diogo Brás (Chief Crypto Business Officer) — contact post-mainnet
+
+---
+
+## 7. Core Data Structures
 
 ```solidity
 enum SubscriptionStatus { Active, Paused, Cancelled, Expired }
@@ -141,7 +261,7 @@ struct Subscription {
 
 ---
 
-## 5. Access Control Map
+## 8. Access Control Map
 
 | Action | Who Can Call |
 |---|---|
@@ -161,7 +281,7 @@ struct Subscription {
 
 ---
 
-## 6. Repository Structure
+## 9. Repository Structure
 
 ```
 C:\The-Opportunity\
@@ -198,7 +318,7 @@ C:\The-Opportunity\
 
 ---
 
-## 7. Security Constraints
+## 10. Security Constraints
 
 1. No upgradeability in MVP.
 2. Fee cap hardcoded at 200 bps.
@@ -213,7 +333,7 @@ C:\The-Opportunity\
 
 ---
 
-## 8. Development Phases
+## 11. Development Phases
 
 ### Phase 0 — Environment Setup ✅
 ### Phase 1 — Contracts ✅ (v3 — configurable grace period)
@@ -232,7 +352,7 @@ C:\The-Opportunity\
 - [ ] Twilio SMS notifications
 - [ ] Geofencing middleware (OFAC sanctions)
 - [ ] Terms of Service + Privacy Policy
-- [ ] Legal consultation (9-item checklist)
+- [ ] Legal consultation (11-item checklist)
 - [ ] Smart contract audit ($15–20K — Hacken or Code4rena)
 - [ ] Deploy to Base Mainnet
 
@@ -241,15 +361,23 @@ C:\The-Opportunity\
 - [ ] EU expansion via Stripe local payment methods
 - [ ] Staff access role (view-only)
 - [ ] Bulk subscriber CSV import
-- [ ] Portugal Ventures Open Day
+- [ ] Portugal Ventures Open Day (requires Portuguese company)
 - [ ] Indico Capital Partners outreach
 - [ ] Start Ventures by Big outreach
 - [ ] Road 2 Web Summit 2026
 - [ ] Business Abroad 2026
 
+### Phase 8 — Identity (v5) 🔲
+- [ ] On-chain identity profile (encrypted, wallet-stored)
+- [ ] Selective disclosure engine
+- [ ] QR code / NFC physical terminal (tablet-based)
+- [ ] Developer API for identity verification
+- [ ] Portable payment history / reputation system
+- [ ] Partner with Sumup or Sibs for hardware terminals
+
 ---
 
-## 9. Key Decisions Log
+## 12. Key Decisions Log
 
 | Date | Decision | Rationale |
 |---|---|---|
@@ -273,19 +401,24 @@ C:\The-Opportunity\
 | Apr 2026 | Shopify Partner registered | Distribution channel post-mainnet |
 | Apr 2026 | Stay on Railway through early mainnet | Reassess at 10+ active merchants |
 | Apr 2026 | Subscriber needs no wallet | MB Way/Multibanco — no crypto needed |
-| Apr 2026 | Bison Digital Assets noted | EUR offramp — revisit post-mainnet |
+| Apr 2026 | Bison Digital Assets — post-mainnet only | No leverage now; revisit with real volume |
 | Apr 2026 | Incorporate in Portugal — not yet | Wait for first merchant + legal advice |
+| Apr 2026 | AuthOnce v4 — prepaid wallets | Natural extension for transactional businesses |
+| Apr 2026 | AuthOnce v5 — on-chain identity | Network moat; Visa model not Meta model |
+| Apr 2026 | Identity data never sold | User owns data; only access to network is monetised |
+| Apr 2026 | Terminal = existing tablet + QR | No hardware manufacturing needed for v5 MVP |
 
 ---
 
-## 10. Grants & External Relations
+## 13. Grants & External Relations
 
 | Grant / Program | Status | Date | Notes |
 |---|---|---|---|
 | Coinbase Base Ecosystem Fund | ✅ Submitted | Apr 2026 | $25–34K ask |
-| Circle Alliance Program | ✅ Submitted | Apr 2026 | Pending review |
+| Circle Alliance Program | ✅ Submitted | Apr 2026 | Pending review — 5+ days |
 | Startup Portugal One Stop Shop | ✅ Contacted | Apr 2026 | Replied by Francisca Sampaio |
-| Vouchers for Startups (PRR) | 🔲 Next round | — | Email sent asking about next round |
+| Vouchers for Startups (PRR) | 🔲 Next round | — | Reply sent to Francisca asking about next round |
+| Indico Founders Program | 📋 Apply now | — | Open call — fintech focus, no company needed |
 | Base Builder Grants | 📋 Apply next | — | $5K–25K |
 | IAPMEI | 📋 After incorporation | — | Needs Portuguese NIF |
 | Portugal 2030 | 📋 After incorporation | — | Needs Portuguese NIF |
@@ -294,18 +427,18 @@ C:\The-Opportunity\
 | Business Abroad 2026 | 📋 Post-mainnet | — | Portuguese delegation |
 | EIC Accelerator | ⏳ Post-mainnet | — | Up to €2.5M grant |
 
-**VC contacts (post-mainnet):**
-- **Portugal Ventures** — Open Day every first Friday of month
-- **Indico Capital Partners** — Fintech, Pre-Seed to Series A, €100K–€5M
+**VC contacts (post-mainnet, requires Portuguese company):**
+- **Portugal Ventures** — Open Day first Friday of month — requires promoter in Portugal
+- **Indico Capital Partners** — Fintech, Pre-Seed to Series A, €100K–€5M — apply now
 - **Start Ventures by Big** — B2B Fintech specialist, seed stage
 
 **Potential partners:**
 - **Nuno Correia** — Utrust co-founder. Warm door post-mainnet.
-- **Bison Digital Assets** — EUR offramp. Revisit post-mainnet.
+- **Bison Digital Assets** — EUR offramp + euro stablecoin. Contact post-mainnet with real volume. Contact: Diogo Brás, diogo.bras@bisondigital.com
 
 ---
 
-## 11. Legal Checklist (To Bring to Lawyer)
+## 14. Legal Checklist (To Bring to Lawyer)
 
 1. Does AuthOnce need Banco de Portugal registration as PSP?
 2. Is Stripe Connect sufficient to avoid PSP licensing?
@@ -316,30 +449,37 @@ C:\The-Opportunity\
 7. BUSL-1.1 enforceability under Portuguese law
 8. Nebenbeschäftigung clause in Swiss employment contract
 9. SRO membership — PolyReg (Switzerland)
+10. On-chain identity — GDPR implications for selective disclosure
+11. Age verification authorization requirements for v5
 
 ---
 
-## 12. Infrastructure Cost Strategy
+## 15. Infrastructure Cost Strategy
 
 - Stay on Railway ($5/month) through testnet and early mainnet.
 - Reassess at 10+ active merchants.
 - At scale: Hetzner VPS (~€5-10/month).
 - Cloudflare Pages as Netlify alternative if needed (both free).
+- Netlify credits: 75% of 300 used (cycle Apr 18–May 17) — batch commits.
 
 ---
 
-## 13. Action List (Prioritised)
+## 16. Action List (Prioritised)
+
+**Today:**
+- [ ] Open Stripe account for AuthOnce (free, 10 min)
+- [ ] Apply to Indico Founders Program (open now)
+- [ ] Subscribe to Startup Portugal newsletter
 
 **Urgent:**
 - [ ] Incorporate company in Portugal (need NIF for all funding)
-- [ ] Contact lawyer (11 legal checklist items)
-- [ ] Order Ledger Nano S Plus from ledger.com
-- [ ] Subscribe to Startup Portugal newsletter
+- [ ] Contact lawyer (11-item legal checklist)
+- [ ] Order Ledger Nano S Plus from ledger.com (next week — pay bills first)
 - [ ] Wait for Francisca's reply re: Vouchers for Startups next round
 
 **When incorporated:**
 - [ ] Apply for Startup Recognition Status (free, 5 days)
-- [ ] Register on Ecosystem Mapping Platform
+- [ ] Register on Ecosystem Mapping Platform (startupportugal.dealroom.co)
 - [ ] Apply to Portugal 2030 via Balcão dos Fundos
 - [ ] Register on IAPMEI platform
 
@@ -347,12 +487,13 @@ C:\The-Opportunity\
 - [ ] Portugal Ventures Open Day
 - [ ] Indico Capital Partners outreach
 - [ ] Start Ventures by Big outreach
+- [ ] Bison Digital Assets — Diogo Brás intro email
 - [ ] Road 2 Web Summit 2026
 - [ ] Shopify app development
 
 ---
 
-## 14. Business Documents
+## 17. Business Documents
 
 Stored locally at `C:\AuthOnce-Docs\` (NOT in GitHub):
 - `Business\AuthOnce_BusinessPlan_2026_v2.docx`
@@ -362,5 +503,11 @@ Stored locally at `C:\AuthOnce-Docs\` (NOT in GitHub):
 
 ---
 
-*Last updated: 2026-04-29 — Zoho Mail set up, Startup Portugal contacted, v3 contracts deployed, full action list compiled.*
-*Next actions: Incorporate in Portugal → Legal consultation → Order Ledger → Privy integration → Stripe Connect → Audit → Mainnet.*
+## 18. Session Start Reminder
+
+**Show priority plan visual at the start of every session.**
+
+---
+
+*Last updated: 2026-04-30 — Full product roadmap v1–v5 defined. On-chain identity vision (v5) documented. Revenue streams mapped. Competitor positioning clarified. Bison Digital Assets deferred to post-mainnet. Legal checklist expanded to 11 items.*
+*Next actions: Open Stripe account → Apply Indico Founders Program → Incorporate in Portugal → Legal consultation → Order Ledger → Privy integration → Stripe Connect → Audit → Mainnet.*
