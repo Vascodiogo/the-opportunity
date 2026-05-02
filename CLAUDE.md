@@ -1,5 +1,5 @@
 # CLAUDE.md — Project Memory
-## AuthOnce: An Intent-Based Subscription Manager
+## AuthOnce: Non-Custodial USDC Subscription Protocol
 
 > This file is the single source of truth for all project decisions.
 > Every coding session must begin by reading this file.
@@ -7,484 +7,314 @@
 
 ---
 
-## 0. Session Start Reminder
-**Always show the priority plan visual at the start of every session.**
-
----
-
 ## 1. Project Overview
 
 **Name:** AuthOnce
-**Domain:** authonce.io
 **Tagline:** Authorize once. Pay forever. Stay in control.
-**Purpose:** A subscription infrastructure protocol that allows merchants to collect recurring payments via MB Way, Multibanco, credit card, SEPA Direct Debit, and USDC. Non-custodial, transparent, and blockchain-powered underneath.
-**MVP Target:** Portugal first — Base Network (mainnet + Base Sepolia testnet).
-**Founder:** Vasco Humberto dos Reis Diogo — Swiss resident, Portuguese citizen, age 51.
-**Goal:** Build to sell for €3–10M. Retire at 54–55.
-**Contact:** vasco@authonce.io (Zoho Mail — full send + receive)
-**Support:** support@authonce.io (Zoho alias → vasco@authonce.io)
+**Domain:** authonce.io (Namecheap)
+**Purpose:** A non-custodial recurring payment protocol on Base Network. Merchants present subscription bills; subscribers authorize once and payments execute automatically via a keeper bot. The protocol never holds funds.
+**MVP Target:** Base Network mainnet — planned Q3 2026.
+**Founder:** Vasco Humberto dos Reis Diogo (solo, Swiss resident, Portuguese citizen). Full-time at Hinti GmbH (ASSA ABLOY). Building AuthOnce in spare time. Exit target: €3–10M sale, retire at 54–55.
+**Legal entity:** Swiss Association (in formation). Sister pending confirmation as Secretary/Treasurer.
+**Local docs:** `C:\AuthOnce-Docs\` — BusinessPlan v2, FinancialProjections, GrantMemo, TechnicalDocs.
 
 ---
 
 ## 2. The Stack
 
-| Layer | Technology | Notes |
+| Layer | Technology | Status |
 |---|---|---|
-| Smart Contracts | Solidity v0.8.24 | Hardhat, optimizer 200 runs, viaIR, evmVersion: paris |
-| Chain | Base Network | Low gas, EVM-compatible, USDC native |
-| Token | USDC (Base Sepolia) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
-| Token | USDC (Base Mainnet) | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| Keeper Bot | Node.js | Running on Railway (supportive-prosperity project) |
-| Notification Backend | Node.js + PostgreSQL | Running on Railway, polling every 30s |
-| Frontend | React + Vite + RainbowKit + wagmi + viem | In `/frontend` folder |
-| Deployment | Netlify (frontend) + Railway (backend) | Auto-deploys on git push |
-| Email | Zoho Mail | vasco@authonce.io + support@authonce.io alias |
-| DNS | Cloudflare | kallie + nicolas.ns.cloudflare.com |
-| Payments (fiat) | Stripe Connect | Platform model — merchants have own Stripe accounts |
-| Copy Monitor | monitor.js | Railway service |
+| Smart Contracts | Solidity via Hardhat (not Foundry) | ✅ Deployed Base Sepolia |
+| Chain | Base Network | ✅ |
+| Token | USDC only (hardcoded) | ✅ |
+| Keeper Bot | Node.js on Railway | ✅ Running 24/7 |
+| Notifier | Node.js on Railway | ✅ Running |
+| Backend API | Express.js on Railway | ✅ Built |
+| Database | PostgreSQL on Railway | ✅ Schema live |
+| Frontend | React + Vite, deployed on Netlify | ✅ Live |
+| Auth (current) | MetaMask / RainbowKit | ✅ Working |
+| Auth (planned) | Web3Auth (Google/Email login) | ⬜ Not built |
+| Fiat Onramp | Stripe Crypto Checkout | ⬜ Not built |
+| Stripe Connect | Merchant OAuth flow | ✅ Built in api.js |
+| Notifications | Resend (email) + webhook dispatcher | ✅ Built |
+| Railway plan | Hobby ($5/month) | ✅ Upgraded |
 
-**Key contract addresses (Base Sepolia testnet — v3):**
-- `SubscriptionVault.sol`: `0xED9a4322030b2523cBB4eD5479539a3afEe30afA` ✅ v3 configurable grace period
+**Contract addresses (Base Sepolia testnet):**
+- `SubscriptionVault.sol`: `0xED9a4322030b2523cBB4eD5479539a3afEe30afA` ✅ v3 — configurable grace period
 - `MerchantRegistry.sol`: `0x3124a01D023FA6F0AFDE1e89c6727FE3D0fAa3d5` ✅ v3
-- Deployer / Admin (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
-- Protocol Treasury (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
-- Gelato Keeper (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
+- USDC (Base Sepolia): `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 
-**Previous addresses (retired):**
-- SubscriptionVault v1.0.0: `0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA`
-- MerchantRegistry v1.0.0: `0x1fA825065260a4e775AbD8D2596B1869904e446A`
-
-**Key contract addresses (Base Mainnet — fill in after audit):**
-- `SubscriptionVault.sol`: `[DEPLOY AFTER AUDIT]`
-- `MerchantRegistry.sol`: `[DEPLOY AFTER AUDIT]`
-- Protocol Treasury: `[LEDGER HARDWARE WALLET — ORDER BEFORE MAINNET]`
-- Admin: `[SAFE MULTISIG — SET UP BEFORE MAINNET]`
-
-**GitHub:** https://github.com/Vascodiogo/the-opportunity (public)
-**Railway:** supportive-prosperity project (keeper + notifier + monitor services)
-**Netlify:** authonce.io frontend (auto-deploys on git push)
-**Shopify Partner:** vascodiogo@hotmail.com — registered 28 Apr 2026
+**Contract addresses (Base Mainnet — not yet deployed):**
+- USDC (Base Mainnet): `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- `SubscriptionVault.sol`: `[DEPLOY AND RECORD HERE]`
+- `MerchantRegistry.sol`: `[DEPLOY AND RECORD HERE]`
+- Protocol Treasury: `[RECORD HERE]`
 
 ---
 
-## 3. Stripe Configuration
+## 3. Business Rules (Locked — Do Not Change Without Architect Approval)
 
-**Account:** AuthOnce (Switzerland, Einzelunternehmen)
-**Live account:** ✅ Activated
-**Payout:** EUR → UBS Switzerland AG
-**Statement descriptor:** AUTHONCE
+### 3.1 Payment Initiation
+Keeper bot initiates every pull. Only whitelisted keeper address can call `executePull()`. User signs once at subscription creation, never again.
 
-**Payment methods enabled:**
-| Method | Status | Market |
-|---|---|---|
-| Cards (Visa, Mastercard) | ✅ Active | Global |
-| MB Way | ✅ Active | Portugal |
-| Multibanco | ✅ Active | Portugal |
-| Google Pay | ✅ Active | Global |
-| Apple Pay | ✅ Active | Global |
-| SEPA Direct Debit | ✅ Active | Europe |
-| Klarna | ✅ Active | Europe |
-| Bancontact | ✅ Active | Belgium |
-| BLIK | ✅ Active | Poland |
-| TWINT | ❌ Ineligible | Switzerland — after incorporation |
+### 3.2 Accepted Token
+USDC only. Hardcoded in contract. No other ERC-20 accepted under any circumstances.
 
-**Stripe Connect:** Platform model ✅ configured in sandbox
-**Webhook:** AuthOnce Railway API → `https://the-opportunity-production.up.railway.app/api/stripe/webhook` ✅
-**Webhook secret:** stored in Railway as `STRIPE_WEBHOOK_SECRET`
-**Branding:** AuthOnce logo + green #34d399 ✅
-**Customer emails:** Portuguese, successful payments ON, support@authonce.io ✅
-**Privacy Policy URL:** https://authonce.io/legal.html ✅
-**Terms of Service URL:** https://authonce.io/legal.html ✅
+### 3.3 Vault Funding Cap (LOCKED)
+Subscriber vault is funded at exactly 1× the subscription amount per billing cycle. No over-funding. No remaining balance. No withdrawal or refund UX. This eliminates an entire category of complexity and is architecturally locked.
 
-**Stripe remaining (after incorporation):**
-- Tax details (VAT number)
-- TWINT reactivation
-- Stripe Connect go live (needs code integration first)
-- Merchant support email per connected account (part of onboarding build)
+### 3.4 Insufficient Funds / Grace Period
+- Keeper detects insufficient balance → emits `InsufficientFunds` event
+- Subscription enters grace period (configurable per subscription, default 7 days)
+- Notifier sends alert to subscriber
+- Keeper retries daily during grace period
+- If not resolved → `expireSubscription()` called → status = Expired
+- Grace period is **configurable per subscription** (not hardcoded) — deployed in v3
 
----
+### 3.5 Billing Intervals
+Three intervals: Weekly (7 days), Monthly (30 days), Yearly (365 days). Immutable after subscription creation.
 
-## 4. Business Rules (Locked)
+### 3.6 Cancellation Authority
+Vault owner OR named guardian can cancel/pause. Only vault owner can resume. Protocol and merchant cannot cancel on behalf of users.
 
-### 4.1 Payment Initiation
-- Keeper bot initiates every USDC payment pull on-chain.
-- `SubscriptionVault` has a whitelisted `keeper` address only.
+### 3.7 Spending Cap
+Hard cap enforced on-chain. Contract reverts if pull amount > subscription.amount. Merchant can never be paid more than agreed.
 
-### 4.2 Accepted Token
-- USDC only (Base native). Hardcoded in contract.
+### 3.8 Custody Model
+Protocol never holds funds. USDC sits in subscriber's own Safe vault at all times. `SubscriptionVault` module uses `execTransactionFromModule()` to move USDC only during authorized pulls. Cancellation never moves funds — only revokes permission.
 
-### 4.3 Grace Period (v3 — configurable)
-- `MIN_GRACE_DAYS = 1`, `MAX_GRACE_DAYS = 30`, `DEFAULT_GRACE_DAYS = 7`
-- Set per subscription at creation. Pass 0 for default.
-- Reactivation: fresh payment link sent to subscriber automatically.
+### 3.9 Merchant Access
+Invite-only for MVP. Admin approves via `approveMerchant(address)` on MerchantRegistry. Revoked merchants cannot receive new subscriptions; existing active subscriptions continue until user cancels.
 
-### 4.4 Billing Intervals
-- Weekly (7d), Monthly (30d), Yearly (365d). Immutable after creation.
+### 3.10 Protocol Revenue
+0.5% fee per successful pull (default `feeBps = 50`). Hard ceiling at 200 bps (2%) — hardcoded, not upgradeable. Fee split atomically in `executePull()`: merchant receives `amount - fee`, treasury receives `fee`.
 
-### 4.5 Cancellation Authority
-- Vault owner OR guardian can cancel/pause. Only owner can resume.
+### 3.11 Merchant Settlement Choice
+Merchants choose at registration how they receive funds:
+- **USDC to wallet** — instant, no conversion, no Stripe needed
+- **Fiat to bank account** — via licensed offramp partner (Circle/MoonPay/Transak), 1–2 business days, any currency the merchant's bank accepts, USD as default
 
-### 4.6 Spending Cap
-- Hard cap enforced on-chain. Contract reverts if exceeded.
+Both options must be ready at mainnet launch. Subscriber experience is identical either way — always pays in USDC.
 
-### 4.7 Custody Model
-- Non-custodial on both fiat and crypto sides.
-- Fiat: Stripe Connect — payments go directly to merchant's Stripe account.
-- USDC: on-chain via Base Network smart contracts.
-- AuthOnce takes 0.5% via Stripe Connect fee splitting — never touches money.
+### 3.12 Price Changes (setProductExpiry)
+Merchants wanting to change subscription pricing must use `setProductExpiry()`. Smart contract enforces a minimum 30-day notice period — cannot be bypassed. Merchants cannot make pricing changes outside of AuthOnce. AuthOnce notifies subscribers automatically.
 
-### 4.8 Merchant Access
-- Invite-only. First 10 founding merchants (Parceiros Fundadores): 0% fees for 3 months.
-- Standard: 0.5% protocol fee per transaction.
-
-### 4.9 Protocol Revenue
-- 0.5% fee (feeBps = 50). Hard ceiling: 2% (200 bps) hardcoded.
-
-### 4.10 Fiat Payment Architecture (Portugal — planned)
-- Stripe Connect: merchant has own Stripe account.
-- MB Way + Multibanco via Stripe (Portugal).
-- SMS notifications via Twilio (~€0.05/SMS).
-- No PSP license needed (legal opinion to confirm).
-- Subscriber chooses MB Way (automatic) or Multibanco (reference per cycle).
-
-### 4.11 Subscriber Flow (No Wallet Required)
-- Subscribers never need a wallet or the authonce.io site.
-- Merchant initiates subscription.
-- Subscriber pays via MB Way or Multibanco.
-- To cancel: signed link in payment confirmation SMS/email.
-
-### 4.12 Tax and Invoicing
-- Merchants are solely responsible for their own tax obligations.
-- AuthOnce must issue VAT invoices for protocol fees — legal opinion to confirm.
-- Transaction history downloadable from merchant dashboard (to build).
-- Monthly fee invoice/receipt for 0.5% AuthOnce fee (to build).
+### 3.13 Notifications
+- Basic subscriber notifications (payment failed, grace period warning): **free on all merchant tiers**
+- Custom branded email notifications on merchant's behalf: **paid feature (Growth tier €49/month and above)**
+- Notification channels: Resend (email) + webhook dispatcher with HMAC-SHA256 signing + 5-attempt exponential backoff retry
 
 ---
 
-## 5. Product Roadmap (Versions)
+## 4. Merchant Pricing Tiers
 
-| Version | Model | Market | Status |
+| Tier | Price | Protocol Fee | Notes |
 |---|---|---|---|
-| v1 | USDC subscriptions on-chain | Crypto-native merchants | ✅ Built on testnet |
-| v2 | MB Way + Multibanco via Stripe Connect | Portuguese mass market | 🔲 In development |
-| v3 | Euro stablecoin (Bison Bank) | Post-stablecoin launch | ⏳ Future |
-| v4 | Prepaid wallets — pay per use | Transactional businesses | ⏳ Long term |
-| v5 | On-chain identity + universal subscription profile | All markets | ⏳ Long term |
-
-### v5 — On-Chain Identity Vision
-- Subscriber has one encrypted profile stored in their mobile wallet
-- Selective disclosure — merchant sees only what subscriber approves
-- Physical terminal: QR code / NFC on existing tablet (no hardware needed)
-- Portable payment history — on-chain reputation system
-- Developer API: €49–199/month tiered pricing
-- Per-verification fee: €0.05–0.10
-- Network moat: more merchants → more profiles → more merchants (Visa flywheel)
-- Data never sold — only access to verified interactions monetised (Visa model, not Meta)
+| Starter | Free | 1.0% per pull | Up to 3 products, hosted pay links, basic dashboard |
+| Growth | €49/month | 0.5% per pull | Unlimited products, webhooks, API, basic analytics, branded emails |
+| Business | €199/month | 0.3% per pull | Advanced analytics, compliance export, price rollout management |
+| Enterprise | Custom | 0.1–0.2% | White-label, custom domain, SLA, dedicated account manager |
 
 ---
 
-## 6. Revenue Streams
+## 5. Merchant Integration Paths
 
-| Stream | Model | Timing |
+### Path A — Hosted Pay Links (No-Code)
+`https://app.authonce.io/pay/{merchantId}/{productId}` — merchant shares link, AuthOnce handles everything.
+
+### Path B — Checkout Widget / SDK
+`npm install @authonce/sdk` — SubscribeButton component, opens modal, fires callback on success.
+
+### Path C — Developer API & Webhooks
+REST API at `https://api.authonce.io/v1`. Bearer token auth. HMAC-SHA256 signed webhooks. Events: `payment.success`, `payment.failed`, `subscription.cancelled`, `subscription.expired`. Retry: 10s → 1min → 5min → 30min → 2hr.
+
+---
+
+## 6. Access Control Map
+
+| Action | Who Can Call |
+|---|---|
+| `executePull(id)` | Keeper bot only |
+| `expireSubscription(id)` | Keeper bot only (after grace period) |
+| `createSubscription(...)` | Vault owner only |
+| `cancelSubscription(id)` | Vault owner OR guardian |
+| `pauseSubscription(id)` | Vault owner OR guardian |
+| `resumeSubscription(id)` | Vault owner only |
+| `setProductExpiry(id, ts)` | Merchant only (min 30-day notice enforced) |
+| `approveMerchant(addr)` | Protocol admin only |
+| `revokeMerchant(addr)` | Protocol admin only |
+| `setFeeBps(bps)` | Protocol admin only (max 200 bps) |
+| `setKeeper(addr)` | Protocol admin only |
+| `setProtocolTreasury(addr)` | Protocol admin only |
+
+---
+
+## 7. Backend Architecture (Current)
+
+```
+scripts/
+  keeper.js       — polls subscriptions, executes pulls, expires grace periods
+  notifier.js     — listens for on-chain events, sends notifications
+  api.js          — Express REST API (merchant registration, admin, Stripe Connect)
+  db.js           — PostgreSQL layer (subscriptions, payments, merchants, webhook_deliveries)
+  webhook.js      — HMAC-signed webhook dispatcher with retry logic + Resend email fallback
+  admin-auth.js   — JWT-based admin authentication (email/password)
+
+Database tables:
+  merchants         — wallet_address, settlement_preference, stripe_account_id, IBAN (encrypted AES-256-GCM)
+  subscriptions     — indexed from on-chain SubscriptionCreated events
+  payments          — indexed from on-chain PaymentExecuted events
+  webhook_deliveries — delivery log (success/failure per attempt)
+```
+
+**Stripe Connect (fully built in api.js):**
+- `GET /api/connect/authorize` — generates OAuth URL
+- `GET /api/connect/callback` — handles redirect, saves stripe_account_id
+- `GET /api/connect/status` — returns connection status
+- `DELETE /api/connect/disconnect` — deauthorizes
+- `POST /api/stripe/webhook` — receives Stripe events (signature verified)
+
+**Stripe webhook TODO (mainnet blocker):**
+- `payment_intent.payment_failed` → wire to grace period trigger + notifier
+- `payment_intent.succeeded` → wire to merchant payment notification
+
+---
+
+## 8. Frontend Architecture (Current)
+
+```
+frontend/src/
+  App.jsx                        — main app, wallet connect, view switcher
+  LandingPage.jsx                — bilingual landing page (EN/PT)
+  i18n.js                        — internationalisation
+  components/
+    Dashboard.jsx                — subscriber view (active subscriptions, admin panel)
+    MerchantDashboard.jsx        — merchant portal (Overview, Products & Pay Links,
+                                   Subscribers, Webhooks tabs)
+```
+
+- Auth: MetaMask via RainbowKit (Web3Auth/social login deferred)
+- Light/dark mode toggle with CSS variables and localStorage persistence
+- Bilingual: English at authonce.io, Portuguese at authonce.io/pt
+- Deployed on Netlify
+
+---
+
+## 9. Development Phase Status
+
+| Phase | Description | Status |
 |---|---|---|
-| Subscription fees | 0.5% per pull | Now (testnet) → mainnet Q3 2026 |
-| Terminal licence | €10–20/month per location | v5 post-mainnet |
-| Per-verification fee | €0.05–0.10 per check | v5 post-mainnet |
-| Developer API (identity) | €49–199/month tiered | v5 post-mainnet |
-| Euro stablecoin routing | Revenue share with Bison | Post-Bison stablecoin launch |
-
-**Exit valuation model:**
-- €500K ARR → €2.5–5M exit (5–10x revenue multiple)
-- €1M ARR → €5–10M exit
-- 5 revenue streams + network effect → premium multiple
-
----
-
-## 7. Competitor Positioning
-
-AuthOnce targets subscription businesses, NOT POS/transactional merchants.
-
-**Real competitors for Portuguese merchants (MB Way subscriptions):**
-
-| Solution | MB Way | Multibanco | Monthly fee | Per transaction |
-|---|---|---|---|---|
-| Stripe standalone | ✅ | ✅ | €0 | 1.5% + €0.25 |
-| Easypay (Portuguese) | ✅ | ✅ | €10–30/month | 0.5–1.5% |
-| Ifthenpay (Portuguese) | ✅ | ✅ | Setup fee | ~1% |
-| **AuthOnce + Stripe** | ✅ | ✅ | **€0** | **0.5% + Stripe** |
-
-**AuthOnce wins on:** No monthly fee, no chargebacks, on-chain audit trail, founding offer (0% 3 months), non-custodial, future-proof.
-
-**Bison Digital Assets — post-mainnet only:**
-- EUR offramp for USDC merchants
-- Euro stablecoin (planned July 2026) — could eliminate conversion step
-- Contact: Diogo Brás, diogo.bras@bisondigital.com
-- Only approach when AuthOnce has real USDC volume and leverage
+| Phase 0 | Foundry/Hardhat setup, Base Sepolia RPC | ✅ Complete |
+| Phase 1 | Contracts (SubscriptionVault v3, MerchantRegistry) | ✅ Complete |
+| Phase 2 | Keeper bot + grace period logic | ✅ Complete |
+| Phase 3 | Backend API, DB, webhook dispatcher, notifier, admin auth | ✅ Complete |
+| Phase 4 | Frontend — Merchant Portal, subscriber dashboard, landing page | ✅ Complete |
+| Phase 5 | Stripe webhook → business logic wiring | ⬜ In progress (mainnet blocker) |
+| Phase 6 | Geofencing middleware | ⬜ Not started (mainnet blocker) |
+| Phase 7 | Legal — Merchant ToS, Privacy Policy, Refund Policy | 🔄 In review |
+| Phase 8 | Smart contract audit | ⬜ Not started ($15–20K) |
+| Phase 9 | Safe multisig for admin + Ledger hardware wallet | ⬜ Not started |
+| Phase 10 | Mainnet deployment | ⬜ Blocked by Phases 5–9 |
 
 ---
 
-## 8. Core Data Structures
+## 10. Pre-Mainnet Checklist
 
-```solidity
-enum SubscriptionStatus { Active, Paused, Cancelled, Expired }
-enum Interval { Weekly, Monthly, Yearly }
-
-struct Subscription {
-    address owner;
-    address guardian;
-    address merchant;
-    address safeVault;
-    uint256 amount;
-    Interval interval;
-    uint256 lastPulledAt;
-    uint256 pausedAt;
-    uint256 expiresAt;
-    uint256 trialEndsAt;
-    uint256 gracePeriodDays;  // v3 — configurable 1–30 days
-    SubscriptionStatus status;
-}
-```
+- [ ] **Stripe webhook → grace period + notifier wiring** — `payment_intent.payment_failed` must trigger grace period and subscriber notification
+- [ ] **Geofencing middleware** — `checkGeofence(req, res, next)` on all API routes and frontend edge; HTTP 451 for OFAC regions; IP not logged
+- [ ] **Merchant Terms of Service** — legal review in progress; 4 material issues flagged (Stripe flow description, class action waiver, access retention language)
+- [ ] **Smart contract audit** — $15–20K budget
+- [ ] **Safe multisig** — replace EOA admin with Safe multisig before mainnet
+- [ ] **Ledger hardware wallet** — treasury key management
+- [ ] **Separate keeper/notifier Railway services** — currently co-located
+- [ ] **Full product review** — notification matrix, flows, pricing tiers, end-to-end testing
 
 ---
 
-## 9. Repository Structure
+## 11. Legal Documents (authonce.io/legal)
 
-```
-C:\The-Opportunity\
-  contracts/
-    SubscriptionVault.sol     — v3 BUSL-1.1
-    MerchantRegistry.sol      — v3 BUSL-1.1
-  scripts/
-    deploy.js                 — deploys both contracts
-    keeper.js                 — Railway
-    notifier.js               — Railway
-    monitor.js                — Railway
-    api.js                    — merchant + admin REST API
-    admin-auth.js             — JWT admin authentication
-    db.js                     — PostgreSQL helpers
-    webhook.js                — merchant webhook dispatcher
-  frontend/
-    src/
-      App.jsx                 — admin route + landing + dashboard
-      LandingPage.jsx         — merchant-first (EN + PT)
-      i18n.js                 — bilingual translations
-      components/
-        Dashboard.jsx
-        MerchantDashboard.jsx
-        AdminLogin.jsx
-        AdminDashboard.jsx
-    public/
-      logo.svg                — AuthOnce SVG logo
-      logo.png                — AuthOnce PNG logo (for Stripe)
-      legal.html              — ToS + Privacy Policy + Refund Policy (EN/PT)
-      _redirects              — Netlify SPA routing
-  LICENSE                     — BUSL-1.1
-  CLAUDE.md
-  railway.json
-  hardhat.config.js
-```
+Three documents in `legal.html` — bilingual EN/PT, tabbed interface:
+- **Terms of Service** (25 sections) — v0.1 testnet draft
+- **Privacy Policy** (16 sections) — GDPR compliant draft
+- **Refund Policy** (11 sections) — draft pending legal review
+
+**Open issues (flagged May 2026):**
+1. ToS §7 — Stripe flow description inaccurate (fiat does not flow directly to merchant; it goes CC → USDC → vault → merchant)
+2. Refund Policy §3 — "retain access until end of billing period" — AuthOnce cannot enforce this; soften language
+3. ToS §21 — Class action waiver not enforceable in Portugal/EU — remove or replace
+4. Privacy Policy §9 — Privy listed as "(planned)" — remove "(planned)" once integrated
+5. ToS §22 — Governing law has inline draft note — clean before mainnet
+
+**Grace period clause (§5 Refund Policy) — RESOLVED:** Correctly states configurable grace period. Contract v3 supports this.
 
 ---
 
-## 10. Security Constraints
+## 12. Compliance
 
-1. No upgradeability in MVP.
-2. Fee cap hardcoded at 200 bps.
-3. Re-entrancy guard on `executePull()`.
-4. Pull amount validated on-chain.
-5. Merchant address locked at creation.
-6. Cancellation never moves funds.
-7. BUSL-1.1 license — commercial use prohibited until 2030.
-8. `ProtocolDeployed` event — monitor.js alerts on copies.
-9. Ledger hardware wallet required before mainnet.
-10. Safe multisig required before mainnet.
+- **Non-custodial positioning:** Protocol facilitates, never holds. No FINMA custodian licence required.
+- **Geofencing:** OFAC-sanctioned regions blocked at edge (Iran, North Korea, Russia, Syria, Cuba, Belarus). IP used transiently, never stored.
+- **Data minimisation:** No PII stored. Primary user identifier = vault address. PII stays with Stripe (card/KYC) and auth provider.
+- **GDPR:** Data controller = Vasco Humberto dos Reis Diogo. Will update to AuthOnce Lda. on incorporation. CNPD supervisory authority.
+- **Fiat settlement via licensed partners** (Circle/MoonPay/Transak) — partners hold payment licences, not AuthOnce.
+- **BUSL-1.1 licence** on protocol code until 2030-01-01, then GPL v2.
 
 ---
 
-## 11. Development Phases
+## 13. Grants & Partnerships
 
-### Phase 0 — Environment Setup ✅
-### Phase 1 — Contracts ✅ (v3 — configurable grace period)
-### Phase 2 — Keeper Bot ✅
-### Phase 3 — Notification Backend ✅
-### Phase 4 — Frontend ✅ (bilingual EN/PT, merchant landing, admin login)
-### Phase 5 — IP Protection ✅ (BUSL-1.1, watermark, monitor.js)
+| Programme | Status |
+|---|---|
+| Coinbase Base Ecosystem Fund | Submitted April 2026 |
+| Circle Alliance Program | Submitted April 2026, pending review |
+| Base Builder Grants | Apply next |
+| IAPMEI (Portugal) | Free consultation — pending |
+| Startup Portugal mentorship | Pending |
+| Ethereum Foundation | After mainnet |
+| Gitcoin | After mainnet |
 
-### Phase 6 — Pre-Mainnet 🔲
-- [ ] Order Ledger Nano S Plus from ledger.com
-- [ ] Set up Safe multisig for admin role
-- [ ] Privy integration (Google/email login for subscribers)
-- [ ] Subscriber cancellation via signed link (no wallet required)
-- [ ] Stripe Connect merchant onboarding (code)
-- [ ] Merchant support email per Stripe Connect account
-- [ ] MB Way + Multibanco integration (Portugal)
-- [ ] Twilio SMS notifications
-- [ ] Geofencing middleware (OFAC sanctions)
-- [ ] Merchant payment notification email (notifier.js)
-- [ ] Transaction history download from merchant dashboard
-- [ ] Monthly fee invoice/receipt for merchants
-- [ ] Terms of Service + Privacy Policy — lawyer review
-- [ ] Legal consultation (13-item checklist)
-- [ ] Smart contract audit ($15–20K — Hacken or Code4rena)
-- [ ] Deploy to Base Mainnet
-
-### Phase 7 — Growth 🔲
-- [ ] Shopify app (Month 4–6 post-mainnet)
-- [ ] EU expansion via Stripe local payment methods
-- [ ] Staff access role (view-only, no financials)
-- [ ] Bulk subscriber CSV import
-- [ ] Getting Started guide (after first merchant onboarded)
-- [ ] Portugal Ventures Open Day (requires Portuguese company)
-- [ ] Indico Capital Partners — follow up
-- [ ] Start Ventures by Big outreach
-- [ ] Road 2 Web Summit 2026
-- [ ] Business Abroad 2026
-- [ ] TWINT reactivation (after incorporation)
-
-### Phase 8 — Identity (v5) 🔲
-- [ ] On-chain identity profile (encrypted, wallet-stored)
-- [ ] Selective disclosure engine
-- [ ] QR code / NFC physical terminal (tablet-based)
-- [ ] Developer API for identity verification
-- [ ] Portable payment history / reputation system
+**Key partnership contact:** Nuno Correia, co-founder of Utrust (crypto payments, SL Benfica). Utrust = one-time payments; AuthOnce = recurring. Complementary. Approach when live on mainnet.
 
 ---
 
-## 12. Key Decisions Log
+## 14. Key Decisions Log
 
 | Date | Decision | Rationale |
 |---|---|---|
-| Project start | Keeper bot initiates pulls | UX friction removal |
-| Project start | USDC only | Simplifies token logic |
-| Project start | Hard spending cap | Security-first |
-| Project start | Non-custodial | Protocol never holds funds |
-| Project start | Invite-only merchants | Reduces abuse |
-| Project start | 0.5% protocol fee | Revenue model |
-| Apr 2026 | Rebranded to AuthOnce | Cleaner brand |
-| Apr 2026 | BUSL-1.1 license | Protects until 2030 |
-| Apr 2026 | Cloudflare for DNS | Free, replaces Namecheap DNS |
-| Apr 2026 | Zoho Mail for email | Full send+receive at vasco@authonce.io |
-| Apr 2026 | Stripe Connect — Platform model | Non-custodial fiat; merchants own their Stripe |
-| Apr 2026 | Fiat-first architecture for Portugal | MB Way + Multibanco via Stripe Connect |
-| Apr 2026 | Configurable grace period (v3) | Merchants need flexibility 1–30 days |
-| Apr 2026 | Shopify Partner registered | Distribution channel post-mainnet |
-| Apr 2026 | Bison Digital Assets — post-mainnet | No leverage now; revisit with real volume |
-| Apr 2026 | Incorporate in Portugal — not yet | Wait for first merchant + legal advice |
-| Apr 2026 | AuthOnce v4 — prepaid wallets | Natural extension for transactional businesses |
-| Apr 2026 | AuthOnce v5 — on-chain identity | Network moat; Visa model not Meta model |
-| Apr 2026 | Identity data never sold | User owns data; only network access monetised |
-| Apr 2026 | Terminal = existing tablet + QR | No hardware manufacturing for v5 MVP |
-| Apr 2026 | Dispute separation — merchant/subscriber | AuthOnce is infrastructure, not mediator |
-| Apr 2026 | Legal docs drafted (ToS, Privacy, Refund) | EN/PT bilingual; lawyer review before mainnet |
-| Apr 2026 | Liability cap €100 in ToS | Maximum legal protection for AuthOnce |
-| Apr 2026 | "Parceiro fundador" in PT | More prestigious than "comerciante fundador" |
-| May 2026 | Getting Started guide — post first merchant | Document real pain points first |
-| May 2026 | Referral links — post-mainnet | Trust first, monetise later |
+| Project start | Keeper bot initiates pulls | User signs once; no manual triggers |
+| Project start | USDC only | Dominant on Base; simplifies approval logic |
+| Project start | Hard spending cap on-chain | Prevents merchant overreach |
+| Project start | Funds inside Safe vault | Non-custodial; protocol never holds |
+| Project start | Invite-only merchants for MVP | Reduces abuse vectors |
+| Project start | 0.5% protocol fee (max 2% hardcoded) | Revenue model with user-protection ceiling |
+| Architecture v2 | Hardhat (not Foundry) | Actually used in build |
+| Architecture v2 | Gelato replaced by custom keeper on Railway | Cost and control |
+| Architecture v2 | Resend for email notifications | Simple, reliable |
+| Architecture v3 | Three merchant integration paths | Serves all technical levels |
+| Architecture v3 | Webhook HMAC-SHA256 + retry policy | Industry standard; prevents spoofing |
+| Architecture v3 | Vault address as primary user identifier | No PII needed |
+| Architecture v3 | HTTP 451 for geofenced regions | Correct semantic; signals legal block |
+| Architecture v3 | No sweep/emergencyDrain functions | Non-custodial claim must be technically unbreakable |
+| 2026-04 | Grace period configurable per subscription (v3) | Merchant flexibility; not hardcoded at 7 days |
+| 2026-04 | setProductExpiry() — 30-day minimum notice enforced on-chain | Protects subscribers from sudden price changes |
+| 2026-04 | Vault funding capped at exactly 1× subscription amount | Eliminates balance/withdrawal/refund UX complexity |
+| 2026-04 | Basic notifications free; branded notifications paid (Growth+) | Protects protocol trust; monetises premium feature |
+| 2026-04 | Merchant settlement: USDC or fiat — both ready at mainnet launch | Fiat settlement is not Phase 6; it ships with mainnet |
+| 2026-04 | Stripe Connect OAuth flow built in api.js | Foundation for fiat settlement path |
+| 2026-05 | Web3Auth preferred over Privy for social login | Cheaper at scale ($79/month vs $499/month at 10K MAU) |
 
 ---
 
-## 13. Grants & External Relations
+## 15. SRO Inquiry
 
-| Grant / Program | Status | Date | Notes |
-|---|---|---|---|
-| Coinbase Base Ecosystem Fund | ✅ Submitted | Apr 2026 | $25–34K ask |
-| Circle Alliance Program | ✅ Submitted | Apr 2026 | Follow up if no reply by May 5 |
-| Startup Portugal One Stop Shop | ✅ Contacted | Apr 2026 | Francisca Sampaio — awaiting Vouchers reply |
-| Startup Portugal Newsletter | ✅ Subscribed | May 2026 | |
-| Indico Capital Partners | ✅ Email sent | May 2026 | futureunicorn@indicocapital.com |
-| Vouchers for Startups (PRR) | 🔲 Next round | — | Reply sent to Francisca asking about next round |
-| Base Builder Grants | 📋 Apply next | — | $5K–25K |
-| IAPMEI | 📋 After incorporation | — | Needs Portuguese NIF |
-| Portugal 2030 | 📋 After incorporation | — | Needs Portuguese NIF |
-| Compete 2030 | 📋 After incorporation | — | Regional focus |
-| Road 2 Web Summit 2026 | 📋 Post-mainnet | — | |
-| Business Abroad 2026 | 📋 Post-mainnet | — | |
-| EIC Accelerator | ⏳ Post-mainnet | — | Up to €2.5M grant |
-
-**VC contacts (post-mainnet):**
-- **Portugal Ventures** — Open Day first Friday of month (requires Portuguese company)
-- **Indico Capital Partners** — Fintech, Pre-Seed to Series A, €100K–€5M
-- **Start Ventures by Big** — B2B Fintech specialist, seed stage
-
-**Potential partners:**
-- **Nuno Correia** — Utrust co-founder. Warm door post-mainnet.
-- **Bison Digital Assets** — EUR offramp + euro stablecoin. Contact post-mainnet.
+Draft letter prepared but **not yet sent**. Must be reviewed before sending. PolyReg is the target SRO.
 
 ---
 
-## 14. Legal Checklist (To Bring to Lawyer)
+## 16. Employment Contract
 
-1. Does AuthOnce need Banco de Portugal registration as PSP?
-2. Is Stripe Connect sufficient to avoid PSP licensing?
-3. GDPR compliance — subscriber phone number hashing
-4. Terms of Service for Portuguese market — review draft at authonce.io/legal.html
-5. Privacy Policy — review draft at authonce.io/legal.html
-6. Refund Policy — review draft at authonce.io/legal.html
-7. MB Way / Multibanco regulatory requirements
-8. Consumer protection — cancellation rights, grace periods
-9. BUSL-1.1 enforceability under Portuguese law
-10. Nebenbeschäftigung clause in Swiss employment contract
-11. SRO membership — PolyReg (Switzerland)
-12. On-chain identity — GDPR implications for selective disclosure (v5)
-13. Does AuthOnce need to issue VAT invoices for 0.5% protocol fee?
-14. Governing law — Swiss vs Portuguese (confirm for ToS)
-15. Data retention period — confirm 10 years under Portuguese law
+Review needed for **Nebenbeschäftigung** (secondary employment) clause before AuthOnce generates revenue.
 
 ---
 
-## 15. Infrastructure Cost Strategy
-
-- Stay on Railway ($5/month) through testnet and early mainnet.
-- Reassess at 10+ active merchants.
-- At scale: Hetzner VPS (~€5-10/month).
-- Cloudflare Pages as Netlify alternative if needed (both free).
-- Netlify credits: monitor usage (cycle Apr 18–May 17) — batch commits.
-
----
-
-## 16. Action List (Prioritised)
-
-**Immediate (this week):**
-- [ ] Order Ledger Nano S Plus from ledger.com
-- [ ] Contact lawyer (15-item legal checklist)
-- [ ] Stripe Connect code integration (merchant onboarding flow)
-- [ ] Circle Alliance Program — follow up if no reply by May 5
-
-**When incorporated:**
-- [ ] Apply for Startup Recognition Status (free, 5 days)
-- [ ] Register on Ecosystem Mapping Platform (startupportugal.dealroom.co)
-- [ ] Apply to Portugal 2030 via Balcão dos Fundos
-- [ ] Register on IAPMEI platform
-- [ ] Update Stripe account to company details
-- [ ] TWINT reactivation
-
-**Post-mainnet:**
-- [ ] Portugal Ventures Open Day
-- [ ] Indico Capital Partners follow-up
-- [ ] Start Ventures by Big outreach
-- [ ] Bison Digital Assets — Diogo Brás intro
-- [ ] Road 2 Web Summit 2026
-- [ ] Shopify app development
-- [ ] Getting Started guide
-- [ ] Referral links for Coinbase/Binance/Kraken
-
----
-
-## 17. Business Documents
-
-Stored locally at `C:\AuthOnce-Docs\` (NOT in GitHub):
-- `Business\AuthOnce_BusinessPlan_2026_v2.docx`
-- `Financial\AuthOnce_FinancialProjections.xlsx`
-- `Grants\AuthOnce_GrantMemo_v3.pdf`
-- `Technical\AuthOnce_TechnicalDocs.md`
-
----
-
-*Last updated: 2026-05-02 — Full session: Stripe fully configured. Legal documents live (authonce.io/legal.html). Stripe Connect backend deployed to Railway (api.js v2, 761 lines). stripe npm package added. DB migration ran (stripe_account_id, stripe_connected_at columns). API health confirmed. Technical Documentation v0.1 created (13 sections, lawyer-ready). Startup Portugal newsletter subscribed. Indico Capital Partners contacted.*
-
-*Pending tomorrow (first thing):*
-*1. Fix Stripe Connect — switch from OAuth (ca_ Client ID) to modern Account Sessions approach*
-*2. Add STRIPE_CONNECT_CLIENT_ID and FRONTEND_URL to Railway (or remove if switching to Account Sessions)*
-*3. Privy integration (subscriber login — no wallet needed)*
-
-*Next actions: Stripe Connect fix → Privy → MB Way build → Subscriber cancellation link → Merchant notification email → Audit → Mainnet.*
+*Last updated: 2026-05-02 — Full project state captured after code review session.*
+*Next actions: Stripe webhook → business logic wiring | Geofencing middleware | Legal docs material issues*
