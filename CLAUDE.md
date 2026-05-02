@@ -480,5 +480,11 @@ Stored locally at `C:\AuthOnce-Docs\` (NOT in GitHub):
 
 ---
 
-*Last updated: 2026-05-02 — Stripe fully configured (MB Way, Multibanco, SEPA, Connect, webhook, branding). Legal documents live at authonce.io/legal.html. Startup Portugal newsletter subscribed. Indico Capital Partners contacted. PT landing page fixes (Registar, Crypto, Parceiro fundador). Legal checklist expanded to 15 items.*
-*Next actions: Order Ledger → Contact lawyer → Stripe Connect code → Privy integration → MB Way build → Audit → Mainnet.*
+*Last updated: 2026-05-02 — Full session: Stripe fully configured. Legal documents live (authonce.io/legal.html). Stripe Connect backend deployed to Railway (api.js v2, 761 lines). stripe npm package added. DB migration ran (stripe_account_id, stripe_connected_at columns). API health confirmed. Technical Documentation v0.1 created (13 sections, lawyer-ready). Startup Portugal newsletter subscribed. Indico Capital Partners contacted.*
+
+*Pending tomorrow (first thing):*
+*1. Fix Stripe Connect — switch from OAuth (ca_ Client ID) to modern Account Sessions approach*
+*2. Add STRIPE_CONNECT_CLIENT_ID and FRONTEND_URL to Railway (or remove if switching to Account Sessions)*
+*3. Privy integration (subscriber login — no wallet needed)*
+
+*Next actions: Stripe Connect fix → Privy → MB Way build → Subscriber cancellation link → Merchant notification email → Audit → Mainnet.*
