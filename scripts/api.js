@@ -531,6 +531,206 @@ app.post("/api/merchants/notify-admin", async (req, res) => {
   }
 });
 // -----------------------------------------------------------------------------
+
+// =============================================================================
+// STRIPE CONNECT — Merchant onboarding
+// =============================================================================
+// Required Railway env vars:
+//   STRIPE_SECRET_KEY        = sk_live_...
+//   STRIPE_CONNECT_CLIENT_ID = ca_...  (from Stripe Dashboard → Connect → Settings)
+//   STRIPE_WEBHOOK_SECRET    = whsec_... (already set)
+//   FRONTEND_URL             = https://authonce.io
+// =============================================================================
+
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+// -----------------------------------------------------------------------------
+// GET /api/connect/authorize
+// Generates the Stripe OAuth URL for a merchant to connect their Stripe account
+// -----------------------------------------------------------------------------
+app.get("/api/connect/authorize", requireMerchantAuth, async (req, res) => {
+  try {
+    const merchant = await db.getMerchant(req.merchantAddress);
+    if (!merchant) return res.status(404).json({ error: "merchant_not_found", message: "Register as a merchant first." });
+    if (!merchant.approved_at) return res.status(403).json({ error: "not_approved", message: "Your merchant application is pending approval." });
+    if (merchant.stripe_account_id) return res.status(400).json({ error: "already_connected", message: "Stripe account already connected.", stripe_account_id: merchant.stripe_account_id });
+
+    const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: "config_error", message: "Stripe Connect not configured." });
+
+    const state = Buffer.from(JSON.stringify({ wallet: req.merchantAddress, ts: Date.now() })).toString("base64");
+    const redirectUri = `${process.env.FRONTEND_URL || "https://authonce.io"}/api/connect/callback`;
+
+    const url = `https://connect.stripe.com/oauth/authorize?` +
+      `response_type=code&client_id=${clientId}&scope=read_write` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&state=${encodeURIComponent(state)}` +
+      `&stripe_user[email]=${encodeURIComponent(merchant.email || "")}` +
+      `&stripe_user[business_name]=${encodeURIComponent(merchant.business_name || "")}` +
+      `&stripe_user[country]=PT`;
+
+    console.log(`[CONNECT] OAuth URL generated for ${req.merchantAddress}`);
+    res.json({ url });
+  } catch (err) {
+    console.error("[CONNECT] Authorize error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/connect/callback
+// Handles Stripe OAuth redirect after merchant connects their account
+// -----------------------------------------------------------------------------
+app.get("/api/connect/callback", async (req, res) => {
+  const FRONTEND = process.env.FRONTEND_URL || "https://authonce.io";
+  try {
+    const { code, state, error } = req.query;
+    if (error) {
+      console.warn(`[CONNECT] Merchant declined: ${error}`);
+      return res.redirect(`${FRONTEND}/merchant?connect=declined`);
+    }
+    if (!code || !state) return res.status(400).json({ error: "missing_params" });
+
+    let walletAddress;
+    try {
+      const decoded = JSON.parse(Buffer.from(decodeURIComponent(state), "base64").toString());
+      walletAddress = decoded.wallet;
+      if (Date.now() - decoded.ts > 15 * 60 * 1000) return res.redirect(`${FRONTEND}/merchant?connect=expired`);
+    } catch (e) {
+      return res.status(400).json({ error: "invalid_state" });
+    }
+
+    const response = await stripe.oauth.token({ grant_type: "authorization_code", code });
+    const stripeAccountId = response.stripe_user_id;
+    if (!stripeAccountId) return res.redirect(`${FRONTEND}/merchant?connect=error`);
+
+    await db.query(
+      "UPDATE merchants SET stripe_account_id = $1, stripe_connected_at = NOW(), updated_at = NOW() WHERE wallet_address = $2",
+      [stripeAccountId, walletAddress]
+    );
+
+    console.log(`[CONNECT] ${walletAddress} connected Stripe account ${stripeAccountId}`);
+    res.redirect(`${FRONTEND}/merchant?connect=success`);
+  } catch (err) {
+    console.error("[CONNECT] Callback error:", err.message);
+    res.redirect(`${FRONTEND}/merchant?connect=error`);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/connect/status
+// Returns Stripe Connect status for the authenticated merchant
+// -----------------------------------------------------------------------------
+app.get("/api/connect/status", requireMerchantAuth, async (req, res) => {
+  try {
+    const merchant = await db.getMerchant(req.merchantAddress);
+    if (!merchant) return res.status(404).json({ error: "merchant_not_found" });
+    if (!merchant.stripe_account_id) return res.json({ connected: false });
+
+    const account = await stripe.accounts.retrieve(merchant.stripe_account_id);
+    res.json({
+      connected: true,
+      stripe_account_id: merchant.stripe_account_id,
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      details_submitted: account.details_submitted,
+      connected_at: merchant.stripe_connected_at,
+    });
+  } catch (err) {
+    console.error("[CONNECT] Status error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// DELETE /api/connect/disconnect
+// Merchant disconnects their Stripe account from AuthOnce
+// -----------------------------------------------------------------------------
+app.delete("/api/connect/disconnect", requireMerchantAuth, async (req, res) => {
+  try {
+    const merchant = await db.getMerchant(req.merchantAddress);
+    if (!merchant?.stripe_account_id) return res.status(400).json({ error: "not_connected" });
+
+    await stripe.oauth.deauthorize({
+      client_id: process.env.STRIPE_CONNECT_CLIENT_ID,
+      stripe_user_id: merchant.stripe_account_id,
+    });
+    await db.query(
+      "UPDATE merchants SET stripe_account_id = NULL, stripe_connected_at = NULL, updated_at = NOW() WHERE wallet_address = $1",
+      [req.merchantAddress]
+    );
+
+    console.log(`[CONNECT] ${req.merchantAddress} disconnected Stripe`);
+    res.json({ success: true, message: "Stripe account disconnected." });
+  } catch (err) {
+    console.error("[CONNECT] Disconnect error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST /api/stripe/webhook
+// Handles all Stripe webhook events (registered in Stripe Dashboard)
+// -----------------------------------------------------------------------------
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error("[WEBHOOK] Signature failed:", err.message);
+    return res.status(400).json({ error: "invalid_signature" });
+  }
+
+  console.log(`[WEBHOOK] ${event.type}`);
+  try {
+    switch (event.type) {
+      case "payment_intent.succeeded": {
+        const pi = event.data.object;
+        console.log(`[WEBHOOK] Payment succeeded: ${pi.id} — ${pi.amount / 100} ${pi.currency.toUpperCase()}`);
+        // TODO: Send merchant payment notification email via Resend
+        break;
+      }
+      case "payment_intent.payment_failed": {
+        const pi = event.data.object;
+        console.log(`[WEBHOOK] Payment failed: ${pi.id} — ${pi.last_payment_error?.message}`);
+        // TODO: Trigger grace period, notify merchant + subscriber
+        break;
+      }
+      case "invoice.paid": {
+        const inv = event.data.object;
+        console.log(`[WEBHOOK] Invoice paid: ${inv.id} — ${inv.amount_paid / 100} ${inv.currency.toUpperCase()}`);
+        // TODO: Send receipt to subscriber, notify merchant
+        break;
+      }
+      case "invoice.payment_failed": {
+        const inv = event.data.object;
+        console.log(`[WEBHOOK] Invoice payment failed: ${inv.id}`);
+        // TODO: Grace period flow
+        break;
+      }
+      case "customer.subscription.created":
+        console.log(`[WEBHOOK] Subscription created: ${event.data.object.id}`); break;
+      case "customer.subscription.deleted":
+        console.log(`[WEBHOOK] Subscription cancelled: ${event.data.object.id}`); break;
+      case "customer.subscription.updated":
+        console.log(`[WEBHOOK] Subscription updated: ${event.data.object.id} — ${event.data.object.status}`); break;
+      case "customer.subscription.paused":
+        console.log(`[WEBHOOK] Subscription paused: ${event.data.object.id}`); break;
+      case "customer.subscription.resumed":
+        console.log(`[WEBHOOK] Subscription resumed: ${event.data.object.id}`); break;
+      case "charge.refunded":
+        console.log(`[WEBHOOK] Charge refunded: ${event.data.object.id}`); break;
+      default:
+        console.log(`[WEBHOOK] Unhandled: ${event.type}`);
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error("[WEBHOOK] Processing error:", err.message);
+    res.status(500).json({ error: "processing_error" });
+  }
+});
+
 // 404 handler
 // -----------------------------------------------------------------------------
 app.use((req, res) => {
