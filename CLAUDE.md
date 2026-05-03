@@ -1,5 +1,5 @@
 # CLAUDE.md — Project Memory
-## AuthOnce: Non-Custodial USDC Subscription Protocol
+## AuthOnce: An Intent-Based Subscription Manager
 
 > This file is the single source of truth for all project decisions.
 > Every coding session must begin by reading this file.
@@ -10,311 +10,326 @@
 ## 1. Project Overview
 
 **Name:** AuthOnce
+**Domain:** authonce.io
 **Tagline:** Authorize once. Pay forever. Stay in control.
-**Domain:** authonce.io (Namecheap)
-**Purpose:** A non-custodial recurring payment protocol on Base Network. Merchants present subscription bills; subscribers authorize once and payments execute automatically via a keeper bot. The protocol never holds funds.
-**MVP Target:** Base Network mainnet — planned Q3 2026.
-**Founder:** Vasco Humberto dos Reis Diogo (solo, Swiss resident, Portuguese citizen). Full-time at Hinti GmbH (ASSA ABLOY). Building AuthOnce in spare time. Exit target: €3–10M sale, retire at 54–55.
-**Legal entity:** Swiss Association (in formation). Sister pending confirmation as Secretary/Treasurer.
-**Local docs:** `C:\AuthOnce-Docs\` — BusinessPlan v2, FinancialProjections, GrantMemo, TechnicalDocs.
+**Purpose:** A Web3 subscription manager that allows users to authorize recurring USDC pulls from a Safe (Gnosis) Smart Account vault, replacing traditional credit-card subscriptions with a self-custodied, on-chain alternative.
+**MVP Target:** Functional on Base Network (mainnet + Base Sepolia testnet).
+**Founder:** Vasco Humberto dos Reis Diogo — Swiss resident, Portuguese citizen, age 51.
+**Goal:** Build to sell for €3–10M. Retire at 54–55.
+**Contact:** vasco@authonce.io
 
 ---
 
 ## 2. The Stack
 
-| Layer | Technology | Status |
+| Layer | Technology | Notes |
 |---|---|---|
-| Smart Contracts | Solidity via Hardhat (not Foundry) | ✅ Deployed Base Sepolia |
-| Chain | Base Network | ✅ |
-| Token | USDC only (hardcoded) | ✅ |
-| Keeper Bot | Node.js on Railway | ✅ Running 24/7 |
-| Notifier | Node.js on Railway | ✅ Running |
-| Backend API | Express.js on Railway | ✅ Built |
-| Database | PostgreSQL on Railway | ✅ Schema live |
-| Frontend | React + Vite, deployed on Netlify | ✅ Live |
-| Auth (current) | MetaMask / RainbowKit | ✅ Working |
-| Auth (planned) | Web3Auth (Google/Email login) | ⬜ Not built |
-| Fiat Onramp | Stripe Crypto Checkout | ⬜ Not built |
-| Stripe Connect | Merchant OAuth flow | ✅ Built in api.js |
-| Notifications | Resend (email) + webhook dispatcher | ✅ Built |
-| Railway plan | Hobby ($5/month) | ✅ Upgraded |
+| Smart Contracts | Solidity v0.8.24 | Hardhat, optimizer 200 runs, viaIR, evmVersion: paris |
+| Chain | Base Network | Low gas, EVM-compatible, USDC native |
+| Token | USDC (Base Sepolia) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Token | USDC (Base Mainnet) | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| Keeper Bot | Node.js | Running on Railway (supportive-prosperity project) |
+| Notification Backend | Node.js + PostgreSQL | Running on Railway, polling every 30s |
+| Frontend | React + Vite + RainbowKit + wagmi + viem | In `/frontend` folder |
+| Deployment | Netlify (frontend) + Railway (backend) | |
+| Email | Resend via vasco@authonce.io | |
+| Copy Monitor | monitor.js | Watches for unauthorized contract deployments |
 
-**Contract addresses (Base Sepolia testnet):**
-- `SubscriptionVault.sol`: `0xED9a4322030b2523cBB4eD5479539a3afEe30afA` ✅ v3 — configurable grace period
-- `MerchantRegistry.sol`: `0x3124a01D023FA6F0AFDE1e89c6727FE3D0fAa3d5` ✅ v3
-- USDC (Base Sepolia): `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+**Key contract addresses (Base Sepolia testnet — v1.0.0 BUSL-1.1):**
+- `SubscriptionVault.sol`: `0x6188D6Bdb9D4DF130914A35aFA2bE66a59Ba25EA` ✅ deployed + verified
+- `MerchantRegistry.sol`: `0x1fA825065260a4e775AbD8D2596B1869904e446A` ✅ deployed + verified
+- Deployer / Admin (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
+- Protocol Treasury (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
+- Gelato Keeper (testnet): `0x44444D60136Cf62804963fA14d62a55c34a96f8F`
+- Test Safe Vault: created on Base Sepolia via app.safe.global ("AuthOnce Test Vault")
 
-**Contract addresses (Base Mainnet — not yet deployed):**
-- USDC (Base Mainnet): `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- `SubscriptionVault.sol`: `[DEPLOY AND RECORD HERE]`
-- `MerchantRegistry.sol`: `[DEPLOY AND RECORD HERE]`
-- Protocol Treasury: `[RECORD HERE]`
+**Key contract addresses (Base Mainnet — fill in after audit):**
+- `SubscriptionVault.sol`: `[DEPLOY AFTER AUDIT]`
+- `MerchantRegistry.sol`: `[DEPLOY AFTER AUDIT]`
+- Protocol Treasury: `[LEDGER HARDWARE WALLET — ORDER BEFORE MAINNET]`
+- Admin: `[SAFE MULTISIG — SET UP BEFORE MAINNET]`
+
+**GitHub:** https://github.com/Vascodiogo/the-opportunity
+**Railway:** supportive-prosperity project (keeper + notifier services)
+**Netlify:** authonce.io frontend
 
 ---
 
 ## 3. Business Rules (Locked — Do Not Change Without Architect Approval)
 
 ### 3.1 Payment Initiation
-Keeper bot initiates every pull. Only whitelisted keeper address can call `executePull()`. User signs once at subscription creation, never again.
+- **Rule:** A trusted off-chain **keeper bot** initiates every payment pull.
+- **Implication:** `SubscriptionVault` has a whitelisted `keeper` address. Only that address can call `executePull()`. The user never manually triggers a payment.
 
 ### 3.2 Accepted Token
-USDC only. Hardcoded in contract. No other ERC-20 accepted under any circumstances.
+- **Rule:** **USDC only** (Base native contract). Hardcoded in contract.
+- **Implication:** No other ERC-20 accepted even if passed as parameter. Security constraint, not a limitation.
 
-### 3.3 Vault Funding Cap (LOCKED)
-Subscriber vault is funded at exactly 1× the subscription amount per billing cycle. No over-funding. No remaining balance. No withdrawal or refund UX. This eliminates an entire category of complexity and is architecturally locked.
+### 3.3 Insufficient Funds Handling
+- **Rule:** If vault balance is below subscription amount at pull time:
+  1. Emit on-chain `InsufficientFunds(subscriptionId, required, available, pausedUntil)` event.
+  2. Notifier backend catches event, sends merchant webhook + email alert.
+  3. Subscription enters **7-day grace period** (`status = Paused`).
+  4. Keeper retries daily during grace period.
+  5. If user tops up within 7 days, keeper resumes and pulls.
+  6. If 7 days pass with no top-up, keeper calls `expireSubscription(id)`.
 
-### 3.4 Insufficient Funds / Grace Period
-- Keeper detects insufficient balance → emits `InsufficientFunds` event
-- Subscription enters grace period (configurable per subscription, default 7 days)
-- Notifier sends alert to subscriber
-- Keeper retries daily during grace period
-- If not resolved → `expireSubscription()` called → status = Expired
-- Grace period is **configurable per subscription** (not hardcoded) — deployed in v3
+### 3.4 Billing Intervals
+- **Rule:** Three supported intervals — weekly (7 days), monthly (30 days), yearly (365 days).
+- Stored as enum. Immutable after subscription creation.
 
-### 3.5 Billing Intervals
-Three intervals: Weekly (7 days), Monthly (30 days), Yearly (365 days). Immutable after subscription creation.
+### 3.5 Cancellation Authority
+- Vault owner (subscriber) OR named guardian can cancel/pause.
+- Only vault owner can resume.
+- Guardian address stored per subscription (zero address if none).
 
-### 3.6 Cancellation Authority
-Vault owner OR named guardian can cancel/pause. Only vault owner can resume. Protocol and merchant cannot cancel on behalf of users.
+### 3.6 Spending Cap (Hard Enforcement)
+- `amount` set at creation is a hard cap. Contract reverts if keeper tries to pull more.
+- `require(pullAmount <= subscription.amount, "ExceedsCap")` — enforced on-chain.
 
-### 3.7 Spending Cap
-Hard cap enforced on-chain. Contract reverts if pull amount > subscription.amount. Merchant can never be paid more than agreed.
+### 3.7 Custody Model
+- User USDC sits inside their own Safe vault at all times.
+- Protocol never holds user funds. Non-custodial architecture.
+- Cancellation never moves funds — only revokes module permission.
 
-### 3.8 Custody Model
-Protocol never holds funds. USDC sits in subscriber's own Safe vault at all times. `SubscriptionVault` module uses `execTransactionFromModule()` to move USDC only during authorized pulls. Cancellation never moves funds — only revokes permission.
+### 3.8 Merchant Access (MVP)
+- Invite-only. Only admin-whitelisted addresses can register as merchants.
+- `MerchantRegistry.sol` with admin role. Revoked merchants cannot receive new subscriptions; existing ones continue until user cancels.
 
-### 3.9 Merchant Access
-Invite-only for MVP. Admin approves via `approveMerchant(address)` on MerchantRegistry. Revoked merchants cannot receive new subscriptions; existing active subscriptions continue until user cancels.
+### 3.9 Protocol Revenue
+- 0.5% coordination fee (feeBps = 50) on every successful pull.
+- Hard ceiling: 2% (200 bps) — hardcoded, not upgradeable.
+- Two transfers per pull: merchant receives 99.5%, protocol treasury 0.5%.
 
-### 3.10 Protocol Revenue
-0.5% fee per successful pull (default `feeBps = 50`). Hard ceiling at 200 bps (2%) — hardcoded, not upgradeable. Fee split atomically in `executePull()`: merchant receives `amount - fee`, treasury receives `fee`.
+### 3.10 Merchant Features (v2)
+- `setProductExpiry()` — merchant can schedule subscription expiry with minimum 30-day notice. Cannot shorten once set.
+- `merchantPauseSubscription()` — merchant can pause billing for up to 90 days (customer service tool). Does NOT trigger grace period.
+- Trial periods — up to 90 days. `lastPulledAt` set to `trialEndsAt` so first pull happens after trial.
 
-### 3.11 Merchant Settlement Choice
-Merchants choose at registration how they receive funds:
-- **USDC to wallet** — instant, no conversion, no Stripe needed
-- **Fiat to bank account** — via licensed offramp partner (Circle/MoonPay/Transak), 1–2 business days, any currency the merchant's bank accepts, USD as default
+### 3.11 Audit Trail & Notifications
+- **Layer 1:** On-chain Solidity events (source of truth)
+- **Layer 2:** Notifier backend polls events every 30s, fires merchant webhooks
+- **Layer 3:** Email via Resend as fallback
+- **Layer 4:** In-app activity feed (frontend reads events)
 
-Both options must be ready at mainnet launch. Subscriber experience is identical either way — always pays in USDC.
-
-### 3.12 Price Changes (setProductExpiry)
-Merchants wanting to change subscription pricing must use `setProductExpiry()`. Smart contract enforces a minimum 30-day notice period — cannot be bypassed. Merchants cannot make pricing changes outside of AuthOnce. AuthOnce notifies subscribers automatically.
-
-### 3.13 Notifications
-- Basic subscriber notifications (payment failed, grace period warning): **free on all merchant tiers**
-- Custom branded email notifications on merchant's behalf: **paid feature (Growth tier €49/month and above)**
-- Notification channels: Resend (email) + webhook dispatcher with HMAC-SHA256 signing + 5-attempt exponential backoff retry
-
----
-
-## 4. Merchant Pricing Tiers
-
-| Tier | Price | Protocol Fee | Notes |
-|---|---|---|---|
-| Starter | Free | 1.0% per pull | Up to 3 products, hosted pay links, basic dashboard |
-| Growth | €49/month | 0.5% per pull | Unlimited products, webhooks, API, basic analytics, branded emails |
-| Business | €199/month | 0.3% per pull | Advanced analytics, compliance export, price rollout management |
-| Enterprise | Custom | 0.1–0.2% | White-label, custom domain, SLA, dedicated account manager |
-
----
-
-## 5. Merchant Integration Paths
-
-### Path A — Hosted Pay Links (No-Code)
-`https://app.authonce.io/pay/{merchantId}/{productId}` — merchant shares link, AuthOnce handles everything.
-
-### Path B — Checkout Widget / SDK
-`npm install @authonce/sdk` — SubscribeButton component, opens modal, fires callback on success.
-
-### Path C — Developer API & Webhooks
-REST API at `https://api.authonce.io/v1`. Bearer token auth. HMAC-SHA256 signed webhooks. Events: `payment.success`, `payment.failed`, `subscription.cancelled`, `subscription.expired`. Retry: 10s → 1min → 5min → 30min → 2hr.
+**Events emitted:**
+- `ProtocolDeployed(protocol, version, deployer, chainId, timestamp)` — deployment tracking
+- `SubscriptionCreated(id, owner, merchant, safeVault, amount, interval, guardian)`
+- `PaymentExecuted(id, amount, merchantReceived, fee, timestamp)`
+- `InsufficientFunds(id, required, available, pausedUntil)`
+- `SubscriptionPaused(id, pausedBy, reason)`
+- `SubscriptionCancelled(id, cancelledBy)`
+- `SubscriptionResumed(id, timestamp)`
+- `SubscriptionExpired(id, timestamp)`
+- `SubscriptionPausedByMerchant(id, merchant, resumesAt)`
+- `TrialStarted(id, trialEndsAt)`
+- `ProductExpirySet(id, merchant, expiresAt, noticeDays)`
+- `MerchantApproved(merchant)`
+- `MerchantRevoked(merchant)`
 
 ---
 
-## 6. Access Control Map
+## 4. Core Data Structures
+
+```solidity
+enum SubscriptionStatus { Active, Paused, Cancelled, Expired }
+enum Interval { Weekly, Monthly, Yearly }
+
+struct Subscription {
+    address owner;          // Safe vault owner (subscriber)
+    address guardian;       // Can also cancel/pause — zero address if none
+    address merchant;       // Approved merchant — immutable after creation
+    address safeVault;      // The Safe wallet that holds the USDC
+    uint256 amount;         // USDC per pull, 6-decimal precision (hard cap)
+    Interval interval;      // Weekly / Monthly / Yearly — immutable
+    uint256 lastPulledAt;   // Timestamp of last successful pull
+    uint256 pausedAt;       // Timestamp of pause start (0 = not paused)
+    uint256 expiresAt;      // Timestamp of scheduled expiry (0 = no expiry set)
+    uint256 trialEndsAt;    // Timestamp when trial ends (0 = no trial)
+    SubscriptionStatus status;
+}
+```
+
+---
+
+## 5. Access Control Map
 
 | Action | Who Can Call |
 |---|---|
-| `executePull(id)` | Keeper bot only |
-| `expireSubscription(id)` | Keeper bot only (after grace period) |
+| `executePull(id, amount)` | Keeper only |
+| `expireSubscription(id)` | Keeper only |
 | `createSubscription(...)` | Vault owner only |
 | `cancelSubscription(id)` | Vault owner OR guardian |
 | `pauseSubscription(id)` | Vault owner OR guardian |
 | `resumeSubscription(id)` | Vault owner only |
-| `setProductExpiry(id, ts)` | Merchant only (min 30-day notice enforced) |
-| `approveMerchant(addr)` | Protocol admin only |
-| `revokeMerchant(addr)` | Protocol admin only |
-| `setFeeBps(bps)` | Protocol admin only (max 200 bps) |
-| `setKeeper(addr)` | Protocol admin only |
-| `setProtocolTreasury(addr)` | Protocol admin only |
+| `setProductExpiry(id, ts)` | Merchant only (on their own subscriptions) |
+| `merchantPauseSubscription(id, days)` | Merchant only |
+| `approveMerchant(addr)` | Admin only |
+| `revokeMerchant(addr)` | Admin only |
+| `setFeeBps(bps)` | Admin only (max 200 bps hardcoded) |
+| `setKeeper(addr)` | Admin only |
+| `setProtocolTreasury(addr)` | Admin only |
 
 ---
 
-## 7. Backend Architecture (Current)
+## 6. Repository Structure
 
 ```
-scripts/
-  keeper.js       — polls subscriptions, executes pulls, expires grace periods
-  notifier.js     — listens for on-chain events, sends notifications
-  api.js          — Express REST API (merchant registration, admin, Stripe Connect)
-  db.js           — PostgreSQL layer (subscriptions, payments, merchants, webhook_deliveries)
-  webhook.js      — HMAC-signed webhook dispatcher with retry logic + Resend email fallback
-  admin-auth.js   — JWT-based admin authentication (email/password)
-
-Database tables:
-  merchants         — wallet_address, settlement_preference, stripe_account_id, IBAN (encrypted AES-256-GCM)
-  subscriptions     — indexed from on-chain SubscriptionCreated events
-  payments          — indexed from on-chain PaymentExecuted events
-  webhook_deliveries — delivery log (success/failure per attempt)
+C:\The-Opportunity\
+  contracts/
+    SubscriptionVault.sol     — core vault logic (v1.0.0 BUSL-1.1)
+    MerchantRegistry.sol      — invite-only merchant whitelist (v1.0.0 BUSL-1.1)
+  scripts/
+    deploy.js                 — deploys both contracts in one run
+    keeper.js                 — keeper bot (also on Railway)
+    notifier.js               — notification backend (also on Railway)
+    monitor.js                — copy detector (watches for ProtocolDeployed events)
+    db.js                     — PostgreSQL helpers
+    webhook.js                — merchant webhook dispatcher
+    approveMerchant.js        — admin utility
+    createSubscription.js     — test utility
+    checkBalance.js           — test utility
+    diagnose.js               — debug utility
+  frontend/
+    src/App.jsx               — React frontend with RainbowKit wallet connection
+  LICENSE                     — BUSL-1.1
+  CLAUDE.md                   — this file (project memory)
+  hardhat.config.js
+  .env                        — secrets (gitignored)
+  .env.example                — template (committed)
 ```
 
-**Stripe Connect (fully built in api.js):**
-- `GET /api/connect/authorize` — generates OAuth URL
-- `GET /api/connect/callback` — handles redirect, saves stripe_account_id
-- `GET /api/connect/status` — returns connection status
-- `DELETE /api/connect/disconnect` — deauthorizes
-- `POST /api/stripe/webhook` — receives Stripe events (signature verified)
+---
 
-**Stripe webhook TODO (mainnet blocker):**
-- `payment_intent.payment_failed` → wire to grace period trigger + notifier
-- `payment_intent.succeeded` → wire to merchant payment notification
+## 7. Security Constraints (Non-Negotiable)
+
+1. **No upgradeability in MVP.** No proxy pattern. Deploy and freeze.
+2. **Fee cap hardcoded at 200 bps (2%).** Not adjustable past this, even by admin.
+3. **Re-entrancy guard on `executePull()`.** Inlined ReentrancyGuard.
+4. **Pull amount validated on-chain.** `require(pullAmount <= subscription.amount)`.
+5. **Merchant address locked at creation.** Cannot change post-creation.
+6. **Cancellation never moves funds.** Only revokes module permission.
+7. **BUSL-1.1 license.** Commercial use prohibited until 2030. Watermark constants baked into contract bytecode.
+8. **`ProtocolDeployed` event** emitted on every deployment — monitor.js alerts on unauthorized copies.
+9. **Ledger hardware wallet required before mainnet** for admin key and protocol treasury.
+10. **Safe multisig required before mainnet** for admin role.
 
 ---
 
-## 8. Frontend Architecture (Current)
+## 8. Development Phases
 
-```
-frontend/src/
-  App.jsx                        — main app, wallet connect, view switcher
-  LandingPage.jsx                — bilingual landing page (EN/PT)
-  i18n.js                        — internationalisation
-  components/
-    Dashboard.jsx                — subscriber view (active subscriptions, admin panel)
-    MerchantDashboard.jsx        — merchant portal (Overview, Products & Pay Links,
-                                   Subscribers, Webhooks tabs)
-```
+### Phase 0 — Environment Setup ✅
+- [x] Hardhat project initialised
+- [x] OpenZeppelin contracts installed
+- [x] Base Sepolia RPC configured
+- [x] `.env` template created
 
-- Auth: MetaMask via RainbowKit (Web3Auth/social login deferred)
-- Light/dark mode toggle with CSS variables and localStorage persistence
-- Bilingual: English at authonce.io, Portuguese at authonce.io/pt
-- Deployed on Netlify
+### Phase 1 — Contracts ✅
+- [x] `MerchantRegistry.sol` — admin whitelist
+- [x] `SubscriptionVault.sol` — core vault logic
+- [x] Deploy to Base Sepolia — verified on Basescan
+- [x] v2 additions: `setProductExpiry()`, `merchantPauseSubscription()`, trial periods
+- [x] v1.0.0: BUSL-1.1 license, watermark constants, `ProtocolDeployed` event
 
----
+### Phase 2 — Keeper Bot ✅
+- [x] Node.js keeper service
+- [x] Subscription polling logic
+- [x] `executePull()` transaction signing
+- [x] Grace period / auto-expire logic
+- [x] Running on Railway
 
-## 9. Development Phase Status
+### Phase 3 — Notification Backend ✅
+- [x] Event polling (getLogs every 30s — reliable on Alchemy free tier)
+- [x] PostgreSQL storage (Railway)
+- [x] Merchant webhook dispatcher with HMAC-SHA256 signing
+- [x] Email via Resend
+- [x] EUR/USD rate from CoinGecko on each payment
+- [x] Running on Railway
 
-| Phase | Description | Status |
-|---|---|---|
-| Phase 0 | Foundry/Hardhat setup, Base Sepolia RPC | ✅ Complete |
-| Phase 1 | Contracts (SubscriptionVault v3, MerchantRegistry) | ✅ Complete |
-| Phase 2 | Keeper bot + grace period logic | ✅ Complete |
-| Phase 3 | Backend API, DB, webhook dispatcher, notifier, admin auth | ✅ Complete |
-| Phase 4 | Frontend — Merchant Portal, subscriber dashboard, landing page | ✅ Complete |
-| Phase 5 | Stripe webhook → business logic wiring | ⬜ In progress (mainnet blocker) |
-| Phase 6 | Geofencing middleware | ⬜ Not started (mainnet blocker) |
-| Phase 7 | Legal — Merchant ToS, Privacy Policy, Refund Policy | 🔄 In review |
-| Phase 8 | Smart contract audit | ⬜ Not started ($15–20K) |
-| Phase 9 | Safe multisig for admin + Ledger hardware wallet | ⬜ Not started |
-| Phase 10 | Mainnet deployment | ⬜ Blocked by Phases 5–9 |
+### Phase 4 — Frontend ✅
+- [x] React + Vite scaffolded
+- [x] RainbowKit wallet connection
+- [x] Dashboard: active subscriptions
+- [x] Wallet connection working
 
----
+### Phase 5 — IP Protection ✅
+- [x] BUSL-1.1 LICENSE file added
+- [x] Watermark constants in both contracts
+- [x] `ProtocolDeployed` tracking event
+- [x] `monitor.js` copy detector written
 
-## 10. Pre-Mainnet Checklist
-
-- [ ] **Stripe webhook → grace period + notifier wiring** — `payment_intent.payment_failed` must trigger grace period and subscriber notification
-- [ ] **Geofencing middleware** — `checkGeofence(req, res, next)` on all API routes and frontend edge; HTTP 451 for OFAC regions; IP not logged
-- [ ] **Merchant Terms of Service** — legal review in progress; 4 material issues flagged (Stripe flow description, class action waiver, access retention language)
-- [ ] **Smart contract audit** — $15–20K budget
-- [ ] **Safe multisig** — replace EOA admin with Safe multisig before mainnet
-- [ ] **Ledger hardware wallet** — treasury key management
-- [ ] **Separate keeper/notifier Railway services** — currently co-located
-- [ ] **Full product review** — notification matrix, flows, pricing tiers, end-to-end testing
-
----
-
-## 11. Legal Documents (authonce.io/legal)
-
-Three documents in `legal.html` — bilingual EN/PT, tabbed interface:
-- **Terms of Service** (25 sections) — v0.1 testnet draft
-- **Privacy Policy** (16 sections) — GDPR compliant draft
-- **Refund Policy** (11 sections) — draft pending legal review
-
-**Open issues (flagged May 2026):**
-1. ToS §7 — Stripe flow description inaccurate (fiat does not flow directly to merchant; it goes CC → USDC → vault → merchant)
-2. Refund Policy §3 — "retain access until end of billing period" — AuthOnce cannot enforce this; soften language
-3. ToS §21 — Class action waiver not enforceable in Portugal/EU — remove or replace
-4. Privacy Policy §9 — Privy listed as "(planned)" — remove "(planned)" once integrated
-5. ToS §22 — Governing law has inline draft note — clean before mainnet
-
-**Grace period clause (§5 Refund Policy) — RESOLVED:** Correctly states configurable grace period. Contract v3 supports this.
+### Phase 6 — Audit & Mainnet 🔲
+- [ ] Order Ledger Nano S Plus (ledger.com — do NOT buy from Amazon)
+- [ ] Set up Safe multisig for admin role
+- [ ] Add monitor.js as third Railway service
+- [ ] Make GitHub repo public
+- [ ] Connect Netlify to GitHub for auto-deploy
+- [ ] External smart contract audit ($15–20K budget)
+- [ ] Deploy to Base Mainnet with Ledger addresses
+- [ ] Record mainnet addresses in Section 2
 
 ---
 
-## 12. Compliance
-
-- **Non-custodial positioning:** Protocol facilitates, never holds. No FINMA custodian licence required.
-- **Geofencing:** OFAC-sanctioned regions blocked at edge (Iran, North Korea, Russia, Syria, Cuba, Belarus). IP used transiently, never stored.
-- **Data minimisation:** No PII stored. Primary user identifier = vault address. PII stays with Stripe (card/KYC) and auth provider.
-- **GDPR:** Data controller = Vasco Humberto dos Reis Diogo. Will update to AuthOnce Lda. on incorporation. CNPD supervisory authority.
-- **Fiat settlement via licensed partners** (Circle/MoonPay/Transak) — partners hold payment licences, not AuthOnce.
-- **BUSL-1.1 licence** on protocol code until 2030-01-01, then GPL v2.
-
----
-
-## 13. Grants & Partnerships
-
-| Programme | Status |
-|---|---|
-| Coinbase Base Ecosystem Fund | Submitted April 2026 |
-| Circle Alliance Program | Submitted April 2026, pending review |
-| Base Builder Grants | Apply next |
-| IAPMEI (Portugal) | Free consultation — pending |
-| Startup Portugal mentorship | Pending |
-| Ethereum Foundation | After mainnet |
-| Gitcoin | After mainnet |
-
-**Key partnership contact:** Nuno Correia, co-founder of Utrust (crypto payments, SL Benfica). Utrust = one-time payments; AuthOnce = recurring. Complementary. Approach when live on mainnet.
-
----
-
-## 14. Key Decisions Log
+## 9. Key Decisions Log
 
 | Date | Decision | Rationale |
 |---|---|---|
-| Project start | Keeper bot initiates pulls | User signs once; no manual triggers |
-| Project start | USDC only | Dominant on Base; simplifies approval logic |
-| Project start | Hard spending cap on-chain | Prevents merchant overreach |
-| Project start | Funds inside Safe vault | Non-custodial; protocol never holds |
-| Project start | Invite-only merchants for MVP | Reduces abuse vectors |
+| Project start | Keeper bot initiates pulls | Removes UX friction; user signs once at setup |
+| Project start | USDC only | Simplifies token approval logic; USDC is dominant on Base |
+| Project start | 7-day grace period on low funds | Balances merchant reliability with user protection |
+| Project start | Hard spending cap on-chain | Security-first; prevents merchant overreach |
+| Project start | Funds inside Safe vault | Cleanest UX; Safe IS the wallet |
+| Project start | Invite-only merchants for MVP | Reduces abuse vectors while ecosystem matures |
 | Project start | 0.5% protocol fee (max 2% hardcoded) | Revenue model with user-protection ceiling |
-| Architecture v2 | Hardhat (not Foundry) | Actually used in build |
-| Architecture v2 | Gelato replaced by custom keeper on Railway | Cost and control |
-| Architecture v2 | Resend for email notifications | Simple, reliable |
-| Architecture v3 | Three merchant integration paths | Serves all technical levels |
-| Architecture v3 | Webhook HMAC-SHA256 + retry policy | Industry standard; prevents spoofing |
-| Architecture v3 | Vault address as primary user identifier | No PII needed |
-| Architecture v3 | HTTP 451 for geofenced regions | Correct semantic; signals legal block |
-| Architecture v3 | No sweep/emergencyDrain functions | Non-custodial claim must be technically unbreakable |
-| 2026-04 | Grace period configurable per subscription (v3) | Merchant flexibility; not hardcoded at 7 days |
-| 2026-04 | setProductExpiry() — 30-day minimum notice enforced on-chain | Protects subscribers from sudden price changes |
-| 2026-04 | Vault funding capped at exactly 1× subscription amount | Eliminates balance/withdrawal/refund UX complexity |
-| 2026-04 | Basic notifications free; branded notifications paid (Growth+) | Protects protocol trust; monetises premium feature |
-| 2026-04 | Merchant settlement: USDC or fiat — both ready at mainnet launch | Fiat settlement is not Phase 6; it ships with mainnet |
-| 2026-04 | Stripe Connect OAuth flow built in api.js | Foundation for fiat settlement path |
-| 2026-05 | Web3Auth preferred over Privy for social login | Cheaper at scale ($79/month vs $499/month at 10K MAU) |
+| Project start | Full notification stack | Required for trust in a financial product |
+| Apr 2026 | Rebranded from "The Opportunity" to AuthOnce | Cleaner brand; authonce.io domain purchased |
+| Apr 2026 | Hardhat over Foundry | Already working; no need to switch |
+| Apr 2026 | Polling over WebSocket for notifier | More reliable on Alchemy free tier |
+| Apr 2026 | Railway for keeper + notifier | Simple deployment; $5/month Hobby plan |
+| Apr 2026 | Resend for email | Simple API; free tier sufficient |
+| Apr 2026 | RainbowKit for wallet connection | Best UX; supports MetaMask + WalletConnect |
+| Apr 2026 | BUSL-1.1 license | Protects commercial use until 2030 |
+| Apr 2026 | On-chain watermark + ProtocolDeployed event | Permanent proof of origin; enables copy detection |
+| Apr 2026 | monitor.js on Railway | Zero extra cost; alerts on unauthorized deployments |
+| Apr 2026 | Ledger required before mainnet | Admin key and treasury must be hardware-secured |
 
 ---
 
-## 15. SRO Inquiry
+## 10. Grants & External Relations
 
-Draft letter prepared but **not yet sent**. Must be reviewed before sending. PolyReg is the target SRO.
+| Grant / Program | Status | Date | Notes |
+|---|---|---|---|
+| Coinbase Base Ecosystem Fund | ✅ Submitted | Apr 2026 | $25–34K ask; PDF memo uploaded |
+| Circle Alliance Program | ✅ Submitted | Apr 2026 | Pending review |
+| Base Builder Grants | 📋 Apply next | — | $5K–25K; quick wins |
+| IAPMEI (Portugal) | 📋 Consult | — | Portuguese startup support |
+| Startup Portugal | 📋 Apply | — | Mentorship program |
+| Ethereum Foundation | ⏳ After mainnet | — | Prefer live mainnet projects |
+
+**Potential partner:** Nuno Correia — Portuguese co-founder of Utrust (crypto payments, SL Benfica). Utrust = one-time crypto payments; AuthOnce = recurring. Complementary, not competing. Warm door when live on mainnet.
 
 ---
 
-## 16. Employment Contract
+## 11. Compliance & Legal
 
-Review needed for **Nebenbeschäftigung** (secondary employment) clause before AuthOnce generates revenue.
+- **Non-custodial:** Protocol never holds user funds. Users hold USDC in their own Safe vault.
+- **Swiss law:** Employment contract must be reviewed for Nebenbeschäftigung clause before commercializing.
+- **Geofencing:** Block OFAC-sanctioned regions at API and frontend level (middleware required before mainnet).
+- **Data minimisation:** No PII stored. Primary user identifier is vault address.
+- **SRO membership:** Legal opinion needed before deciding whether to join PolyReg.
+- **BUSL-1.1:** Commercial use of codebase prohibited until 2030-01-01.
 
 ---
 
-*Last updated: 2026-05-02 — Full project state captured after code review session.*
-*Next actions: Stripe webhook → business logic wiring | Geofencing middleware | Legal docs material issues*
+## 12. Business Documents
+
+Stored locally at `C:\AuthOnce-Docs\` (NOT in GitHub — sensitive):
+- `Business\AuthOnce_BusinessPlan_2026_v2.docx`
+- `Financial\AuthOnce_FinancialProjections.xlsx`
+- `Grants\AuthOnce_GrantMemo_v3.pdf`
+- `Technical\AuthOnce_TechnicalDocs.md`
+
+---
+
+*Last updated: 2026-04-26 — v1.0.0 deployed with BUSL-1.1 watermark. All phases 0–5 complete. Phase 6 (Audit & Mainnet) is next.*
+*Next actions: Order Ledger → Make GitHub public → Connect Netlify → Add monitor.js to Railway.*
