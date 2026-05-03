@@ -333,9 +333,16 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           }}>
             {lang === "en" ? "Apply Today →" : "Registar →"}
           </button>
+          <button onClick={onLaunchApp} style={{
+            background: "none",
+            border: `0.5px solid ${border}`,
+            borderRadius: 8, padding: "8px 16px",
+            color: text, fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>
+            {lang === "en" ? "Launch App →" : "Abrir App →"}
+          </button>
         </div>
       </nav>
-
       {/* ── Hero ── */}
       <section style={{ maxWidth: 960, margin: "0 auto", padding: "96px 40px 72px", textAlign: "center" }}>
         {/* Founding badge */}
