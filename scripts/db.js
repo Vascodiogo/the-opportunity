@@ -10,6 +10,7 @@
 //    payments       — indexed from on-chain PaymentExecuted events
 //    merchants      — off-chain merchant profiles, webhook URLs, settlement prefs
 //    webhooks       — webhook delivery log (success/failure tracking)
+//    data_consents  — DataOnce Phase 2: subscriber data access consent registry
 // =============================================================================
 
 require("dotenv").config();
@@ -167,6 +168,63 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_merchant ON webhook_deliveries(merchant_address)`);
   await pool.query("ALTER TABLE merchants ADD COLUMN IF NOT EXISTS stripe_account_id TEXT, ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMPTZ");
   await pool.query("CREATE INDEX IF NOT EXISTS idx_merchants_stripe_account_id ON merchants(stripe_account_id) WHERE stripe_account_id IS NOT NULL");
+
+  // DataOnce — Phase 2 data consent registry
+  // Stores subscriber consent records for data access by companies.
+  // data_category examples: subscription_behaviour, spending_categories,
+  //   health_lifestyle, demographic, browsing_interests, financial_profile,
+  //   location_region, professional, commerce_retail, digital_behaviour
+  // data_source: authonce_onchain, authonce_payment, stripe_verified,
+  //   self_declared, connected_account, browser_extension
+  await query(`
+    CREATE TABLE IF NOT EXISTS data_consents (
+      id                  SERIAL PRIMARY KEY,
+
+      -- Subscriber identity
+      subscriber_address  TEXT NOT NULL,
+
+      -- Data details
+      data_category       TEXT NOT NULL,
+      data_source         TEXT NOT NULL DEFAULT 'authonce_onchain',
+      verification_level  TEXT NOT NULL DEFAULT 'on_chain_verified',
+      data_freshness_days INTEGER DEFAULT 30,
+
+      -- Access grant
+      access_granted_to   TEXT,
+      data_buyer_name     TEXT,
+      purpose             TEXT,
+
+      -- Pricing
+      price_per_month     NUMERIC(18,6) DEFAULT 0,
+      payment_frequency   TEXT NOT NULL DEFAULT 'monthly',
+      minimum_term_days   INTEGER DEFAULT 30,
+      total_earned        NUMERIC(18,6) DEFAULT 0,
+
+      -- GDPR compliance
+      consent_given_at    TIMESTAMPTZ,
+      consent_version     TEXT,
+      legal_basis         TEXT NOT NULL DEFAULT 'consent',
+      ip_country          TEXT,
+      revoked_at          TIMESTAMPTZ,
+
+      -- Access tracking
+      last_accessed_at    TIMESTAMPTZ,
+      access_count        INTEGER DEFAULT 0,
+
+      -- Status
+      active              BOOLEAN NOT NULL DEFAULT TRUE,
+      expires_at          TIMESTAMPTZ,
+
+      -- Audit
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_data_consents_subscriber ON data_consents(subscriber_address)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_data_consents_category ON data_consents(data_category)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_data_consents_buyer ON data_consents(access_granted_to) WHERE access_granted_to IS NOT NULL`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_data_consents_active ON data_consents(active) WHERE active = TRUE`);
+
   console.log("[DB] Schema ready ✓");
 }
 
