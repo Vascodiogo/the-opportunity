@@ -630,5 +630,26 @@ Every coding session must begin in this order. Do not skip ahead.
 
 ---
 
-*Last updated: 2026-05-03 — Full day session. Base Builder Grants submitted, Resend verified, Subscriber Terms drafted, Portugal payments decided, DataOnce designed, QR access feature planned, merchant dashboard roadmap built, 20-week schedule created.*
-*Next session: Start with Web3Auth integration — see §22 Session Start Priorities.*
+## 24. Admin Dashboard — Merchant Approval UI
+
+**Current process (manual):**
+Merchant applies via landing page → email received → go to Basescan → MerchantRegistry → Write Contract → `approveMerchant(address)` → sign transaction. Works for first 10 founding merchants.
+
+**Planned UI (Saturday May 10):**
+- Pending merchant applications list in Admin Dashboard
+- One-click Approve button → calls `approveMerchant()` on-chain
+- Requires wallet connected in admin panel (MetaMask or Ledger via MetaMask)
+- Merchant receives approval email automatically via Resend
+
+**Ledger integration:**
+When Ledger arrives — connect Ledger to MetaMask. Admin approval flow stays identical but private key never leaves hardware. Physical button confirmation on Ledger device before any on-chain action.
+
+**Saturday May 10 plan (9am–3pm):**
+- 9am–12pm: Merchant approval UI + wallet connect in Admin Dashboard + MRR chart backend API
+- 12pm–1pm: Lunch
+- 1pm–3pm: MRR chart frontend + churn rate + subscriber stats cards
+
+---
+
+*Last updated: 2026-05-04 — Pay link page working, Web3Auth SDK installed, routing fixed, legal fixes pushed, merchant approval UI planned for May 10.*
+*Next session: Web3Auth Google login in PayPage.jsx | Saturday May 10: Merchant approval UI + MRR chart*
