@@ -457,8 +457,174 @@ Ocean Protocol trades bulk datasets between data scientists and enterprises. Dat
 - [ ] Pricing discovery — how does subscriber know what their data is worth
 - [ ] Data buyer onboarding — KYC/AML requirements for companies buying data
 - [ ] Portuguese lawyer review — GDPR data marketplace compliance
+- [ ] Mobile access — subscriber portal at authonce.io/my-subscriptions with "My Data" tab (Option A). Convert to PWA when user base grows.
 
 ---
 
-*Last updated: 2026-05-03 — Added DataOnce Phase 2 vision. Session: Base Builder Grants submitted, Resend verified, Subscriber Terms drafted, Portugal payments decided, Web3Auth confirmed over Particle Network.*
-*Next actions: Post @AuthOnce Twitter thread | Web3Auth integration | Fix Subscriber Terms (4 items) | Start Stripe onramp build*
+## 19. QR Code Access Feature
+
+**What it is:** When a subscriber pays their first payment via AuthOnce, they receive a unique QR code — proof of active subscription. Physical merchants (gyms, clubs, coworking spaces) scan it at entry. If subscription active → access granted. If expired or cancelled → access denied.
+
+**Technical flow:**
+```
+First payment confirmed
+→ AuthOnce generates signed JWT QR code
+→ Contains: subscription_id, merchant_address, subscriber_address, valid_until, status
+→ Subscriber receives QR in email + subscriber portal
+→ Merchant scans QR → calls GET /api/subscriptions/verify/{qr_token}
+→ Returns: active/expired/cancelled + subscriber tier
+→ Merchant turnstile/door opens or stays closed
+```
+
+**What needs to be built:**
+- QR generation on first payment confirmation — 1 day
+- `GET /api/subscriptions/verify/:token` endpoint — half day
+- QR display in subscriber portal and email — half day
+- Merchant scanner integration — webhook, merchant responsibility
+
+**DataOnce connection:**
+Every scan generates behaviour data subscriber owns:
+- Entry/exit timestamps
+- Visit frequency and patterns
+- Day of week preferences
+This data can be monetised via DataOnce with subscriber consent.
+
+**Why this is powerful for Portugal:**
+Gyms are the most common recurring subscription business in Portugal. QR access eliminates plastic cards, expired memberships still getting in, and chargebacks from cancelled cards.
+
+**Door type compatibility:**
+
+| Door type | AuthOnce integration | Fit |
+|---|---|---|
+| Smart lock (Yale, Nuki, August) | API call revokes access automatically | ✅ Perfect |
+| Electronic fob/card system | QR code replaces fob — revoked instantly | ✅ Perfect |
+| Intercom with app (Akuvox, 2N) | API integration possible | ✅ Good |
+| Traditional key lock | No integration possible | ❌ Manual only |
+
+**Real estate use case:**
+AuthOnce as recurring rent collection infrastructure. Tenant authorises once — rent pulls automatically every month. No late payments, no bank transfers, no chargebacks. Payment history on-chain — auditable for tax. If payment fails → grace period → subscription expires → QR/smart lock access revoked automatically.
+
+AuthOnce does NOT handle eviction — that remains the landlord's legal responsibility under local tenancy law. AuthOnce revokes digital access only. This is a feature, not a limitation — neutral infrastructure that doesn't make legal decisions.
+
+**Best real estate targets (digital access already in place):**
+- Coworking spaces — electronic access standard
+- Student accommodation — fob systems common
+- Short-term rentals — smart locks common (Airbnb hosts use Nuki/August)
+- Office buildings — electronic access standard
+- Traditional residential — payment automation works, physical access revocation manual
+
+**Status:** Designed. Build at mainnet launch alongside subscriber portal.
+
+---
+
+## 20. Portugal Beta Merchant Targets — Gyms
+
+**Target segment:** Gym chains — perfect fit for AuthOnce QR access + recurring subscriptions.
+
+**Why gyms:**
+- Recurring monthly/annual subscriptions ✅
+- Physical access control problem AuthOnce solves ✅
+- Chargeback and cancellation penalty problems ✅
+- Large subscriber bases = high transaction volume ✅
+
+**The pitch:**
+> "No more plastic cards. No more chargebacks. No more cancellation disputes. Subscribers pay via AuthOnce — QR code grants access automatically. Subscription expires → access revoked instantly. 0.5% fee vs 2.9% + chargebacks with Stripe."
+
+**Target chains:**
+
+| Chain | Segment | Monthly fee | Notes |
+|---|---|---|---|
+| Fitness Hut | Low-cost | €20-30/month | Biggest operator in Portugal, 30+ sites, most agile |
+| Solinca | Mid-market | €40/month | Shopping mall locations, good tech adoption |
+| Holmes Place | Premium | €59-67/month | Largest revenue but most corporate, approach last |
+
+**Contact timing:** After mainnet launch (Q3 2026) with working product + QR demo.
+
+**First target:** Fitness Hut — largest, most agile, budget-conscious (AuthOnce saves them fees).
+
+**Research needed before contact:**
+- [ ] Find Head of Operations / Partnerships at Fitness Hut Portugal
+- [ ] Find equivalent contact at Solinca
+- [ ] Find IT/Digital Director at Holmes Place Portugal
+- [ ] Research their current payment/access system (likely proprietary card system)
+- [ ] Prepare gym-specific pitch deck
+
+**Additional Portuguese subscription businesses to target (beyond gyms):**
+- Coworking spaces (Second Home, Selina, Heden)
+- Yoga/pilates studios (independent, no card readers)
+- Swimming clubs
+- Martial arts academies
+- Portuguese SaaS companies (Jscrambler, Coverflex, Datasailr)
+
+---
+
+## 21. Merchant Dashboard Analytics Roadmap
+
+**Goal:** ChartMogul-level analytics built natively. All data already exists in PostgreSQL — this is a frontend + API exercise.
+
+**What already exists in MerchantDashboard.jsx:**
+- Active subscriber count ✅
+- MRR calculation ✅
+- Gross/net revenue ✅
+- Subscriber status breakdown ✅
+- Products, Subscribers, Webhooks, Settings tabs ✅
+
+**What needs to be built (priority order):**
+
+| Priority | Feature | Effort |
+|---|---|---|
+| 1 | MRR growth chart — 6 months line graph (Chart.js) | 3h |
+| 2 | Date range filter | 3h |
+| 3 | Churn rate + new subscriber stat cards | 2h |
+| 4 | Filter by product/plan | 2h |
+| 5 | ARR + subscriber LTV metrics | 2h |
+| 6 | Subscriber detail view — payment history per subscriber | 4h |
+| 7 | Invoice generation and download | 6h |
+| 8 | Settlement preference UI — change USDC ↔ fiat from dashboard | 3h |
+| 9 | Trial-to-paid conversion rate (when free trials added) | 2h |
+
+**Planned build session:** Weekend of May 10–11 2026
+- Saturday 9am–3pm — backend API endpoints (MRR history, churn, filters)
+- Sunday 9am–3pm — frontend charts, filter UI, subscriber detail view
+
+**Total estimated effort:** ~25 hours across 2 weekends if needed.
+
+---
+
+## 22. Session Start Priorities
+
+Every coding session must begin in this order. Do not skip ahead.
+
+1. **Web3Auth integration** — subscriber invisible wallet (Google/email login)
+2. **Stripe onramp** — card/MB Way/Multibanco → USDC → subscriber vault
+3. **Stripe webhook wiring** — payment events → grace period + notifier
+4. **Subscriber portal** — authonce.io/my-subscriptions with magic link login
+5. **Geofencing middleware** — HTTP 451 for OFAC regions
+6. **Merchant dashboard analytics** — MRR chart, churn, filters
+
+**This week (May 4–9) target:**
+- Monday: Web3Auth account + SDK + Google login
+- Tuesday: Stripe Crypto Checkout setup + test keys
+- Wednesday: Pay link page — login + payment UI
+- Thursday: Webhook wiring + end-to-end test
+- Friday: Buffer
+- Saturday–Sunday: Merchant dashboard analytics
+
+---
+
+## 23. Mainnet Schedule (20 Weeks)
+
+| Phase | Dates | Focus |
+|---|---|---|
+| Phase 1 | May 3–31 | Stripe onramp — Web3Auth + card/MB Way/Multibanco → USDC |
+| Phase 2 | Jun 1–28 | Subscriber portal — magic link, cancel/pause, QR code, notifications |
+| Phase 3 | Jun 29–Jul 26 | Security — geofencing, new deployer wallet, Safe multisig, Ledger |
+| Summer | Jul–Aug | Reduced capacity — audit kick-off, Portuguese lawyer review, legal fixes |
+| Phase 4 | Aug 10–Sep 30 | Audit fixes, mainnet deployment, first merchant, PR push |
+
+**Target mainnet date: end of September 2026.**
+
+---
+
+*Last updated: 2026-05-03 — Full day session. Base Builder Grants submitted, Resend verified, Subscriber Terms drafted, Portugal payments decided, DataOnce designed, QR access feature planned, merchant dashboard roadmap built, 20-week schedule created.*
+*Next session: Start with Web3Auth integration — see §22 Session Start Priorities.*
