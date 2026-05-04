@@ -209,7 +209,7 @@ export default function PayPage() {
                   transition: "opacity 0.15s",
                 }}
               >
-                {status === "subscribing" ? "Processing..." : `Subscribe — $${product.amount?.toFixed(2)} USDC/${intervalLabel}`}
+                {status === "subscribing" ? "Processing..." : `Subscribe — $${product.amount?.toFixed(2)} / ${intervalLabel}`}
               </button>
             )}
 
