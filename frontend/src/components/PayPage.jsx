@@ -158,17 +158,19 @@ export default function PayPage() {
                 <span style={{ fontSize: 32, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
                   ${product.amount?.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: "#94a3b8" }}>USDC / {intervalLabel}</span>
+                <span style={{ fontSize: 13, color: "#94a3b8" }}>/ {intervalLabel}</span>
               </div>
             </div>
 
             {/* How it works */}
             <div style={{ marginBottom: 28 }}>
               {[
-                ["🔐", "Connect your wallet or create one in seconds"],
-                ["💳", "Fund your vault with a credit card"],
-                ["⚡", "First payment pulled instantly — then automatically each period"],
-                ["🛡️", "Cancel anytime — your funds stay in your wallet"],
+                ["💳", navigator.language?.toLowerCase().startsWith("pt")
+                  ? "Pay by card, MB Way, or Multibanco"
+                  : "Pay by card — no crypto needed"],
+                ["⚡", "Authorise once — payments collected automatically each period"],
+                ["🔔", "3-day notice sent before every payment"],
+                ["🛡️", "Cancel anytime at authonce.io/my-subscriptions"],
               ].map(([icon, text]) => (
                 <div key={text} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
                   <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon}</span>
@@ -220,7 +222,7 @@ export default function PayPage() {
             {/* Connected wallet info */}
             {isConnected && (
               <div style={{ marginTop: 12, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
-                Paying from {address?.slice(0, 6)}...{address?.slice(-4)}
+                Connected: {address?.slice(0, 6)}...{address?.slice(-4)} · <a href="/" style={{ color: "#475569" }}>Change</a>
               </div>
             )}
           </>

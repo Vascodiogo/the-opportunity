@@ -223,12 +223,16 @@ frontend/src/
     MerchantDashboard.jsx        — merchant portal (Overview, Products, Subscribers, Webhooks)
 ```
 
-- Auth: MetaMask via RainbowKit (Web3Auth deferred)
+- Auth: Web3Auth (Google/email) for all users — MetaMask/RainbowKit stays as optional path for crypto-native users only. No user is required to install MetaMask.
+- Merchant flow: Apply on landing page → AuthOnce approves → email login via Web3Auth → Merchant Dashboard. Fiat merchants need no wallet — just IBAN. USDC merchants provide any wallet address (Coinbase deposit address works).
+- Subscriber flow: authonce.io/pay/:merchantId/:productId → Google login → Stripe payment → invisible wallet created → subscription live.
+- Admin flow: authonce.io/admin → JWT email/password → Admin Dashboard.
 - Light/dark mode with CSS variables and localStorage
 - Bilingual: EN at authonce.io, PT at authonce.io/pt
 - Deployed on Netlify — live
 - Admin: authonce.io/admin (JWT login, no wallet needed)
 - **Subscriber portal: authonce.io/my-subscriptions — NOT YET BUILT**
+- **Pay link page: authonce.io/pay/:merchantId/:productId — NOT YET BUILT**
 - Launch App button removed from LandingPage.jsx nav — needs restoring or replacing
 
 ---

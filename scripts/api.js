@@ -731,6 +731,29 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   }
 });
 
+// -----------------------------------------------------------------------------
+// DataOnce — Phase 2 data marketplace routes (placeholder)
+// These routes are reserved for DataOnce build — do not remove.
+// -----------------------------------------------------------------------------
+
+// GET /api/data/categories — available data categories (returns empty array until DataOnce is built)
+app.get("/api/data/categories", (req, res) => {
+  res.json({
+    categories: [],
+    status: "coming_soon",
+    message: "DataOnce data marketplace — launching after AuthOnce mainnet.",
+  });
+});
+
+// GET /api/data/consents/:address — subscriber's active consents
+app.get("/api/data/consents/:address", (req, res) => {
+  res.json({
+    consents: [],
+    status: "coming_soon",
+    message: "DataOnce data marketplace — launching after AuthOnce mainnet.",
+  });
+});
+
 // 404 handler
 // -----------------------------------------------------------------------------
 app.use((req, res) => {
