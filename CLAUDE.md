@@ -32,8 +32,8 @@
 | Backend API | Express.js on Railway | ✅ Built |
 | Database | PostgreSQL on Railway | ✅ Schema live |
 | Frontend | React + Vite, deployed on Netlify | ✅ Live at authonce.io |
-| Auth (current) | MetaMask / RainbowKit | ✅ Working |
-| Auth (planned) | Web3Auth (Google/Email login) | ⬜ Not built |
+| Auth (subscriber) | Google OAuth via Passport.js | ✅ Working — tested May 5 2026 |
+| Auth (merchant/admin) | MetaMask / RainbowKit + JWT | ✅ Working |
 | Fiat Onramp | Stripe Crypto Checkout | ⬜ Not built |
 | Stripe Connect | Merchant OAuth flow | ✅ Built in api.js |
 | Notifications | Resend (email) + webhook dispatcher | ✅ Built — domain verified |
@@ -687,3 +687,58 @@ BoomFi, Loop Crypto, SubscribeOnChain, Sphere, OnChainPay — all custodial or c
 
 *Last updated: 2026-05-05 — Competitive analysis added (Stripe, Reccura). Keeper bot centralisation risk noted — post-mainnet: consider Chainlink Automation.*
 *Next session: Web3Auth Google login in PayPage.jsx | Saturday May 10: Merchant approval UI + MRR chart*
+
+---
+
+## 26. Subscriber Authentication — Completed May 5 2026
+
+**Decision:** Google OAuth via Passport.js instead of Web3Auth.
+
+**Why:** Web3Auth v9/v10 incompatible with Vite 8 due to Node.js polyfill issues. Google OAuth via Passport.js is server-side, zero polyfill issues, $0/month at any scale, and we own the auth layer completely.
+
+**How it works:**
+```
+Subscriber clicks "Sign in with Google" on pay link
+→ Redirected to Railway /auth/google
+→ Google OAuth → callback to Railway /auth/google/callback
+→ Subscriber created in PostgreSQL subscribers table
+→ Deterministic wallet generated from email (ethers.js keccak256)
+→ JWT token returned to frontend via redirect
+→ Frontend stores token in localStorage
+→ GET /api/subscriber/me returns profile
+→ Subscribe button shown with name + avatar
+```
+
+**Wallet generation:** Deterministic from email using `keccak256(seed:email)`. Same email always generates same wallet. Private key encrypted with AES-256-GCM and stored in DB.
+
+**Routes added to api.js:**
+- `GET /auth/google` — starts OAuth flow with state parameter (returnTo + origin)
+- `GET /auth/google/callback` — handles return, creates subscriber, returns JWT
+- `GET /api/subscriber/me` — returns subscriber profile from JWT
+
+**DB table added:** `subscribers` — email, google_id, name, avatar_url, wallet_address, wallet_private_key (encrypted), phone, country
+
+**Environment variables added to Railway:**
+- `GOOGLE_CLIENT_ID` — from Google Cloud Console (project: authonce-pay-safe)
+- `GOOGLE_CLIENT_SECRET`
+- `SESSION_SECRET`
+- `FRONTEND_URL` — https://authonce.io
+- `GOOGLE_CALLBACK_URL`
+
+**Google OAuth app:** console.cloud.google.com → project authonce-pay-safe → needs publishing before mainnet (currently in test mode — shows "Developer info" warning)
+
+**Tested:** Two different Google accounts → two different subscribers → two different wallet addresses → both confirmed working May 5 2026.
+
+**What's still TODO before payment works:**
+1. Stripe Crypto Checkout — card → USDC → subscriber wallet (handleSubscribe currently simulates)
+2. On-chain createSubscription() after payment confirmed
+3. Netlify `_redirects` or `netlify.toml` needed for SPA routing on production
+
+**Session Start Priorities (updated):**
+1. ~~Google OAuth~~ ✅ DONE
+2. **Stripe Crypto Checkout** — card → USDC → subscriber wallet
+3. **Stripe webhook wiring** — payment events → business logic
+4. **Subscriber portal** — authonce.io/my-subscriptions
+5. **Geofencing middleware**
+6. **Merchant dashboard analytics** (Saturday May 10)
+
