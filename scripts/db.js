@@ -225,6 +225,27 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_data_consents_buyer ON data_consents(access_granted_to) WHERE access_granted_to IS NOT NULL`);
   await query(`CREATE INDEX IF NOT EXISTS idx_data_consents_active ON data_consents(active) WHERE active = TRUE`);
 
+  // Subscribers — Google OAuth login, magic link, MB Way/Multibanco identity
+  await query(`
+    CREATE TABLE IF NOT EXISTS subscribers (
+      id                  SERIAL PRIMARY KEY,
+      email               TEXT UNIQUE NOT NULL,
+      google_id           TEXT UNIQUE,
+      name                TEXT,
+      avatar_url          TEXT,
+      wallet_address      TEXT UNIQUE,
+      wallet_private_key  TEXT,
+      phone               TEXT,
+      country             TEXT DEFAULT 'PT',
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_login_at       TIMESTAMPTZ
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_subscribers_google_id ON subscribers(google_id) WHERE google_id IS NOT NULL`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_subscribers_wallet ON subscribers(wallet_address) WHERE wallet_address IS NOT NULL`);
+
   console.log("[DB] Schema ready ✓");
 }
 
@@ -392,6 +413,41 @@ async function logWebhookDelivery(data) {
 }
 
 // -----------------------------------------------------------------------------
+// Subscriber helpers
+// -----------------------------------------------------------------------------
+
+async function upsertSubscriber(data) {
+  const { email, googleId, name, avatarUrl, walletAddress, walletPrivateKey, phone, country } = data;
+  const res = await query(`
+    INSERT INTO subscribers
+      (email, google_id, name, avatar_url, wallet_address, wallet_private_key, phone, country, created_at, updated_at, last_login_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW(),NOW())
+    ON CONFLICT (email) DO UPDATE SET
+      google_id          = COALESCE(EXCLUDED.google_id, subscribers.google_id),
+      name               = COALESCE(EXCLUDED.name, subscribers.name),
+      avatar_url         = COALESCE(EXCLUDED.avatar_url, subscribers.avatar_url),
+      wallet_address     = COALESCE(EXCLUDED.wallet_address, subscribers.wallet_address),
+      wallet_private_key = COALESCE(EXCLUDED.wallet_private_key, subscribers.wallet_private_key),
+      phone              = COALESCE(EXCLUDED.phone, subscribers.phone),
+      updated_at         = NOW(),
+      last_login_at      = NOW()
+    RETURNING *
+  `, [email, googleId || null, name || null, avatarUrl || null,
+      walletAddress || null, walletPrivateKey || null, phone || null, country || 'PT']);
+  return res.rows[0];
+}
+
+async function getSubscriberByEmail(email) {
+  const res = await query("SELECT * FROM subscribers WHERE email = $1", [email]);
+  return res.rows[0] || null;
+}
+
+async function getSubscriberByGoogleId(googleId) {
+  const res = await query("SELECT * FROM subscribers WHERE google_id = $1", [googleId]);
+  return res.rows[0] || null;
+}
+
+// -----------------------------------------------------------------------------
 // Health check
 // -----------------------------------------------------------------------------
 
@@ -425,6 +481,10 @@ module.exports = {
   upsertMerchant,
   getMerchant,
   getMerchantWebhook,
+  // Subscribers
+  upsertSubscriber,
+  getSubscriberByEmail,
+  getSubscriberByGoogleId,
   // Webhooks
   logWebhookDelivery,
   // Health

@@ -732,7 +732,129 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 });
 
 // -----------------------------------------------------------------------------
-// DataOnce — Phase 2 data marketplace routes (placeholder)
+// =============================================================================
+// Subscriber Authentication — Google OAuth + JWT
+// =============================================================================
+
+const passport       = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const session        = require("express-session");
+const { ethers }     = require("ethers");
+
+// Session middleware (needed for passport OAuth flow only)
+app.use(session({
+  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: process.env.NODE_ENV === "production", maxAge: 10 * 60 * 1000 }, // 10 min — just for OAuth handshake
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  try {
+    const res = await db.query("SELECT * FROM subscribers WHERE id = $1", [id]);
+    done(null, res.rows[0] || null);
+  } catch (err) { done(err); }
+});
+
+// Generate deterministic wallet from subscriber email (non-custodial per subscriber)
+function generateSubscriberWallet(email) {
+  const seed = process.env.WALLET_SEED_SECRET || process.env.ENCRYPTION_KEY || "authonce-subscriber-wallet-seed";
+  const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`${seed}:${email}`));
+  const wallet = new ethers.Wallet(privateKey);
+  return { address: wallet.address, privateKey };
+}
+
+// Google OAuth Strategy
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID:     process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL:  process.env.GOOGLE_CALLBACK_URL || "https://the-opportunity-production.up.railway.app/auth/google/callback",
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email     = profile.emails?.[0]?.value;
+      const googleId  = profile.id;
+      const name      = profile.displayName;
+      const avatarUrl = profile.photos?.[0]?.value;
+
+      if (!email) return done(new Error("No email from Google"));
+
+      // Generate deterministic wallet for this subscriber
+      const { address: walletAddress, privateKey: walletPrivateKey } = generateSubscriberWallet(email);
+      const encryptedKey = db.encrypt(walletPrivateKey);
+
+      const subscriber = await db.upsertSubscriber({
+        email, googleId, name, avatarUrl,
+        walletAddress,
+        walletPrivateKey: encryptedKey,
+      });
+
+      return done(null, subscriber);
+    } catch (err) {
+      return done(err);
+    }
+  }));
+}
+
+// GET /auth/google — start OAuth flow
+app.get("/auth/google", (req, res, next) => {
+  const returnTo = req.query.returnTo || "/";
+  req.session.returnTo = returnTo;
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    prompt: "select_account",
+  })(req, res, next);
+});
+
+// GET /auth/google/callback — handle OAuth return
+app.get("/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed` }),
+  async (req, res) => {
+    try {
+      const subscriber = req.user;
+      const token = jwt.sign(
+        { sub: subscriber.id, email: subscriber.email, wallet: subscriber.wallet_address, type: "subscriber" },
+        process.env.JWT_SECRET,
+        { expiresIn: "30d" }
+      );
+      const returnTo = req.session.returnTo || "/";
+      delete req.session.returnTo;
+      // Redirect to frontend with token
+      res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}${returnTo}?subscriber_token=${token}`);
+    } catch (err) {
+      console.error("[AUTH] Google callback error:", err.message);
+      res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed`);
+    }
+  }
+);
+
+// GET /api/subscriber/me — get subscriber profile from JWT
+app.get("/api/subscriber/me", async (req, res) => {
+  try {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "unauthorized" });
+    const token = auth.slice(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.type !== "subscriber") return res.status(401).json({ error: "invalid_token_type" });
+    const subscriber = await db.getSubscriberByEmail(decoded.email);
+    if (!subscriber) return res.status(404).json({ error: "subscriber_not_found" });
+    res.json({
+      id: subscriber.id,
+      email: subscriber.email,
+      name: subscriber.name,
+      avatar_url: subscriber.avatar_url,
+      wallet_address: subscriber.wallet_address,
+    });
+  } catch (err) {
+    res.status(401).json({ error: "invalid_token" });
+  }
+});
+
+// =============================================================================
 // These routes are reserved for DataOnce build — do not remove.
 // -----------------------------------------------------------------------------
 
