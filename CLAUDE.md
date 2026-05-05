@@ -651,5 +651,39 @@ When Ledger arrives — connect Ledger to MetaMask. Admin approval flow stays id
 
 ---
 
-*Last updated: 2026-05-04 — Pay link page working, Web3Auth SDK installed, routing fixed, legal fixes pushed, merchant approval UI planned for May 10.*
+## 25. Competitive Landscape
+
+### Stripe Onchain Subscriptions (October 2025)
+Stripe launched stablecoin subscription payments. Key facts:
+- Still **custodial** — Stripe holds/routes funds, merchants receive fiat
+- Built for their existing 350K+ merchants, not Web3-native market
+- No non-custodial architecture, no physical access, no MB Way/Portugal
+- **Verdict:** Validates the market. Not a direct threat to AuthOnce's lane.
+
+**AuthOnce response tweet (ready to post):**
+> "Stripe launched onchain subscriptions. They still hold your funds and route your money. AuthOnce doesn't touch a single USDC. Funds stay in the subscriber's own vault. Authorize once. Pay forever. Non-custodial wins. @buildonbase"
+
+### Reccura (Somnia Network)
+Native onchain scheduling — the chain itself fires recurring transactions, no keeper bot needed. Targets DAOs, DCA strategies, crypto-native users.
+- **Not a threat** — completely different target market (DAOs vs gyms/merchants)
+- Somnia is unproven; Base has Coinbase backing and real ecosystem
+- WSDT token wrapping is UX nightmare for normal users
+- **One thing to learn:** Native scheduling is architecturally superior to keeper bot. Post-mainnet: consider migrating to Chainlink Automation to eliminate keeper centralisation risk.
+
+### Other Players
+BoomFi, Loop Crypto, SubscribeOnChain, Sphere, OnChainPay — all custodial or crypto-native only. None have MB Way, Multibanco, QR physical access, or DataOnce layer.
+
+### AuthOnce Competitive Moat
+| Advantage | Why it matters |
+|---|---|
+| Non-custodial | No FINMA licence, subscriber trust, GDPR compliant |
+| Base Network | Coinbase backing, lowest fees, growing ecosystem |
+| Portugal-first | MB Way + Multibanco — no competitor has this |
+| QR physical access | Gyms, coworking, clubs — unique vertical |
+| DataOnce | Second product nobody else is building |
+| EU-compliant | MiCA, GDPR — getting stronger every year |
+
+---
+
+*Last updated: 2026-05-05 — Competitive analysis added (Stripe, Reccura). Keeper bot centralisation risk noted — post-mainnet: consider Chainlink Automation.*
 *Next session: Web3Auth Google login in PayPage.jsx | Saturday May 10: Merchant approval UI + MRR chart*
