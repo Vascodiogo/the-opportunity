@@ -1,24 +1,21 @@
 // src/components/PayPage.jsx
 // Subscriber pay link page — authonce.io/pay/:merchantAddress/:productSlug
-// Web3Auth Google/email login → invisible wallet → subscribe
+// Google OAuth login → JWT token → wallet created server-side → subscribe
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { VAULT_ADDRESS, INTERVAL_NAMES } from "../config.js";
+import { INTERVAL_NAMES } from "../config.js";
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
-const WEB3AUTH_CLIENT_ID = import.meta.env.VITE_WEB3AUTH_CLIENT_ID || "BP0M4iPUqWUUdUAHlPekAVRS5gvHnjy1zQbICL-Fth7f3EKOfiyvm6uKIcYlmHQ_DLQVNFEqhc2xVZg1jmhUIRs";
+
 export default function PayPage() {
   const { merchantAddress, productSlug } = useParams();
 
   const [merchant, setMerchant] = useState(null);
   const [product, setProduct] = useState(null);
-  const [status, setStatus] = useState("idle"); // idle | logging_in | ready | subscribing | success | error
+  const [status, setStatus] = useState("idle"); // idle | ready | subscribing | success | error
   const [errorMsg, setErrorMsg] = useState("");
-  const [user, setUser] = useState(null);
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [web3auth, setWeb3auth] = useState(null);
-  const initRef = useRef(false);
+  const [subscriber, setSubscriber] = useState(null);
 
   // Load merchant info from API
   useEffect(() => {
@@ -37,92 +34,68 @@ export default function PayPage() {
     setProduct(found || null);
   }, [merchantAddress, productSlug]);
 
-  // Initialise Web3Auth lazily — only load when user clicks login
-  const initWeb3Auth = async () => {
-    if (initRef.current && web3auth) return web3auth;
-    initRef.current = true;
+  // Check for subscriber_token in URL (returned from Google OAuth)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("subscriber_token");
+    if (!token) return;
 
-    try {
-      console.log("window.Modal:", window.Modal, "window.EthereumProvider:", window.EthereumProvider);
-      const EthereumPrivateKeyProvider = window.EthereumProvider?.EthereumPrivateKeyProvider;
+    // Store token
+    localStorage.setItem("subscriber_token", token);
 
-      const chainConfig = {
-        chainNamespace: "eip155",
-        chainId: "0x14a34",
-        rpcTarget: "https://sepolia.base.org",
-        displayName: "Base Sepolia",
-        blockExplorerUrl: "https://sepolia.basescan.org",
-        ticker: "ETH",
-        tickerName: "Ethereum",
-      };
+    // Remove token from URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete("subscriber_token");
+    window.history.replaceState({}, "", url.toString());
 
-      const privateKeyProvider = new EthereumPrivateKeyProvider({
-        config: { chainConfig },
-      });
-
-      const auth = new Web3Auth({
-        clientId: WEB3AUTH_CLIENT_ID,
-        web3AuthNetwork: "sapphire_devnet",
-        privateKeyProvider,
-      });
-
-      await auth.initModal();
-      setWeb3auth(auth);
-
-      if (auth.connected) {
-        const accounts = await auth.provider.request({ method: "eth_accounts" });
-        setWalletAddress(accounts[0]);
-        const userInfo = await auth.getUserInfo();
-        setUser(userInfo);
+    // Fetch subscriber profile
+    fetch(`${API_BASE}/api/subscriber/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        setSubscriber(data);
         setStatus("ready");
-      }
+      })
+      .catch(() => setErrorMsg("Login failed. Please try again."));
+  }, []);
 
-      return auth;
-    } catch (err) {
-      console.error("Web3Auth init error:", err);
-      setErrorMsg("Failed to initialise login. Please refresh and try again.");
-      setStatus("error");
-      return null;
-    }
+  // Check for existing token on page load
+  useEffect(() => {
+    const token = localStorage.getItem("subscriber_token");
+    if (!token) return;
+    fetch(`${API_BASE}/api/subscriber/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => {
+        if (!r.ok) throw new Error("Token expired");
+        return r.json();
+      })
+      .then(data => {
+        setSubscriber(data);
+        setStatus("ready");
+      })
+      .catch(() => localStorage.removeItem("subscriber_token"));
+  }, []);
+
+  const handleLogin = () => {
+    const returnTo = window.location.pathname + window.location.search;
+    const origin = window.location.origin;
+    window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent(returnTo)}&origin=${encodeURIComponent(origin)}`;
   };
 
-  const handleLogin = async () => {
-    setStatus("logging_in");
-    setErrorMsg("");
-    try {
-      const auth = await initWeb3Auth();
-      if (!auth) return;
-
-      const provider = await auth.connect();
-      const accounts = await provider.request({ method: "eth_accounts" });
-      setWalletAddress(accounts[0]);
-      const userInfo = await auth.getUserInfo();
-      setUser(userInfo);
-      setStatus("ready");
-    } catch (err) {
-      console.error("Login error:", err);
-      if (err.message !== "User closed the modal") {
-        setErrorMsg("Login failed. Please try again.");
-      }
-      setStatus("idle");
-    }
-  };
-
-  const handleLogout = async () => {
-    if (web3auth) await web3auth.logout();
-    setUser(null);
-    setWalletAddress(null);
+  const handleLogout = () => {
+    localStorage.removeItem("subscriber_token");
+    setSubscriber(null);
     setStatus("idle");
-    initRef.current = false;
-    setWeb3auth(null);
   };
 
   const handleSubscribe = async () => {
-    if (!walletAddress || !product) return;
+    if (!subscriber || !product) return;
     setStatus("subscribing");
     setErrorMsg("");
     try {
-      // TODO: Stripe Crypto Checkout — fund vault then createSubscription
+      // TODO: Stripe Crypto Checkout — fund vault then createSubscription on-chain
       await new Promise(r => setTimeout(r, 1500));
       setStatus("success");
     } catch (err) {
@@ -166,7 +139,6 @@ export default function PayPage() {
       cursor: "pointer",
       letterSpacing: "-0.01em",
       transition: "opacity 0.15s",
-      marginBottom: 0,
     },
     btnPrimary: {
       background: "linear-gradient(135deg, #34d399, #3b82f6)",
@@ -194,14 +166,14 @@ export default function PayPage() {
       marginBottom: 16,
     },
     avatar: {
-      width: 32,
-      height: 32,
+      width: 36,
+      height: 36,
       borderRadius: "50%",
       background: "linear-gradient(135deg, #34d399, #3b82f6)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: 700,
       color: "#080c14",
       flexShrink: 0,
@@ -245,7 +217,6 @@ export default function PayPage() {
           </div>
 
         ) : status === "success" ? (
-          /* Success */
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <div style={{
               width: 56, height: 56, borderRadius: "50%",
@@ -263,7 +234,7 @@ export default function PayPage() {
             </div>
             <div style={{ fontSize: 12, color: "#475569" }}>
               Manage your subscription at{" "}
-              <a href="https://authonce.io/my-subscriptions" style={{ color: "#34d399" }}>
+              <a href="/my-subscriptions" style={{ color: "#34d399" }}>
                 authonce.io/my-subscriptions
               </a>
             </div>
@@ -326,11 +297,11 @@ export default function PayPage() {
               </div>
             )}
 
-            {/* Idle — show login button */}
+            {/* Idle — show Google login button */}
             {status === "idle" && (
               <>
                 <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleLogin}>
-                  Sign in with Google or Email →
+                  Sign in with Google →
                 </button>
                 <div style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 12 }}>
                   No MetaMask required · No crypto knowledge needed
@@ -338,34 +309,31 @@ export default function PayPage() {
               </>
             )}
 
-            {/* Logging in */}
-            {status === "logging_in" && (
-              <button style={{ ...s.btn, ...s.btnDisabled }} disabled>
-                Opening login...
-              </button>
-            )}
-
             {/* Ready — show user badge + subscribe */}
-            {status === "ready" && (
+            {status === "ready" && subscriber && (
               <>
                 <div style={s.userBadge}>
                   <div style={s.avatar}>
-                    {user?.profileImage ? (
-                      <img src={user.profileImage} alt="" style={{ width: 32, height: 32, objectFit: "cover" }} />
+                    {subscriber.avatar_url ? (
+                      <img src={subscriber.avatar_url} alt="" style={{ width: 36, height: 36, objectFit: "cover" }} />
                     ) : (
-                      (user?.name || user?.email || "U")[0].toUpperCase()
+                      (subscriber.name || subscriber.email || "U")[0].toUpperCase()
                     )}
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>
-                      {user?.name || user?.email}
+                      {subscriber.name || subscriber.email}
                     </div>
-                    <div style={{ fontSize: 11, color: "#34d399" }}>✓ Signed in</div>
+                    <div style={{ fontSize: 11, color: "#34d399" }}>✓ Signed in with Google</div>
                   </div>
                 </div>
 
-                <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleSubscribe}>
-                  Subscribe — ${product.amount?.toFixed(2)} / {intervalLabel} →
+                <button
+                  style={{ ...s.btn, ...s.btnPrimary, opacity: status === "subscribing" ? 0.7 : 1 }}
+                  onClick={handleSubscribe}
+                  disabled={status === "subscribing"}
+                >
+                  {status === "subscribing" ? "Processing..." : `Subscribe — $${product.amount?.toFixed(2)} / ${intervalLabel} →`}
                 </button>
 
                 <button style={{ ...s.btn, ...s.btnSecondary }} onClick={handleLogout}>
@@ -373,16 +341,9 @@ export default function PayPage() {
                 </button>
 
                 <div style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 12 }}>
-                  Wallet: {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)} · Secured by Base Network
+                  Wallet: {subscriber.wallet_address?.slice(0, 6)}...{subscriber.wallet_address?.slice(-4)} · Secured by Base Network
                 </div>
               </>
-            )}
-
-            {/* Subscribing */}
-            {status === "subscribing" && (
-              <button style={{ ...s.btn, ...s.btnDisabled }} disabled>
-                Processing...
-              </button>
             )}
           </>
         )}

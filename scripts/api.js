@@ -804,6 +804,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 app.get("/auth/google", (req, res, next) => {
   const returnTo = req.query.returnTo || "/";
   req.session.returnTo = returnTo;
+req.session.frontendOrigin = req.query.origin || process.env.FRONTEND_URL || "https://authonce.io";
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
@@ -824,8 +825,9 @@ app.get("/auth/google/callback",
       const returnTo = req.session.returnTo || "/";
       delete req.session.returnTo;
       // Redirect to frontend with token
-      res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}${returnTo}?subscriber_token=${token}`);
-    } catch (err) {
+      const origin = req.session.frontendOrigin || process.env.FRONTEND_URL || "https://authonce.io";
+      delete req.session.frontendOrigin;
+      res.redirect(`${origin}${returnTo}?subscriber_token=${token}`);    } catch (err) {
       console.error("[AUTH] Google callback error:", err.message);
       res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed`);
     }
