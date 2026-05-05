@@ -803,11 +803,13 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 // GET /auth/google — start OAuth flow
 app.get("/auth/google", (req, res, next) => {
   const returnTo = req.query.returnTo || "/";
-  req.session.returnTo = returnTo;
-req.session.frontendOrigin = req.query.origin || process.env.FRONTEND_URL || "https://authonce.io";
+  const origin = req.query.origin || process.env.FRONTEND_URL || "https://authonce.io";
+  // Encode returnTo and origin in state parameter — survives across Railway instances
+  const state = Buffer.from(JSON.stringify({ returnTo, origin })).toString("base64");
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
+    state,
   })(req, res, next);
 });
 
@@ -822,11 +824,14 @@ app.get("/auth/google/callback",
         process.env.JWT_SECRET,
         { expiresIn: "30d" }
       );
-      const returnTo = req.session.returnTo || "/";
-      delete req.session.returnTo;
-      // Redirect to frontend with token
-      const origin = req.session.frontendOrigin || process.env.FRONTEND_URL || "https://authonce.io";
-      delete req.session.frontendOrigin;
+      // Decode state parameter to get returnTo and origin
+      let returnTo = "/";
+      let origin = process.env.FRONTEND_URL || "https://authonce.io";
+      try {
+        const state = JSON.parse(Buffer.from(req.query.state || "", "base64").toString());
+        returnTo = state.returnTo || "/";
+        origin = state.origin || origin;
+      } catch (e) { /* use defaults */ }
       res.redirect(`${origin}${returnTo}?subscriber_token=${token}`);    } catch (err) {
       console.error("[AUTH] Google callback error:", err.message);
       res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed`);
