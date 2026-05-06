@@ -742,3 +742,80 @@ Subscriber clicks "Sign in with Google" on pay link
 5. **Geofencing middleware**
 6. **Merchant dashboard analytics** (Saturday May 10)
 
+
+---
+
+## 27. Fee Structure — Definitive Decision
+
+**Who pays processing fees:** The merchant pays all fees — exactly like Stripe, PayPal, and every other payment processor. The subscriber always pays the exact subscription price shown. No surcharges, no surprise fees.
+
+**Fee comparison for merchants:**
+
+| Payment method | Stripe alone | AuthOnce | AuthOnce advantage |
+|---|---|---|---|
+| Credit/debit card | 2.9% + €0.30 | 2.9% + €0.30 + 0.5% | Zero chargebacks |
+| MB Way | €0.30 flat | €0.30 + 0.5% | Cheaper than Stripe card |
+| Multibanco | €0.30 flat | €0.30 + 0.5% | Cheaper than Stripe card |
+| USDC wallet direct | N/A | 0.5% only | Dramatically cheaper |
+
+**AuthOnce wins on:**
+- Zero chargebacks (saves 0.5-1% revenue average)
+- Zero frozen accounts
+- Zero manual payment chasing — keeper bot handles everything
+- No monthly fees on Starter tier
+- MB Way/Multibanco dramatically cheaper than card processing
+- Portuguese gym with 300 MB Way subscribers saves ~€130/month vs Stripe
+
+**Onramp strategy:**
+- MVP: Transak or MoonPay for fiat → USDC conversion
+- Post Circle approval: Circle direct mint (near-zero conversion cost)
+- Long term: AuthOnce owns the conversion layer entirely
+
+**Bison Bank:** Not a competitor. Potential partner for EUR settlement in Portugal (Phase 6). Monitor their euro stablecoin launch (expected Q2 2026). Approach after AuthOnce mainnet.
+
+---
+
+## 28. Portugal Incorporation — Tax Incentives
+
+**SIFIDE II — R&D Tax Credit:**
+- Up to 82.5% recovery of R&D investment (32.5% base + 50% incremental)
+- Smart contract development, keeper bot, protocol architecture all qualify
+- If AuthOnce spends €50K on development in Portugal → recover up to €41K
+- Direct SIFIDE still active (only investment fund version being phased out)
+- Action: Raise with IAPMEI consultation and Fio Legal
+
+**Patent Box:**
+- 85% exemption from corporate income tax on income from copyright on computer programs
+- AuthOnce smart contract code and protocol software may qualify
+- Action: Ask Fio Legal specifically about this
+
+**AML/Wallet Screening:**
+- Feedzai: Portuguese gold standard, enterprise-level, targets banks — post-mainnet option
+- Elliptic: Better fit for MVP — startup-friendly, API-driven, crypto-native
+- AMLBot: Lightweight option for early stage
+- Action: Evaluate Elliptic before mainnet for wallet screening compliance
+
+**From competitor analysis — features to add to AuthOnce:**
+- "Saved Revenue" analytics — show merchants revenue at risk vs recovered revenue (add to Saturday May 10 dashboard build)
+- SIFIDE II consultation — add to IAPMEI agenda
+- Web Summit 2026 (Lisbon, November) — target for first merchant acquisition push, 5 months after mainnet
+- Feedzai as post-mainnet enterprise compliance partner
+
+---
+
+## 29. Session Start Protocol (updated)
+
+Every coding session:
+1. Start with "AuthOnce"
+2. Upload CLAUDE.md to project files if updated
+3. Upload the specific files we will touch that session (max 2-3 files)
+4. Review §26 Session Start Priorities
+
+Current priorities:
+1. ✅ Google OAuth — DONE
+2. **Stripe Checkout** — card/MB Way/Multibanco → EUR → merchant
+3. Stripe webhook wiring
+4. Subscriber portal
+5. Geofencing
+6. Saturday May 10: Merchant approval UI + MRR chart + Saved Revenue analytics
+
