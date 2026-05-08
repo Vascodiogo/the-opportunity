@@ -11,6 +11,12 @@
 //    POST   /api/webhooks/test          — Test webhook delivery
 //    GET    /api/health                 — Health check
 //
+//  Product endpoints:
+//    GET    /api/products/:merchantAddress/:productSlug — Public: get product (used by PayPage)
+//    GET    /api/products/:merchantAddress              — Merchant: list all products
+//    POST   /api/products/:merchantAddress              — Merchant: create/update product
+//    DELETE /api/products/:merchantAddress/:productSlug — Merchant: deactivate product
+//
 //  Admin endpoints (JWT auth):
 //    POST   /api/admin/login            — Email/password login → JWT token
 //    GET    /api/admin/me               — Verify token
@@ -513,6 +519,10 @@ app.get("/api/admin/fees/export", requireAdminAuth, async (req, res) => {
     res.status(500).json({ error: "server_error" });
   }
 });
+
+// -----------------------------------------------------------------------------
+// POST /api/merchants/notify-admin
+// -----------------------------------------------------------------------------
 app.post("/api/merchants/notify-admin", async (req, res) => {
   try {
     const { business_name, email, wallet_address, website, use_case } = req.body;
@@ -530,7 +540,99 @@ app.post("/api/merchants/notify-admin", async (req, res) => {
     res.status(500).json({ error: "server_error" });
   }
 });
-// -----------------------------------------------------------------------------
+
+// =============================================================================
+// Products
+// =============================================================================
+// NOTE: Two-param route MUST be registered before one-param route — Express
+// matches in order and both are dynamic segments.
+// =============================================================================
+
+// GET /api/products/:merchantAddress/:productSlug — PUBLIC (used by PayPage, no auth)
+app.get("/api/products/:merchantAddress/:productSlug", async (req, res) => {
+  try {
+    const address = req.params.merchantAddress.toLowerCase();
+    const slug    = req.params.productSlug;
+    const product = await db.getProduct(address, slug);
+    if (!product) return res.status(404).json({ error: "not_found", message: "Product not found or inactive." });
+    res.json({
+      id:               product.id,
+      merchant_address: product.merchant_address,
+      slug:             product.slug,
+      name:             product.name,
+      amount:           parseFloat(product.amount),
+      interval:         product.interval,
+    });
+  } catch (err) {
+    console.error("[API] Get product error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// GET /api/products/:merchantAddress — list all active products (merchant auth)
+app.get("/api/products/:merchantAddress", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.merchantAddress.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+    const products = await db.getMerchantProducts(address);
+    res.json({
+      products: products.map(p => ({
+        id: p.id, slug: p.slug, name: p.name,
+        amount: parseFloat(p.amount), interval: p.interval,
+        created_at: p.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error("[API] List products error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// POST /api/products/:merchantAddress — create or update a product (merchant auth)
+app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.merchantAddress.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+
+    const { name, amount, interval } = req.body;
+    if (!name || !amount || !interval) {
+      return res.status(400).json({ error: "missing_fields", message: "name, amount, interval required." });
+    }
+    if (!["weekly", "monthly", "yearly"].includes(interval)) {
+      return res.status(400).json({ error: "invalid_interval", message: "interval must be weekly, monthly, or yearly." });
+    }
+    if (isNaN(amount) || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
+    }
+
+    // Generate slug from name — same logic as the old localStorage key
+    const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval });
+
+    console.log(`[PRODUCTS] Upserted: ${address} / ${slug}`);
+    res.status(201).json({
+      id: product.id, slug: product.slug, name: product.name,
+      amount: parseFloat(product.amount), interval: product.interval,
+    });
+  } catch (err) {
+    console.error("[API] Create product error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// DELETE /api/products/:merchantAddress/:productSlug — deactivate a product (merchant auth)
+app.delete("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.merchantAddress.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+    await db.deactivateProduct(address, req.params.productSlug);
+    console.log(`[PRODUCTS] Deactivated: ${address} / ${req.params.productSlug}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API] Delete product error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
 
 // =============================================================================
 // STRIPE CONNECT — Merchant onboarding
@@ -685,28 +787,39 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   console.log(`[WEBHOOK] ${event.type}`);
   try {
     switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        console.log(`[WEBHOOK] Checkout completed: ${session.id}`);
+        // Mark session as completed in DB
+        if (session.payment_intent) {
+          await db.completeCheckoutSession(session.id, session.payment_intent);
+          console.log(`[WEBHOOK] Session ${session.id} marked complete — payment_intent: ${session.payment_intent}`);
+        }
+        // TODO Phase 5c: trigger on-chain vault funding + subscription creation
+        break;
+      }
       case "payment_intent.succeeded": {
         const pi = event.data.object;
         console.log(`[WEBHOOK] Payment succeeded: ${pi.id} — ${pi.amount / 100} ${pi.currency.toUpperCase()}`);
-        // TODO: Send merchant payment notification email via Resend
+        // TODO Phase 5c: send merchant payment notification email via Resend
         break;
       }
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
         console.log(`[WEBHOOK] Payment failed: ${pi.id} — ${pi.last_payment_error?.message}`);
-        // TODO: Trigger grace period, notify merchant + subscriber
+        // TODO Phase 5c: trigger grace period, notify merchant + subscriber
         break;
       }
       case "invoice.paid": {
         const inv = event.data.object;
         console.log(`[WEBHOOK] Invoice paid: ${inv.id} — ${inv.amount_paid / 100} ${inv.currency.toUpperCase()}`);
-        // TODO: Send receipt to subscriber, notify merchant
+        // TODO Phase 5c: send receipt to subscriber, notify merchant
         break;
       }
       case "invoice.payment_failed": {
         const inv = event.data.object;
         console.log(`[WEBHOOK] Invoice payment failed: ${inv.id}`);
-        // TODO: Grace period flow
+        // TODO Phase 5c: grace period flow
         break;
       }
       case "customer.subscription.created":
@@ -731,7 +844,6 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   }
 });
 
-// -----------------------------------------------------------------------------
 // =============================================================================
 // Subscriber Authentication — Google OAuth + JWT
 // =============================================================================
@@ -832,7 +944,8 @@ app.get("/auth/google/callback",
         returnTo = state.returnTo || "/";
         origin = state.origin || origin;
       } catch (e) { /* use defaults */ }
-      res.redirect(`${origin}${returnTo}?subscriber_token=${token}`);    } catch (err) {
+      res.redirect(`${origin}${returnTo}?subscriber_token=${token}`);
+    } catch (err) {
       console.error("[AUTH] Google callback error:", err.message);
       res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed`);
     }
