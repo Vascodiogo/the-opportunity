@@ -118,15 +118,13 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             </div>
           )}
 <button onClick={handleAdd} disabled={saving} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginTop: 8 }}>
-  {saving ? "Saving..." : "Create Product"}
-</button>            Create Product
+            {saving ? "Saving..." : "Create Product"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 function WebhookModal({ merchantAddress, onClose }) {
   const [url, setUrl] = useState("");
   const [saved, setSaved] = useState(false);
