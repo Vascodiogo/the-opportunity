@@ -148,7 +148,7 @@ function WebhookModal({ merchantAddress, onClose }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Endpoint URL</label>
-            <input placeholder="https://yoursite.com/webhooks/opportunity" value={url} onChange={e => setUrl(e.target.value)} />
+            <input placeholder="https://yoursite.com/webhooks/authonce" value={url} onChange={e => setUrl(e.target.value)} />
           </div>
           <div style={{ background: "var(--bg-tag)", borderRadius: 8, padding: "10px 14px" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 8 }}>Events included</div>
