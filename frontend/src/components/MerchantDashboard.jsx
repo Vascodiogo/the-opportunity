@@ -394,7 +394,7 @@ export default function MerchantDashboard({ address }) {
           <div style={{ marginTop: 20, ...card }}>
             <div style={sectionLabel}>Webhook security</div>
             <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
-              Every request includes a <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>X-Opportunity-Signature</span> header signed with HMAC-SHA256.
+              Every request includes a <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>X-AuthOnce-Signature</span> header signed with HMAC-SHA256.
               Failed deliveries are retried: 10s → 1min → 5min → 30min → 2hr.
             </div>
           </div>
