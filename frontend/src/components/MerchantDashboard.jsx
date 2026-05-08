@@ -15,6 +15,7 @@ const client = createPublicClient({
 });
 
 const BASE_URL = "https://app.authonce.io/pay";
+const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 function StatCard({ label, value, sub, accent }) {
   return (
@@ -61,17 +62,27 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [amount, setAmount] = useState("");
   const [interval, setInterval] = useState("1");
 
-  const handleAdd = () => {
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
     if (!name || !amount) return;
-    const product = {
-      id: `prod_${Date.now()}`, name,
-      amount: parseFloat(amount), interval: Number(interval),
-      payLink: `${BASE_URL}/${merchantAddress}/${name.toLowerCase().replace(/\s+/g, "-")}`,
-    };
-    const saved = JSON.parse(localStorage.getItem(`products_${merchantAddress}`) || "[]");
-    saved.push(product);
-    localStorage.setItem(`products_${merchantAddress}`, JSON.stringify(saved));
-    onAdded(); onClose();
+    setSaving(true);
+    try {
+      const intervalMap = { "0": "weekly", "1": "monthly", "2": "yearly" };
+      const res = await fetch(`${API_BASE}/api/products/${merchantAddress}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
+        body: JSON.stringify({ name, amount: parseFloat(amount), interval: intervalMap[interval] }),
+      });
+      if (!res.ok) throw new Error("Failed to save product");
+      onAdded();
+      onClose();
+    } catch (err) {
+      alert("Could not save product. Please try again.");
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -106,8 +117,9 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               </div>
             </div>
           )}
-          <button onClick={handleAdd} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: "pointer", marginTop: 8 }}>
-            Create Product
+<button onClick={handleAdd} disabled={saving} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginTop: 8 }}>
+  {saving ? "Saving..." : "Create Product"}
+</button>            Create Product
           </button>
         </div>
       </div>
@@ -174,8 +186,22 @@ export default function MerchantDashboard({ address }) {
   const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [copied, setCopied] = useState(null);
   const [qrProduct, setQrProduct] = useState(null);
-  const loadProducts = useCallback(() => setProducts(JSON.parse(localStorage.getItem(`products_${address}`) || "[]")), [address]);
-  const loadWebhooks = useCallback(() => setWebhooks(JSON.parse(localStorage.getItem(`webhooks_${address}`) || "[]")), [address]);
+  const loadProducts = useCallback(async () => {
+  if (!address) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/products/${address}`, {
+      headers: { "X-Merchant-Address": address },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      // Normalize interval: API returns 'weekly'/'monthly'/'yearly', map to numeric for existing UI
+      const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
+      setProducts(data.products.map(p => ({ ...p, interval: INTERVAL_MAP[p.interval] ?? p.interval })));
+    }
+  } catch (err) {
+    console.error("[Dashboard] loadProducts error:", err);
+  }
+}, [address]);  const loadWebhooks = useCallback(() => setWebhooks(JSON.parse(localStorage.getItem(`webhooks_${address}`) || "[]")), [address]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!address) return;
