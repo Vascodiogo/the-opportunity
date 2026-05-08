@@ -16,6 +16,7 @@ export default function PayPage() {
   const [status, setStatus] = useState("idle"); // idle | ready | subscribing | success | error
   const [errorMsg, setErrorMsg] = useState("");
   const [subscriber, setSubscriber] = useState(null);
+  const [productLoading, setProductLoading] = useState(true);
 
   // Load merchant info from API
   useEffect(() => {
@@ -26,12 +27,21 @@ export default function PayPage() {
       .catch(() => setMerchant({ business_name: null }));
   }, [merchantAddress]);
 
-  // Load product from localStorage
+  // Load product from API
   useEffect(() => {
     if (!merchantAddress || !productSlug) return;
-    const saved = JSON.parse(localStorage.getItem(`products_${merchantAddress}`) || "[]");
-    const found = saved.find(p => p.name.toLowerCase().replace(/\s+/g, "-") === productSlug);
-    setProduct(found || null);
+    fetch(`${API_BASE}/api/products/${merchantAddress}/${productSlug}`)
+      .then(r => {
+        if (!r.ok) throw new Error("Not found");
+        return r.json();
+      })
+      .then(data => {
+        // Normalize interval string to numeric for INTERVAL_NAMES lookup
+        const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
+        setProduct({ ...data, interval: INTERVAL_MAP[data.interval] ?? data.interval });
+      })
+      .catch(() => setProduct(null))
+      .finally(() => setProductLoading(false));
   }, [merchantAddress, productSlug]);
 
   // Check for subscriber_token in URL (returned from Google OAuth)
@@ -209,7 +219,9 @@ export default function PayPage() {
         }} />
 
         {/* Product not found */}
-        {!product ? (
+        {productLoading ? (
+          <div style={{ textAlign: "center", padding: "20px 0", color: "#94a3b8", fontSize: 13 }}>Loading...</div>
+        ) : !product ? (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
             <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Product not found</div>
