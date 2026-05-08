@@ -160,8 +160,7 @@ function WebhookModal({ merchantAddress, onClose }) {
           </div>
           <div style={{ background: "var(--bg-tag)", borderRadius: 8, padding: "10px 14px" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>Security</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>All requests signed with HMAC-SHA256. Verify the X-Opportunity-Signature header before processing.</div>
-          </div>
+<div style={{ fontSize: 11, color: "var(--text-muted)" }}>All requests signed with HMAC-SHA256. Verify the X-AuthOnce-Signature header before processing.</div>          </div>
           {saved ? (
             <div style={{ textAlign: "center", color: "var(--green)", fontSize: 14 }}>✅ Webhook saved!</div>
           ) : (
