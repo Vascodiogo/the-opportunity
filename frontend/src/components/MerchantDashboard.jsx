@@ -323,7 +323,7 @@ export default function MerchantDashboard({ address }) {
                     <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", background: "var(--bg-tag)", padding: "6px 12px", borderRadius: 6, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {BASE_URL}/{shortAddress(address)}/{p.name.toLowerCase().replace(/\s+/g, "-")}
                     </div>
-                    <button onClick={() => copyLink(, p.id)}
+                    <button onClick={() => copyLink(`${BASE_URL}/${address.toLowerCase()}/${p.slug}`, p.id)}
                       style={{ background: copied === p.id ? "rgba(52,211,153,0.12)" : "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: copied === p.id ? "var(--green)" : "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
                       {copied === p.id ? "Copied!" : "Copy Link"}
                     </button>
