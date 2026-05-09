@@ -75,11 +75,9 @@ function requireMerchantAuth(req, res, next) {
 
 // -----------------------------------------------------------------------------
 // Auth middleware — admin (JWT)
-// Supports both new JWT tokens and legacy ADMIN_SECRET header
 // -----------------------------------------------------------------------------
 
 function requireAdminAuth(req, res, next) {
-  // New: JWT Bearer token
   const authHeader = req.headers["authorization"];
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.split(" ")[1];
@@ -95,7 +93,6 @@ function requireAdminAuth(req, res, next) {
     }
   }
 
-  // Legacy: X-Admin-Secret header (keep working for existing scripts)
   const secret = req.headers["x-admin-secret"];
   if (secret && secret === process.env.ADMIN_SECRET) {
     req.admin = { email: ADMIN_EMAIL, role: "admin" };
@@ -130,7 +127,7 @@ app.get("/api/health", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// POST /api/admin/login — Email/password → JWT token
+// POST /api/admin/login
 // -----------------------------------------------------------------------------
 app.post("/api/admin/login", async (req, res) => {
   const { email, password } = req.body;
@@ -151,7 +148,6 @@ app.post("/api/admin/login", async (req, res) => {
     console.warn("[ADMIN] WARNING: Using default JWT_SECRET — set a real secret in Railway environment variables.");
   }
 
-  // Support plain text (dev) and bcrypt hash (production)
   let valid = false;
   if (ADMIN_PASSWORD.startsWith("$2")) {
     valid = await bcrypt.compare(password, ADMIN_PASSWORD);
@@ -175,14 +171,14 @@ app.post("/api/admin/login", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// GET /api/admin/me — verify token
+// GET /api/admin/me
 // -----------------------------------------------------------------------------
 app.get("/api/admin/me", requireAdminAuth, (req, res) => {
   res.json({ email: req.admin.email, role: req.admin.role });
 });
 
 // -----------------------------------------------------------------------------
-// GET /api/admin/stats — protocol overview
+// GET /api/admin/stats
 // -----------------------------------------------------------------------------
 app.get("/api/admin/stats", requireAdminAuth, async (req, res) => {
   try {
@@ -543,12 +539,10 @@ app.post("/api/merchants/notify-admin", async (req, res) => {
 
 // =============================================================================
 // Products
-// =============================================================================
-// NOTE: Two-param route MUST be registered before one-param route — Express
-// matches in order and both are dynamic segments.
+// NOTE: Two-param route MUST be registered before one-param route.
 // =============================================================================
 
-// GET /api/products/:merchantAddress/:productSlug — PUBLIC (used by PayPage, no auth)
+// GET /api/products/:merchantAddress/:productSlug — PUBLIC
 app.get("/api/products/:merchantAddress/:productSlug", async (req, res) => {
   try {
     const address = req.params.merchantAddress.toLowerCase();
@@ -562,6 +556,7 @@ app.get("/api/products/:merchantAddress/:productSlug", async (req, res) => {
       name:             product.name,
       amount:           parseFloat(product.amount),
       interval:         product.interval,
+      trial_days:       product.trial_days || 0,
     });
   } catch (err) {
     console.error("[API] Get product error:", err.message);
@@ -579,6 +574,7 @@ app.get("/api/products/:merchantAddress", requireMerchantAuth, async (req, res) 
       products: products.map(p => ({
         id: p.id, slug: p.slug, name: p.name,
         amount: parseFloat(p.amount), interval: p.interval,
+        trial_days: p.trial_days || 0,
         created_at: p.created_at,
       })),
     });
@@ -594,7 +590,7 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
     const address = req.params.merchantAddress.toLowerCase();
     if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
 
-    const { name, amount, interval } = req.body;
+    const { name, amount, interval, trial_days = 0 } = req.body;
     if (!name || !amount || !interval) {
       return res.status(400).json({ error: "missing_fields", message: "name, amount, interval required." });
     }
@@ -605,14 +601,15 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
     }
 
-    // Generate slug from name — same logic as the old localStorage key
+    const trialDays = Math.min(Math.max(parseInt(trial_days) || 0, 0), 90);
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval });
+    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval, trialDays });
 
-    console.log(`[PRODUCTS] Upserted: ${address} / ${slug}`);
+    console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (trial: ${trialDays} days)`);
     res.status(201).json({
       id: product.id, slug: product.slug, name: product.name,
       amount: parseFloat(product.amount), interval: product.interval,
+      trial_days: product.trial_days || 0,
     });
   } catch (err) {
     console.error("[API] Create product error:", err.message);
@@ -637,19 +634,9 @@ app.delete("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, a
 // =============================================================================
 // STRIPE CONNECT — Merchant onboarding
 // =============================================================================
-// Required Railway env vars:
-//   STRIPE_SECRET_KEY        = sk_live_...
-//   STRIPE_CONNECT_CLIENT_ID = ca_...  (from Stripe Dashboard → Connect → Settings)
-//   STRIPE_WEBHOOK_SECRET    = whsec_... (already set)
-//   FRONTEND_URL             = https://authonce.io
-// =============================================================================
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// -----------------------------------------------------------------------------
-// GET /api/connect/authorize
-// Generates the Stripe OAuth URL for a merchant to connect their Stripe account
-// -----------------------------------------------------------------------------
 app.get("/api/connect/authorize", requireMerchantAuth, async (req, res) => {
   try {
     const merchant = await db.getMerchant(req.merchantAddress);
@@ -679,10 +666,6 @@ app.get("/api/connect/authorize", requireMerchantAuth, async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------------------
-// GET /api/connect/callback
-// Handles Stripe OAuth redirect after merchant connects their account
-// -----------------------------------------------------------------------------
 app.get("/api/connect/callback", async (req, res) => {
   const FRONTEND = process.env.FRONTEND_URL || "https://authonce.io";
   try {
@@ -719,10 +702,6 @@ app.get("/api/connect/callback", async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------------------
-// GET /api/connect/status
-// Returns Stripe Connect status for the authenticated merchant
-// -----------------------------------------------------------------------------
 app.get("/api/connect/status", requireMerchantAuth, async (req, res) => {
   try {
     const merchant = await db.getMerchant(req.merchantAddress);
@@ -744,10 +723,6 @@ app.get("/api/connect/status", requireMerchantAuth, async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------------------
-// DELETE /api/connect/disconnect
-// Merchant disconnects their Stripe account from AuthOnce
-// -----------------------------------------------------------------------------
 app.delete("/api/connect/disconnect", requireMerchantAuth, async (req, res) => {
   try {
     const merchant = await db.getMerchant(req.merchantAddress);
@@ -770,10 +745,6 @@ app.delete("/api/connect/disconnect", requireMerchantAuth, async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/stripe/webhook
-// Handles all Stripe webhook events (registered in Stripe Dashboard)
-// -----------------------------------------------------------------------------
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
@@ -790,36 +761,30 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log(`[WEBHOOK] Checkout completed: ${session.id}`);
-        // Mark session as completed in DB
         if (session.payment_intent) {
           await db.completeCheckoutSession(session.id, session.payment_intent);
           console.log(`[WEBHOOK] Session ${session.id} marked complete — payment_intent: ${session.payment_intent}`);
         }
-        // TODO Phase 5c: trigger on-chain vault funding + subscription creation
         break;
       }
       case "payment_intent.succeeded": {
         const pi = event.data.object;
         console.log(`[WEBHOOK] Payment succeeded: ${pi.id} — ${pi.amount / 100} ${pi.currency.toUpperCase()}`);
-        // TODO Phase 5c: send merchant payment notification email via Resend
         break;
       }
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
         console.log(`[WEBHOOK] Payment failed: ${pi.id} — ${pi.last_payment_error?.message}`);
-        // TODO Phase 5c: trigger grace period, notify merchant + subscriber
         break;
       }
       case "invoice.paid": {
         const inv = event.data.object;
         console.log(`[WEBHOOK] Invoice paid: ${inv.id} — ${inv.amount_paid / 100} ${inv.currency.toUpperCase()}`);
-        // TODO Phase 5c: send receipt to subscriber, notify merchant
         break;
       }
       case "invoice.payment_failed": {
         const inv = event.data.object;
         console.log(`[WEBHOOK] Invoice payment failed: ${inv.id}`);
-        // TODO Phase 5c: grace period flow
         break;
       }
       case "customer.subscription.created":
@@ -853,12 +818,11 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const session        = require("express-session");
 const { ethers }     = require("ethers");
 
-// Session middleware (needed for passport OAuth flow only)
 app.use(session({
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === "production", maxAge: 10 * 60 * 1000 }, // 10 min — just for OAuth handshake
+  cookie: { secure: process.env.NODE_ENV === "production", maxAge: 10 * 60 * 1000 },
 }));
 
 app.use(passport.initialize());
@@ -872,7 +836,6 @@ passport.deserializeUser(async (id, done) => {
   } catch (err) { done(err); }
 });
 
-// Generate deterministic wallet from subscriber email (non-custodial per subscriber)
 function generateSubscriberWallet(email) {
   const seed = process.env.WALLET_SEED_SECRET || process.env.ENCRYPTION_KEY || "authonce-subscriber-wallet-seed";
   const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`${seed}:${email}`));
@@ -880,7 +843,6 @@ function generateSubscriberWallet(email) {
   return { address: wallet.address, privateKey };
 }
 
-// Google OAuth Strategy
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID:     process.env.GOOGLE_CLIENT_ID,
@@ -895,7 +857,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
       if (!email) return done(new Error("No email from Google"));
 
-      // Generate deterministic wallet for this subscriber
       const { address: walletAddress, privateKey: walletPrivateKey } = generateSubscriberWallet(email);
       const encryptedKey = db.encrypt(walletPrivateKey);
 
@@ -912,11 +873,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   }));
 }
 
-// GET /auth/google — start OAuth flow
 app.get("/auth/google", (req, res, next) => {
   const returnTo = req.query.returnTo || "/";
   const origin = req.query.origin || process.env.FRONTEND_URL || "https://authonce.io";
-  // Encode returnTo and origin in state parameter — survives across Railway instances
   const state = Buffer.from(JSON.stringify({ returnTo, origin })).toString("base64");
   passport.authenticate("google", {
     scope: ["profile", "email"],
@@ -925,7 +884,6 @@ app.get("/auth/google", (req, res, next) => {
   })(req, res, next);
 });
 
-// GET /auth/google/callback — handle OAuth return
 app.get("/auth/google/callback",
   passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed` }),
   async (req, res) => {
@@ -936,7 +894,6 @@ app.get("/auth/google/callback",
         process.env.JWT_SECRET,
         { expiresIn: "30d" }
       );
-      // Decode state parameter to get returnTo and origin
       let returnTo = "/";
       let origin = process.env.FRONTEND_URL || "https://authonce.io";
       try {
@@ -952,7 +909,6 @@ app.get("/auth/google/callback",
   }
 );
 
-// GET /api/subscriber/me — get subscriber profile from JWT
 app.get("/api/subscriber/me", async (req, res) => {
   try {
     const auth = req.headers.authorization;
@@ -975,29 +931,18 @@ app.get("/api/subscriber/me", async (req, res) => {
 });
 
 // =============================================================================
-// These routes are reserved for DataOnce build — do not remove.
-// -----------------------------------------------------------------------------
+// DataOnce — reserved routes
+// =============================================================================
 
-// GET /api/data/categories — available data categories (returns empty array until DataOnce is built)
 app.get("/api/data/categories", (req, res) => {
-  res.json({
-    categories: [],
-    status: "coming_soon",
-    message: "DataOnce data marketplace — launching after AuthOnce mainnet.",
-  });
+  res.json({ categories: [], status: "coming_soon", message: "DataOnce data marketplace — launching after AuthOnce mainnet." });
 });
 
-// GET /api/data/consents/:address — subscriber's active consents
 app.get("/api/data/consents/:address", (req, res) => {
-  res.json({
-    consents: [],
-    status: "coming_soon",
-    message: "DataOnce data marketplace — launching after AuthOnce mainnet.",
-  });
+  res.json({ consents: [], status: "coming_soon", message: "DataOnce data marketplace — launching after AuthOnce mainnet." });
 });
 
 // 404 handler
-// -----------------------------------------------------------------------------
 app.use((req, res) => {
   res.status(404).json({ error: "not_found", message: `Route ${req.method} ${req.path} not found` });
 });

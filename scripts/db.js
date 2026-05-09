@@ -172,52 +172,30 @@ async function initSchema() {
   await pool.query("CREATE INDEX IF NOT EXISTS idx_merchants_stripe_account_id ON merchants(stripe_account_id) WHERE stripe_account_id IS NOT NULL");
 
   // DataOnce — Phase 2 data consent registry
-  // Stores subscriber consent records for data access by companies.
-  // data_category examples: subscription_behaviour, spending_categories,
-  //   health_lifestyle, demographic, browsing_interests, financial_profile,
-  //   location_region, professional, commerce_retail, digital_behaviour
-  // data_source: authonce_onchain, authonce_payment, stripe_verified,
-  //   self_declared, connected_account, browser_extension
   await query(`
     CREATE TABLE IF NOT EXISTS data_consents (
       id                  SERIAL PRIMARY KEY,
-
-      -- Subscriber identity
       subscriber_address  TEXT NOT NULL,
-
-      -- Data details
       data_category       TEXT NOT NULL,
       data_source         TEXT NOT NULL DEFAULT 'authonce_onchain',
       verification_level  TEXT NOT NULL DEFAULT 'on_chain_verified',
       data_freshness_days INTEGER DEFAULT 30,
-
-      -- Access grant
       access_granted_to   TEXT,
       data_buyer_name     TEXT,
       purpose             TEXT,
-
-      -- Pricing
       price_per_month     NUMERIC(18,6) DEFAULT 0,
       payment_frequency   TEXT NOT NULL DEFAULT 'monthly',
       minimum_term_days   INTEGER DEFAULT 30,
       total_earned        NUMERIC(18,6) DEFAULT 0,
-
-      -- GDPR compliance
       consent_given_at    TIMESTAMPTZ,
       consent_version     TEXT,
       legal_basis         TEXT NOT NULL DEFAULT 'consent',
       ip_country          TEXT,
       revoked_at          TIMESTAMPTZ,
-
-      -- Access tracking
       last_accessed_at    TIMESTAMPTZ,
       access_count        INTEGER DEFAULT 0,
-
-      -- Status
       active              BOOLEAN NOT NULL DEFAULT TRUE,
       expires_at          TIMESTAMPTZ,
-
-      -- Audit
       created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -248,7 +226,7 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_subscribers_google_id ON subscribers(google_id) WHERE google_id IS NOT NULL`);
   await query(`CREATE INDEX IF NOT EXISTS idx_subscribers_wallet ON subscribers(wallet_address) WHERE wallet_address IS NOT NULL`);
 
-  // Products — merchant subscription products (migrated from localStorage)
+  // Products — merchant subscription products
   await query(`
     CREATE TABLE IF NOT EXISTS products (
       id               SERIAL PRIMARY KEY,
@@ -257,6 +235,7 @@ async function initSchema() {
       name             TEXT NOT NULL,
       amount           NUMERIC(18,6) NOT NULL,
       interval         TEXT NOT NULL CHECK (interval IN ('weekly','monthly','yearly')),
+      trial_days       INTEGER NOT NULL DEFAULT 0,
       active           BOOLEAN NOT NULL DEFAULT TRUE,
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -264,6 +243,8 @@ async function initSchema() {
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_products_merchant ON products(merchant_address)`);
+  // Migration: add trial_days to existing products table
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS trial_days INTEGER NOT NULL DEFAULT 0`);
 
   // Stripe checkout sessions — track pending payments before on-chain confirmation
   await query(`
@@ -419,7 +400,6 @@ async function getMerchant(walletAddress) {
   );
   if (!res.rows[0]) return null;
   const m = res.rows[0];
-  // Decrypt IBAN only when needed — never expose in general queries
   if (m.iban_encrypted) {
     m.iban_decrypted = decrypt(m.iban_encrypted);
     delete m.iban_encrypted;
@@ -440,18 +420,19 @@ async function getMerchantWebhook(merchantAddress) {
 // -----------------------------------------------------------------------------
 
 async function upsertProduct(merchantAddress, data) {
-  const { slug, name, amount, interval } = data;
+  const { slug, name, amount, interval, trialDays = 0 } = data;
   const res = await query(`
-    INSERT INTO products (merchant_address, slug, name, amount, interval, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
+    INSERT INTO products (merchant_address, slug, name, amount, interval, trial_days, created_at, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
     ON CONFLICT (merchant_address, slug) DO UPDATE SET
       name       = EXCLUDED.name,
       amount     = EXCLUDED.amount,
       interval   = EXCLUDED.interval,
+      trial_days = EXCLUDED.trial_days,
       active     = TRUE,
       updated_at = NOW()
     RETURNING *
-  `, [merchantAddress, slug, name, amount, interval]);
+  `, [merchantAddress, slug, name, amount, interval, trialDays]);
   return res.rows[0];
 }
 
@@ -580,6 +561,7 @@ async function healthCheck() {
 
 module.exports = {
   query,
+  pool,
   initSchema,
   encrypt,
   decrypt,
@@ -612,5 +594,4 @@ module.exports = {
   logWebhookDelivery,
   // Health
   healthCheck,
-  pool,
 };
