@@ -549,14 +549,16 @@ app.get("/api/products/:merchantAddress/:productSlug", async (req, res) => {
     const slug    = req.params.productSlug;
     const product = await db.getProduct(address, slug);
     if (!product) return res.status(404).json({ error: "not_found", message: "Product not found or inactive." });
-    res.json({
+   res.json({
       id:               product.id,
       merchant_address: product.merchant_address,
       slug:             product.slug,
       name:             product.name,
       amount:           parseFloat(product.amount),
       interval:         product.interval,
-      trial_days:       product.trial_days || 0,
+      trial_days:       product.trial_days   || 0,
+      intro_amount:     parseFloat(product.intro_amount || 0),
+      intro_pulls:      parseInt(product.intro_pulls    || 0),
     });
   } catch (err) {
     console.error("[API] Get product error:", err.message);
@@ -573,9 +575,12 @@ app.get("/api/products/:merchantAddress", requireMerchantAuth, async (req, res) 
     res.json({
       products: products.map(p => ({
         id: p.id, slug: p.slug, name: p.name,
-        amount: parseFloat(p.amount), interval: p.interval,
-        trial_days: p.trial_days || 0,
-        created_at: p.created_at,
+        amount:       parseFloat(p.amount),
+        interval:     p.interval,
+        trial_days:   p.trial_days   || 0,
+        intro_amount: parseFloat(p.intro_amount || 0),
+        intro_pulls:  parseInt(p.intro_pulls    || 0),
+        created_at:   p.created_at,
       })),
     });
   } catch (err) {
@@ -590,7 +595,7 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
     const address = req.params.merchantAddress.toLowerCase();
     if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
 
-    const { name, amount, interval, trial_days = 0 } = req.body;
+    const { name, amount, interval, trial_days = 0, intro_amount = 0, intro_pulls = 0 } = req.body;
     if (!name || !amount || !interval) {
       return res.status(400).json({ error: "missing_fields", message: "name, amount, interval required." });
     }
@@ -601,15 +606,20 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
     }
 
-    const trialDays = Math.min(Math.max(parseInt(trial_days) || 0, 0), 90);
+    const trialDays   = Math.min(Math.max(parseInt(trial_days)   || 0, 0), 90);
+    const introAmount = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), parseFloat(amount));
+    const introPulls  = Math.min(Math.max(parseInt(intro_pulls)   || 0, 0), 12);
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval, trialDays });
+    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval, trialDays, introAmount, introPulls });
 
-    console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (trial: ${trialDays} days)`);
+    console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (intro: $${introAmount} × ${introPulls})`);
     res.status(201).json({
       id: product.id, slug: product.slug, name: product.name,
-      amount: parseFloat(product.amount), interval: product.interval,
-      trial_days: product.trial_days || 0,
+      amount:       parseFloat(product.amount),
+      interval:     product.interval,
+      trial_days:   product.trial_days   || 0,
+      intro_amount: parseFloat(product.intro_amount || 0),
+      intro_pulls:  parseInt(product.intro_pulls    || 0),
     });
   } catch (err) {
     console.error("[API] Create product error:", err.message);
