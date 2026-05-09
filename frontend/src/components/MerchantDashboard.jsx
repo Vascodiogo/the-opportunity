@@ -313,7 +313,7 @@ export default function MerchantDashboard({ address }) {
             <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No products yet. Create your first plan to generate a pay link.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {products.map(p => (
+              {products.map(p => (`${BASE_URL}/${address.toLowerCase()}/${p.slug || p.name.toLowerCase().replace(/\s+/g, "-")}`
                 <div key={p.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "var(--shadow)" }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{p.name}</div>
@@ -323,7 +323,7 @@ export default function MerchantDashboard({ address }) {
                     <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", background: "var(--bg-tag)", padding: "6px 12px", borderRadius: 6, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {BASE_URL}/{shortAddress(address)}/{p.name.toLowerCase().replace(/\s+/g, "-")}
                     </div>
-                    <button onClick={() => copyLink(`${BASE_URL}/${address}/${p.name.toLowerCase().replace(/\s+/g, "-")}`, p.id)}
+                    <button onClick={() => copyLink(, p.id)}
                       style={{ background: copied === p.id ? "rgba(52,211,153,0.12)" : "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: copied === p.id ? "var(--green)" : "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
                       {copied === p.id ? "Copied!" : "Copy Link"}
                     </button>
