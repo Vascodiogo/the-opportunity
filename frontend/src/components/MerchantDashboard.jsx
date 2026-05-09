@@ -14,7 +14,7 @@ const client = createPublicClient({
   transport: http("https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT"),
 });
 
-const BASE_URL = "https://app.authonce.io/pay";
+const BASE_URL = "https://authonce.io/pay";
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 function StatCard({ label, value, sub, accent }) {
