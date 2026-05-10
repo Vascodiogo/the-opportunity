@@ -271,8 +271,14 @@ function SubscriptionCard({ sub, isCustodied, merchantName, onCancelled }) {
         </div>
       </div>
 
-      {/* Details grid */}
+     {/* Details grid */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        {(isActive || isPaused) && (
+        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Next payment</div>
+          <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 500 }}>{formatDate(nextPull)}</div>
+          {nextPullWhen && (
+            {(isActive || isPaused) && (
         <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
           <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Next payment</div>
           <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 500 }}>{formatDate(nextPull)}</div>
@@ -281,6 +287,14 @@ function SubscriptionCard({ sub, isCustodied, merchantName, onCancelled }) {
               {nextPullWhen}
             </div>
           )}
+        </div>
+        )}
+            <div style={{ fontSize: 11, color: nextPullWhen === "overdue" ? "#f87171" : "#34d399", marginTop: 2 }}>
+              {nextPullWhen}
+            </div>
+          )}
+        </div>
+        )}
         </div>
         <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
           <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Interval</div>
