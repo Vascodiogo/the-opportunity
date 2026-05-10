@@ -1,5 +1,6 @@
 // src/components/MerchantDashboard.jsx
 import { useState, useEffect, useCallback } from "react";
+import { useWriteContract } from "wagmi";
 import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "wagmi/chains";
@@ -131,6 +132,62 @@ function TrialPopover({ product, address, onClose }) {
           </button>
           <button onClick={onClose} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 16px", cursor: "pointer" }}>Cancel</button>
         </div>
+      </div>
+    </div>
+  );
+}
+// ─── Price Change Modal ───────────────────────────────────────────────────────
+function PriceChangeModal({ product, address, onClose }) {
+  const [noticeDays, setNoticeDays] = useState("30");
+  const [saving, setSaving]         = useState(false);
+  const [done, setDone]             = useState(false);
+  const { writeContractAsync }      = useWriteContract ? require("wagmi").useWriteContract() : { writeContractAsync: null };
+
+  const expiresAt = Math.floor(Date.now() / 1000) + (parseInt(noticeDays) || 30) * 86400;
+  const expiryDate = new Date(expiresAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={onClose}>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+          📢 Price Change Notice — {product.name}
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
+          Schedule a price change. Subscribers will be notified automatically and can cancel before the change takes effect. Minimum 30 days notice is enforced on-chain.
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Notice period (days · min 30)</label>
+          <input
+            type="number" min="30" max="365" value={noticeDays}
+            onChange={e => setNoticeDays(e.target.value)}
+            style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }}
+          />
+        </div>
+        <div style={{ background: "rgba(248,113,113,0.06)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "var(--text-muted)" }}>
+          Subscriptions will expire on <strong style={{ color: "var(--red)" }}>{expiryDate}</strong>. Subscribers will receive an email notice 30 days before.
+        </div>
+        {done ? (
+          <div style={{ textAlign: "center", color: "var(--green)", fontSize: 13 }}>✅ Price change scheduled on-chain.</div>
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={saving || !writeContractAsync}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  alert("Price change notice requires subscription IDs. Use setProductExpiry() directly via Basescan for now — full UI coming soon.");
+                  onClose();
+                } catch (err) {
+                  alert("Error: " + err.message);
+                } finally { setSaving(false); }
+              }}
+              style={{ flex: 1, background: "var(--red)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px", cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? "Scheduling..." : "Schedule Price Change"}
+            </button>
+            <button onClick={onClose} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 16px", cursor: "pointer" }}>Cancel</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -350,6 +407,36 @@ function exportPaymentsCSV(payments, address) {
   URL.revokeObjectURL(url);
 }
 
+// ─── Allowance Cell ───────────────────────────────────────────────────────────
+function AllowanceCell({ subscriptionId, amount }) {
+  const [allowance, setAllowance] = useState(null);
+
+  useEffect(() => {
+    if (subscriptionId == null) return;
+    client.readContract({
+      address: VAULT_ADDRESS, abi: VAULT_ABI,
+      functionName: "vaultAllowance", args: [BigInt(subscriptionId)],
+    })
+      .then(val => setAllowance(Number(val) / 1e6))
+      .catch(() => setAllowance(null));
+  }, [subscriptionId]);
+
+  if (allowance === null) return <span style={{ fontSize: 11, color: "var(--text-muted)" }}>—</span>;
+
+  const required = parseFloat(amount || 0);
+  const ok       = allowance >= required;
+
+  return (
+    <span style={{
+      fontSize: 11, fontFamily: "monospace",
+      color: ok ? "var(--green)" : "var(--red)",
+      fontWeight: 600,
+    }}>
+      {ok ? "✓" : "⚠"} ${allowance.toFixed(2)}
+    </span>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function MerchantDashboard({ address }) {
   const [tab, setTab]                         = useState("overview");
@@ -369,6 +456,7 @@ export default function MerchantDashboard({ address }) {
   const [copied, setCopied]                   = useState(null);
   const [qrProduct, setQrProduct]             = useState(null);
   const [trialProduct, setTrialProduct]       = useState(null);
+  const [priceChangeProduct, setPriceChangeProduct] = useState(null);
 
   // On-chain approval check
   useEffect(() => {
@@ -600,6 +688,12 @@ export default function MerchantDashboard({ address }) {
                       🎁 Trial Link
                     </button>
                     <button
+                      onClick={() => setPriceChangeProduct(p)}
+                      style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, color: "var(--red)", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      📢 Price Change
+                    </button>
+                    <button
                       onClick={() => setQrProduct(p)}
                       style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
                     >
@@ -789,6 +883,7 @@ export default function MerchantDashboard({ address }) {
       {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
       {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} />}
       {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
+      {priceChangeProduct && <PriceChangeModal product={priceChangeProduct} address={address} onClose={() => setPriceChangeProduct(null)} />}
 
       {/* QR Modal */}
       {qrProduct && (
