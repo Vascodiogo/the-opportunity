@@ -1,6 +1,8 @@
 // src/App.jsx — AuthOnce Protocol
 import AdminLogin from "./components/AdminLogin.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
+import MySubscriptions from "./components/MySubscriptions.jsx";
+import PayPage from "./components/PayPage.jsx";
 import { useState, useEffect } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -16,8 +18,9 @@ export default function App() {
   const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
   const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem("admin_token") || "");
   const [adminEmail, setAdminEmail] = useState(() => sessionStorage.getItem("admin_email") || "");
-  const isAdminRoute = window.location.pathname.startsWith("/admin");
+  const isAdminRoute           = window.location.pathname.startsWith("/admin");
   const isMySubscriptionsRoute = window.location.pathname.startsWith("/my-subscriptions");
+  const isPayRoute             = window.location.pathname.startsWith("/pay");
   const [view, setView] = useState("subscriber");
   const [showApp, setShowApp] = useState(false);
 
@@ -43,35 +46,63 @@ export default function App() {
   const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
   const isDark = theme === "dark";
 
-  const navBg = isDark ? "rgba(8,12,20,0.95)" : "rgba(248,250,252,0.95)";
-  const cardBg = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
-  const borderColor = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";
-  const textPrimary = isDark ? "#f1f5f9" : "#0f172a";
-  const textMuted = isDark ? "#475569" : "#94a3b8";
-  const switcherBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)";
-  const switcherActiveBg = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const navBg          = isDark ? "rgba(8,12,20,0.95)"   : "rgba(248,250,252,0.95)";
+  const cardBg         = isDark ? "rgba(255,255,255,0.03)": "#ffffff";
+  const borderColor    = isDark ? "rgba(255,255,255,0.07)": "rgba(0,0,0,0.08)";
+  const textPrimary    = isDark ? "#f1f5f9" : "#0f172a";
+  const textMuted      = isDark ? "#475569" : "#94a3b8";
+  const switcherBg     = isDark ? "rgba(255,255,255,0.04)": "rgba(0,0,0,0.05)";
+  const switcherActiveBg = isDark ? "rgba(255,255,255,0.08)": "rgba(0,0,0,0.08)";
+
+  // ── Standalone routes (no nav, no wallet required) ──────────────────────────
 
   if (isAdminRoute) {
-    if (!adminToken) return <AdminLogin isDark={isDark} onLogin={(token) => { setAdminToken(token); setAdminEmail(sessionStorage.getItem("admin_email") || ""); }} />;
-    return <AdminDashboard token={adminToken} email={adminEmail} isDark={isDark} onLogout={() => { sessionStorage.removeItem("admin_token"); sessionStorage.removeItem("admin_email"); setAdminToken(""); setAdminEmail(""); }} />;
-  }
-
-  if (isMySubscriptionsRoute) {
+    if (!adminToken) return (
+      <AdminLogin
+        isDark={isDark}
+        onLogin={(token) => {
+          setAdminToken(token);
+          setAdminEmail(sessionStorage.getItem("admin_email") || "");
+        }}
+      />
+    );
     return (
-      <div style={{ minHeight: "100vh", background: isDark ? "#080c14" : "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-        <div style={{ textAlign: "center" }}>
-          <img src="/logo.svg" alt="AuthOnce" style={{ width: 48, height: 48, marginBottom: 16 }} />
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: isDark ? "#f1f5f9" : "#0f172a" }}>Auth<span style={{ color: "#34d399" }}>Once</span></h1>
-          <p style={{ color: isDark ? "#475569" : "#94a3b8", marginTop: 8 }}>Subscriber portal coming soon.</p>
-          <a href="mailto:support@authonce.io" style={{ color: "#34d399", fontSize: 13 }}>support@authonce.io</a>
-        </div>
-      </div>
+      <AdminDashboard
+        token={adminToken}
+        email={adminEmail}
+        isDark={isDark}
+        onLogout={() => {
+          sessionStorage.removeItem("admin_token");
+          sessionStorage.removeItem("admin_email");
+          setAdminToken("");
+          setAdminEmail("");
+        }}
+      />
     );
   }
 
+  // Subscriber portal — standalone, Google OAuth only
+  if (isMySubscriptionsRoute) {
+    return <MySubscriptions />;
+  }
+
+  // Pay page — standalone, handled by router in main.jsx
+  // (kept here as fallback in case routing is flat)
+  if (isPayRoute) {
+    return <PayPage />;
+  }
+
+  // ── Main app ────────────────────────────────────────────────────────────────
+
   if (!isConnected && !showApp) {
-    return <LandingPage lang={lang} isDark={isDark} onToggleTheme={toggleTheme} onLaunchApp={() => setShowApp(true)} />;
+    return (
+      <LandingPage
+        lang={lang}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        onLaunchApp={() => setShowApp(true)}
+      />
+    );
   }
 
   if (!isConnected && showApp) {
@@ -121,7 +152,7 @@ export default function App() {
         </div>
       </nav>
       {view === "subscriber" && <Dashboard address={address} isAdmin={isAdmin} isDark={isDark} />}
-      {view === "merchant" && <MerchantDashboard address={address} isDark={isDark} />}
+      {view === "merchant"    && <MerchantDashboard address={address} isDark={isDark} />}
     </div>
   );
 }
