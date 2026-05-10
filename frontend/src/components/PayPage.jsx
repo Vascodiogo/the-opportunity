@@ -155,7 +155,7 @@ const s = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function ConnectorButton({ connector, onClick }) {
-  const icons = { metaMask: "🦊", coinbaseWallet: "🔵", walletConnect: "🔗", injected: "💼" };
+  const icons = { metaMaskSDK: "🦊", metaMask: "🦊", coinbaseWallet: "🔵", coinbaseWalletSDK: "🔵", walletConnect: "🔗" };
   return (
     <button
       style={{ ...s.btn, ...s.btnSecondary, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 8 }}
@@ -514,17 +514,13 @@ export default function PayPage() {
       {connectors.map(c => c.id).join(", ")}
     </div>
                 {connectors
-  .filter((c, index, self) =>
-    // Keep only: metaMask, coinbaseWallet, walletConnect — deduplicated by id
-    ["metaMask", "coinbaseWallet", "walletConnect"].includes(c.id) &&
-    self.findIndex(x => x.id === c.id) === index
-  )
-  .map(connector => (
-    <ConnectorButton key={connector.uid} connector={connector} onClick={() => handleConnect(connector)} />
-  ))}
-                <div style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 14 }}>
-                  MetaMask · Coinbase Wallet · WalletConnect supported
-                </div>
+                  .filter((c, i, self) =>
+                    ["metaMaskSDK", "coinbaseWallet", "coinbaseWalletSDK", "walletConnect"].includes(c.id) &&
+                    self.findIndex(x => x.id === c.id) === i
+                  )
+                  .map(connector => (
+                    <ConnectorButton key={connector.uid} connector={connector} onClick={() => handleConnect(connector)} />
+                  ))}
               </>
             )}
 
