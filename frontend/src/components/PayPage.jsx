@@ -510,9 +510,6 @@ export default function PayPage() {
             {/* Idle — wallet chooser */}
             {flowStatus === "idle" && (
               <>
-                <div style={{ fontSize: 9, color: "#475569", marginBottom: 8 }}>
-      {connectors.map(c => c.id).join(", ")}
-    </div>
                 {connectors
                   .filter((c, i, self) =>
                     ["metaMaskSDK", "coinbaseWallet", "coinbaseWalletSDK", "walletConnect"].includes(c.id) &&
