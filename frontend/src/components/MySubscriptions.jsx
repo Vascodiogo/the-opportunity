@@ -253,9 +253,14 @@ function SubscriptionCard({ sub, isCustodied, merchantName, onCancelled }) {
           <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
             Subscription #{sub.id}
           </div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 6 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 2 }}>
             {merchantName || shortAddress(sub.merchant)}
           </div>
+          {productName && (
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 6 }}>
+              {productName}
+            </div>
+          )}
           <StatusBadge status={sub.status} />
         </div>
         <div style={{ textAlign: "right" }}>
@@ -396,6 +401,7 @@ export default function MySubscriptions() {
   const [subscriber, setSubscriber]       = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [merchantNames, setMerchantNames] = useState({}); // address → name
+  const [productNames, setProductNames]   = useState({}); // `${merchant}-${amount}-${interval}` → name
   const [loading, setLoading]             = useState(false);
   const [errorMsg, setErrorMsg]           = useState("");
   const [authMode, setAuthMode]           = useState(null);
@@ -471,6 +477,23 @@ export default function MySubscriptions() {
         } catch { /* use address fallback */ }
       }));
       setMerchantNames(names);
+
+      // Fetch products for all unique merchants to match product names
+      const INTERVAL_MAP = { 0: "weekly", 1: "monthly", 2: "yearly" };
+      const pnames = {};
+      await Promise.all(uniqueMerchants.map(async addr => {
+        try {
+          const res = await fetch(`${API_BASE}/api/products/${addr}`);
+          if (res.ok) {
+            const data = await res.json();
+            (data.products || []).forEach(p => {
+              const key = `${addr}-${Math.round(parseFloat(p.amount) * 1e6)}-${p.interval}`;
+              pnames[key] = p.name;
+            });
+          }
+        } catch { /* no product name */ }
+      }));
+      setProductNames(pnames);
     } catch (err) {
       setErrorMsg("Could not load subscriptions. Please try again.");
       console.error(err);
@@ -646,6 +669,7 @@ export default function MySubscriptions() {
                     sub={sub}
                     isCustodied={isCustodied}
                     merchantName={merchantNames[sub.merchant?.toLowerCase()]}
+                    productName={productNames[`${sub.merchant?.toLowerCase()}-${Number(sub.amount)}-${["weekly","monthly","yearly"][sub.interval]}`]}
                     onCancelled={loadSubscriptions}
                   />
                 ))}
