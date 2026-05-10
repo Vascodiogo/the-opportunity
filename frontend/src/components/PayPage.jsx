@@ -198,7 +198,6 @@ export default function PayPage() {
 
   const { address, isConnected } = useAccount();
   const chainId                  = useChainId();
-  const { connect, connectors }  = useConnect();
   const { disconnect }           = useDisconnect();
   const { switchChain }          = useSwitchChain();
   const { writeContractAsync }   = useWriteContract();
