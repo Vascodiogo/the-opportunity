@@ -195,6 +195,7 @@ export default function PayPage() {
   const [errorMsg, setErrorMsg]             = useState("");
   const [approveTxHash, setApproveTxHash]   = useState(null);
   const [subscribeTxHash, setSubscribeTxHash] = useState(null);
+  const [selectedInterval, setSelectedInterval] = useState("monthly"); // "monthly" | "yearly"
 
   const { address, isConnected } = useAccount();
   const chainId                  = useChainId();
@@ -212,9 +213,10 @@ export default function PayPage() {
     query: { enabled: !!subscribeTxHash },
   });
 
-  // For the approve step, we approve the full amount (not intro amount)
-  // so the vault can pull the full price when intro period ends
-  const amountRaw = product ? parseUnits(product.amount.toString(), 6) : 0n;
+  // When yearly is selected, use yearly_amount; otherwise use monthly amount
+  const isYearly    = selectedInterval === "yearly" && product?.yearly_amount;
+  const activeAmount = isYearly ? product.yearly_amount : product?.amount;
+  const amountRaw   = activeAmount ? parseUnits(activeAmount.toString(), 6) : 0n;
 
   const { data: currentAllowance } = useReadContract({
     address: USDC_ADDRESS,
@@ -231,8 +233,11 @@ export default function PayPage() {
       .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
       .then(data => setProduct({
         ...data,
-        interval:    INTERVAL_MAP[data.interval] ?? data.interval,
-        intro_amount: parseFloat(data.intro_amount || 0),
+        interval:      INTERVAL_MAP[data.interval] ?? data.interval,
+        intro_amount:  parseFloat(data.intro_amount || 0),
+        intro_pulls:   parseInt(data.intro_pulls || 0),
+        yearly_amount: data.yearly_amount ? parseFloat(data.yearly_amount) : null,
+      }))
         intro_pulls:  parseInt(data.intro_pulls || 0),
       }))
       .catch(() => setProduct(null))
@@ -299,7 +304,7 @@ export default function PayPage() {
     setFlowStatus("subscribing");
     setErrorMsg("");
     try {
-      const introAmountRaw = hasIntro
+      const introAmountRaw = hasIntro && !isYearly
         ? parseUnits(product.intro_amount.toString(), 6)
         : 0n;
 
@@ -308,15 +313,15 @@ export default function PayPage() {
         abi: VAULT_ABI,
         functionName: "createSubscription",
         args: [
-          merchantAddress,                 // merchant
-          address,                         // safeVault — subscriber's own wallet
-          amountRaw,                       // full recurring amount
-          introAmountRaw,                  // intro amount (0 if no intro pricing)
-          BigInt(product.intro_pulls || 0),// intro pulls (0 if no intro pricing)
-          product.interval,                // 0=weekly 1=monthly 2=yearly
-          ZERO_ADDRESS,                    // guardian — none for MVP
-          BigInt(trialDays),               // trial days from ?trial=N
-          0n,                              // grace period — contract default (7 days)
+          merchantAddress,                          // merchant
+          address,                                  // safeVault
+          amountRaw,                                // full recurring amount
+          introAmountRaw,                           // intro amount (0 for yearly)
+          isYearly ? 0n : BigInt(product.intro_pulls || 0), // intro pulls
+          isYearly ? 2 : product.interval,          // 2=yearly, or product interval
+          ZERO_ADDRESS,                             // guardian
+          BigInt(trialDays),                        // trial days
+          0n,                                       // grace period default
         ],
       });
       setSubscribeTxHash(hash);
@@ -333,13 +338,6 @@ export default function PayPage() {
   const stepSubscribe  = flowStatus === "subscribing";
   const approvedDone   = approveConfirmed || (currentAllowance !== undefined && currentAllowance >= amountRaw && flowStatus !== "idle");
   const subscribedDone = subscribeConfirmed;
-
-  // What subscriber sees as the first price
-  const firstPrice = hasIntro
-    ? `$${product.intro_amount.toFixed(2)}`
-    : hasTrial
-    ? "$0.00"
-    : `$${product?.amount?.toFixed(2)}`;
 
   return (
     <div style={s.page}>
@@ -447,6 +445,29 @@ export default function PayPage() {
                 {product.name}
               </div>
 
+              {/* Interval toggle — show when yearly_amount is set */}
+              {product.yearly_amount && (
+                <div style={{ display: "flex", gap: 6, marginBottom: 12, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 4 }}>
+                  <button
+                    onClick={() => setSelectedInterval("monthly")}
+                    style={{ flex: 1, background: selectedInterval === "monthly" ? "rgba(52,211,153,0.15)" : "none", border: selectedInterval === "monthly" ? "0.5px solid rgba(52,211,153,0.3)" : "none", borderRadius: 6, color: selectedInterval === "monthly" ? "#34d399" : "#64748b", fontSize: 12, fontWeight: 600, padding: "6px 0", cursor: "pointer" }}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setSelectedInterval("yearly")}
+                    style={{ flex: 1, background: selectedInterval === "yearly" ? "rgba(52,211,153,0.15)" : "none", border: selectedInterval === "yearly" ? "0.5px solid rgba(52,211,153,0.3)" : "none", borderRadius: 6, color: selectedInterval === "yearly" ? "#34d399" : "#64748b", fontSize: 12, fontWeight: 600, padding: "6px 0", cursor: "pointer" }}
+                  >
+                    Yearly
+                    {product.yearly_amount && product.amount && (
+                      <span style={{ marginLeft: 4, fontSize: 10, background: "rgba(52,211,153,0.15)", color: "#34d399", padding: "1px 5px", borderRadius: 99 }}>
+                        save {Math.round((1 - product.yearly_amount / (product.amount * 12)) * 100)}%
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Trial badge */}
               {hasTrial && (
                 <div style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 6 }}>
@@ -454,8 +475,8 @@ export default function PayPage() {
                 </div>
               )}
 
-              {/* Intro pricing badge */}
-              {hasIntro && (
+              {/* Intro pricing badge — only show for monthly */}
+              {hasIntro && !isYearly && (
                 <div style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 8, marginLeft: hasTrial ? 6 : 0 }}>
                   🎁 Intro: ${product.intro_amount.toFixed(2)} × {product.intro_pulls}
                 </div>
@@ -465,23 +486,28 @@ export default function PayPage() {
               <div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                   <span style={{ fontSize: 30, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
-                    ${product.amount?.toFixed(2)}
+                    ${activeAmount?.toFixed(2)}
                   </span>
-                  <span style={{ fontSize: 13, color: "#94a3b8" }}>/ {intervalLabel}</span>
+                  <span style={{ fontSize: 13, color: "#94a3b8" }}>/ {isYearly ? "year" : intervalLabel}</span>
                 </div>
-                {hasTrial && hasIntro && (
+                {isYearly && (
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                    ${(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually
+                  </div>
+                )}
+                {!isYearly && hasTrial && hasIntro && (
                   <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4, lineHeight: 1.6 }}>
                     Free for {trialDays} days →<br/>
                     Then ${product.intro_amount.toFixed(2)} / {intervalLabel} × {product.intro_pulls} →<br/>
                     Then ${product.amount?.toFixed(2)} / {intervalLabel}
                   </div>
                 )}
-                {hasTrial && !hasIntro && (
+                {!isYearly && hasTrial && !hasIntro && (
                   <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
                     Free for {trialDays} days, then ${product.amount?.toFixed(2)} / {intervalLabel}
                   </div>
                 )}
-                {!hasTrial && hasIntro && (
+                {!isYearly && !hasTrial && hasIntro && (
                   <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
                     ${product.intro_amount.toFixed(2)} / {intervalLabel} for {product.intro_pulls} {product.intro_pulls === 1 ? intervalLabel.toLowerCase() : ({ Weekly: "weeks", Monthly: "months", Yearly: "years" })[intervalLabel]}, then ${product.amount?.toFixed(2)}
                   </div>
@@ -545,7 +571,7 @@ export default function PayPage() {
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <Step n={1} label={`Approve ${product.amount?.toFixed(2)} USDC`} active={stepApprove} done={approvedDone} />
+                  <Step n={1} label={`Approve ${activeAmount?.toFixed(2)} USDC`} active={stepApprove} done={approvedDone} />
                   <Step n={2} label="Create subscription on-chain" active={stepSubscribe} done={subscribedDone} />
                 </div>
 
@@ -553,8 +579,9 @@ export default function PayPage() {
                   <div style={{ marginBottom: 20 }}>
                     {[
                       ["⚡", "Two transactions — approve USDC, then subscribe"],
+                      isYearly ? ["📅", `Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`] : null,
                       hasTrial ? ["🎁", `${trialDays}-day free trial — first payment after trial ends`] : null,
-                      hasIntro && !hasTrial ? ["🎁", `Intro price ${firstPrice} for ${product.intro_pulls} ${intervalLabel.toLowerCase()}${product.intro_pulls > 1 ? "s" : ""}, then $${product.amount?.toFixed(2)}`] : null,
+                      hasIntro && !hasTrial && !isYearly ? ["🎁", `Intro price $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalLabel.toLowerCase()}${product.intro_pulls > 1 ? "s" : ""}, then $${product.amount?.toFixed(2)}`] : null,
                       ["🔔", "3-day notice before every payment"],
                       ["🛡️", "Cancel anytime at authonce.io/my-subscriptions"],
                       ["🔒", "AuthOnce never holds your funds"],
@@ -581,10 +608,12 @@ export default function PayPage() {
 
                 {flowStatus === "connected" && (
                   <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleApprove} disabled={isWrongNetwork}>
-                    {hasTrial
+                    {hasTrial && !isYearly
                       ? `Start ${trialDays}-day free trial →`
+                      : isYearly
+                      ? `Subscribe yearly — $${product.yearly_amount?.toFixed(2)} / year →`
                       : hasIntro
-                      ? `Subscribe — ${firstPrice} / ${intervalLabel} →`
+                      ? `Subscribe — $${product.intro_amount?.toFixed(2)} / ${intervalLabel} →`
                       : `Subscribe — $${product.amount?.toFixed(2)} / ${intervalLabel} →`
                     }
                   </button>

@@ -252,16 +252,24 @@ function PriceChangeModal({ product, address, onClose }) {
 
 // ─── Add Product Modal ────────────────────────────────────────────────────────
 function AddProductModal({ merchantAddress, onClose, onAdded }) {
-  const [name, setName]             = useState("");
-  const [amount, setAmount]         = useState("");
-  const [interval, setInterval]     = useState("1");
-  const [hasIntro, setHasIntro]     = useState(false);
+  const [name, setName]               = useState("");
+  const [amount, setAmount]           = useState("");
+  const [interval, setInterval]       = useState("1");
+  const [hasIntro, setHasIntro]       = useState(false);
   const [introAmount, setIntroAmount] = useState("");
-  const [introPulls, setIntroPulls] = useState("1");
-  const [saving, setSaving]         = useState(false);
+  const [introPulls, setIntroPulls]   = useState("1");
+  const [hasYearly, setHasYearly]     = useState(false);
+  const [yearlyAmount, setYearlyAmount] = useState("");
+  const [saving, setSaving]           = useState(false);
 
   const intervalMap   = { "0": "weekly", "1": "monthly", "2": "yearly" };
   const intervalLabel = { "0": "week", "1": "month", "2": "year" };
+
+  // Auto-calculate yearly discount suggestion (20% off × 12)
+  const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
+  const yearlyDiscount   = amount && yearlyAmount
+    ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
+    : 0;
 
   const handleAdd = async () => {
     if (!name || !amount) return;
@@ -273,6 +281,10 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
       alert("Intro price cannot be higher than the full price.");
       return;
     }
+    if (hasYearly && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) {
+      alert("Please enter a valid yearly price.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/api/products/${merchantAddress}`, {
@@ -280,10 +292,11 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
         body: JSON.stringify({
           name,
-          amount:       parseFloat(amount),
-          interval:     intervalMap[interval],
-          intro_amount: hasIntro ? parseFloat(introAmount) : 0,
-          intro_pulls:  hasIntro ? parseInt(introPulls) : 0,
+          amount:        parseFloat(amount),
+          interval:      intervalMap[interval],
+          intro_amount:  hasIntro  ? parseFloat(introAmount)  : 0,
+          intro_pulls:   hasIntro  ? parseInt(introPulls)     : 0,
+          yearly_amount: hasYearly ? parseFloat(yearlyAmount) : null,
         }),
       });
       if (!res.ok) throw new Error("Failed to save product");
@@ -383,6 +396,43 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               </div>
             )}
           </div>
+
+          {/* Yearly pricing toggle — only show for monthly products */}
+          {interval === "1" && (
+            <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => { setHasYearly(v => !v); if (!yearlyAmount && yearlySuggestion) setYearlyAmount(yearlySuggestion); }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>📅 Yearly pricing option</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                    Offer a discounted yearly plan — subscriber pays once a year
+                  </div>
+                </div>
+                <div style={{ width: 36, height: 20, borderRadius: 99, background: hasYearly ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 2, left: hasYearly ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s" }} />
+                </div>
+              </div>
+
+              {hasYearly && (
+                <div style={{ marginTop: 14 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    Yearly price (USDC) — suggested: ${yearlySuggestion} (20% off)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder={yearlySuggestion || "192.00"}
+                    value={yearlyAmount}
+                    onChange={e => setYearlyAmount(e.target.value)}
+                    style={{ width: "100%", boxSizing: "border-box" }}
+                  />
+                  {yearlyAmount && amount && yearlyDiscount > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: "var(--green)", background: "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.2)", borderRadius: 6, padding: "6px 10px" }}>
+                      Subscriber saves {yearlyDiscount}% vs monthly · ${(parseFloat(yearlyAmount) / 12).toFixed(2)}/month equivalent
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Preview */}
           {name && amount && (
@@ -532,9 +582,10 @@ export default function MerchantDashboard({ address }) {
         const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
         setProducts(data.products.map(p => ({
           ...p,
-          interval:     INTERVAL_MAP[p.interval] ?? p.interval,
-          intro_amount: parseFloat(p.intro_amount || 0),
-          intro_pulls:  parseInt(p.intro_pulls || 0),
+          interval:      INTERVAL_MAP[p.interval] ?? p.interval,
+          intro_amount:  parseFloat(p.intro_amount || 0),
+          intro_pulls:   parseInt(p.intro_pulls || 0),
+          yearly_amount: p.yearly_amount ? parseFloat(p.yearly_amount) : null,
         })));
       }
     } catch (err) { console.error("[Dashboard] loadProducts error:", err); }
@@ -711,6 +762,11 @@ export default function MerchantDashboard({ address }) {
                         {p.intro_amount > 0 && p.intro_pulls > 0 && (
                           <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 7px", borderRadius: 99, background: "rgba(251,191,36,0.1)", color: "var(--amber)", fontWeight: 600 }}>
                             🎁 ${p.intro_amount.toFixed(2)} intro × {p.intro_pulls}
+                          </span>
+                        )}
+                        {p.yearly_amount && (
+                          <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 7px", borderRadius: 99, background: "rgba(52,211,153,0.1)", color: "var(--green)", fontWeight: 600 }}>
+                            📅 ${p.yearly_amount.toFixed(2)}/yr
                           </span>
                         )}
                       </div>
