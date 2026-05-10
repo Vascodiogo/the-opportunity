@@ -2,12 +2,14 @@
 // Standalone subscriber portal — authonce.io/my-subscriptions
 //
 // Two login paths:
-//   Type A — Crypto-native: connect wallet (MetaMask/WalletConnect) → read subscriptions for that address
-//   Type B — Fiat/custodied: sign in with Google → lookup custodied wallet → read subscriptions
+//   Type A — Crypto-native: connect wallet → read subscriptions for that address
+//   Type B — Fiat/custodied: sign in with Google → lookup custodied wallet
 //
-// Cancel flow:
-//   Type A: sign cancelSubscription(id) with connected wallet
-//   Type B: POST /api/subscriber/cancel/:id → backend signs with custodied key
+// Features:
+//   - Merchant business name (fetched from API)
+//   - Next payment date (fixed for new subscriptions)
+//   - Payment history per subscription
+//   - Cancel (Type A: wallet sign / Type B: backend)
 
 import { useState, useEffect, useCallback } from "react";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
@@ -30,11 +32,13 @@ const client = createPublicClient({
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getNextPullDate(lastPulledAt, interval) {
-  if (!lastPulledAt || lastPulledAt === 0n) return null;
-  const last = Number(lastPulledAt) * 1000;
   const intervals = { 0: 7, 1: 30, 2: 365 };
   const days = intervals[interval] || 30;
-  return new Date(last + days * 86400 * 1000);
+  // If never pulled, use now + interval as estimate
+  const base = (!lastPulledAt || lastPulledAt === 0n)
+    ? Date.now()
+    : Number(lastPulledAt) * 1000;
+  return new Date(base + days * 86400 * 1000);
 }
 
 function formatDate(date) {
@@ -98,8 +102,81 @@ function StatusBadge({ status }) {
   );
 }
 
+// ─── Payment History ──────────────────────────────────────────────────────────
+function PaymentHistory({ subscriptionId, merchantAddress }) {
+  const [payments, setPayments]   = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [expanded, setExpanded]   = useState(false);
+
+  const load = async () => {
+    if (payments.length > 0) { setExpanded(true); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/subscriber/payments/${subscriptionId}`,
+        { headers: { "X-Subscription-Id": String(subscriptionId) } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setPayments(data.payments || []);
+      }
+    } catch (err) {
+      console.error("Payment history error:", err);
+    } finally {
+      setLoading(false);
+      setExpanded(true);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 16, borderTop: "0.5px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
+      <button
+        onClick={expanded ? () => setExpanded(false) : load}
+        style={{ background: "none", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}
+      >
+        {expanded ? "▲" : "▼"} Payment history
+        {payments.length > 0 && <span style={{ color: "#475569" }}>({payments.length})</span>}
+      </button>
+
+      {loading && (
+        <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>Loading...</div>
+      )}
+
+      {expanded && !loading && payments.length === 0 && (
+        <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>No payments yet.</div>
+      )}
+
+      {expanded && payments.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.5fr", padding: "6px 0", fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "0.5px solid rgba(255,255,255,0.04)" }}>
+            <span>Date</span><span>Amount</span><span>Transaction</span>
+          </div>
+          {payments.map((p, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.5fr", padding: "8px 0", fontSize: 12, alignItems: "center", borderBottom: "0.5px solid rgba(255,255,255,0.03)" }}>
+              <span style={{ color: "#94a3b8" }}>
+                {new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+              <span style={{ color: "#34d399", fontFamily: "monospace", fontWeight: 600 }}>
+                ${p.amount_usdc}
+              </span>
+              <a
+                href={`https://sepolia.basescan.org/tx/${p.tx_hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontFamily: "monospace", fontSize: 11, color: "#3b82f6", textDecoration: "none" }}
+              >
+                {p.tx_hash?.slice(0, 8)}...{p.tx_hash?.slice(-6)} ↗
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Subscription Card ────────────────────────────────────────────────────────
-function SubscriptionCard({ sub, isCustodied, walletAddress, onCancelled }) {
+function SubscriptionCard({ sub, isCustodied, merchantName, onCancelled }) {
   const [cancelling, setCancelling]     = useState(false);
   const [cancelTxHash, setCancelTxHash] = useState(null);
   const [errorMsg, setErrorMsg]         = useState("");
@@ -121,8 +198,8 @@ function SubscriptionCard({ sub, isCustodied, walletAddress, onCancelled }) {
   const isPaused  = sub.status === 1;
   const canCancel = isActive || isPaused;
 
-  const nextPull    = getNextPullDate(sub.lastPulledAt, sub.interval);
-  const nextPullWhen = daysUntil(nextPull);
+  const nextPull     = getNextPullDate(sub.lastPulledAt, sub.interval);
+  const nextPullWhen = isActive ? daysUntil(nextPull) : null;
 
   // Type B — custodied: backend cancels
   const handleCustodiedCancel = async () => {
@@ -145,7 +222,7 @@ function SubscriptionCard({ sub, isCustodied, walletAddress, onCancelled }) {
     }
   };
 
-  // Type A — own wallet: MetaMask/WalletConnect signs
+  // Type A — own wallet signs
   const handleWalletCancel = async () => {
     setCancelling(true);
     setErrorMsg("");
@@ -165,54 +242,67 @@ function SubscriptionCard({ sub, isCustodied, walletAddress, onCancelled }) {
 
   const handleCancel = isCustodied ? handleCustodiedCancel : handleWalletCancel;
 
-  // For Type A: check correct wallet is connected
-  const subOwner   = sub.safeVault?.toLowerCase() || sub.owner?.toLowerCase();
+  const subOwner    = sub.safeVault?.toLowerCase() || sub.owner?.toLowerCase();
   const wrongWallet = !isCustodied && connectedAddress && connectedAddress.toLowerCase() !== subOwner;
 
   return (
     <div style={c.card}>
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
             Subscription #{sub.id}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#f1f5f9", marginBottom: 6 }}>
-            {shortAddress(sub.merchant)}
+          <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 6 }}>
+            {merchantName || shortAddress(sub.merchant)}
           </div>
           <StatusBadge status={sub.status} />
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
             {formatUSDC(sub.amount)}
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8" }}>/ {INTERVAL_NAMES[sub.interval]}</div>
+          {sub.introAmount > 0n && sub.pullCount < sub.introPulls && (
+            <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 2 }}>
+              🎁 Intro price — {Number(sub.introPulls) - Number(sub.pullCount)} {INTERVAL_NAMES[sub.interval]?.toLowerCase()}s left
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+      {/* Details grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
           <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Next payment</div>
           <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 500 }}>{formatDate(nextPull)}</div>
-          {nextPullWhen && isActive && (
+          {nextPullWhen && (
             <div style={{ fontSize: 11, color: nextPullWhen === "overdue" ? "#f87171" : "#34d399", marginTop: 2 }}>
               {nextPullWhen}
             </div>
           )}
         </div>
         <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Vault</div>
-          <div style={{ fontSize: 12, color: "#94a3b8", fontFamily: "monospace" }}>
-            {shortAddress(sub.safeVault || sub.owner)}
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Interval</div>
+          <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 500 }}>
+            {INTERVAL_NAMES[sub.interval]}
           </div>
+          {sub.trialEndsAt > 0n && Date.now() < Number(sub.trialEndsAt) * 1000 && (
+            <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 2 }}>
+              Trial ends {formatDate(new Date(Number(sub.trialEndsAt) * 1000))}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Error */}
       {errorMsg && <div style={c.error}>{errorMsg}</div>}
 
+      {/* Cancel */}
       {canCancel && (
         wrongWallet ? (
           <div style={{ fontSize: 12, color: "#f87171" }}>
-            Wrong wallet. Connect {shortAddress(subOwner)} to cancel.
+            Wrong wallet connected. Please connect {shortAddress(subOwner)} to cancel.
           </div>
         ) : !showConfirm ? (
           <button
@@ -250,6 +340,9 @@ function SubscriptionCard({ sub, isCustodied, walletAddress, onCancelled }) {
           This subscription is {STATUS_NAMES[sub.status]?.toLowerCase()}.
         </div>
       )}
+
+      {/* Payment history */}
+      <PaymentHistory subscriptionId={sub.id} merchantAddress={sub.merchant} />
     </div>
   );
 }
@@ -298,16 +391,17 @@ async function fetchSubscriptionsForWallet(walletAddress) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function MySubscriptions() {
-  const [subscriber, setSubscriber]       = useState(null); // Google auth subscriber
+  const [subscriber, setSubscriber]       = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [merchantNames, setMerchantNames] = useState({}); // address → name
   const [loading, setLoading]             = useState(false);
   const [errorMsg, setErrorMsg]           = useState("");
-  const [authMode, setAuthMode]           = useState(null); // null | "wallet" | "google"
-  const [authStatus, setAuthStatus]       = useState("checking"); // checking | ready
+  const [authMode, setAuthMode]           = useState(null);
+  const [authStatus, setAuthStatus]       = useState("checking");
 
   const { address: walletAddress, isConnected } = useAccount();
 
-  // Handle Google OAuth return token
+  // Handle Google OAuth return + existing token
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token  = params.get("subscriber_token");
@@ -338,20 +432,20 @@ export default function MySubscriptions() {
     }
   }, []);
 
-  // When wallet connects or is already connected — switch to wallet mode
+  // Auto-detect connected wallet
   useEffect(() => {
     if (isConnected && walletAddress && authMode === null && authStatus === "ready") {
       setAuthMode("wallet");
     }
   }, [isConnected, walletAddress, authStatus]);
 
-  // Load subscriptions when mode and address are known
   const walletToQuery = authMode === "wallet"
     ? walletAddress
     : authMode === "google"
     ? subscriber?.wallet_address
     : null;
 
+  // Load subscriptions
   const loadSubscriptions = useCallback(async () => {
     if (!walletToQuery) return;
     setLoading(true);
@@ -359,6 +453,22 @@ export default function MySubscriptions() {
     try {
       const subs = await fetchSubscriptionsForWallet(walletToQuery);
       setSubscriptions(subs);
+
+      // Fetch merchant names for all unique merchants
+      const uniqueMerchants = [...new Set(subs.map(s => s.merchant.toLowerCase()))];
+      const names = {};
+      await Promise.all(uniqueMerchants.map(async addr => {
+        try {
+          const res = await fetch(`${API_BASE}/api/merchants/${addr}`, {
+            headers: { "X-Merchant-Address": addr },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.business_name) names[addr] = data.business_name;
+          }
+        } catch { /* use address fallback */ }
+      }));
+      setMerchantNames(names);
     } catch (err) {
       setErrorMsg("Could not load subscriptions. Please try again.");
       console.error(err);
@@ -381,6 +491,7 @@ export default function MySubscriptions() {
     localStorage.removeItem("subscriber_token");
     setSubscriber(null);
     setSubscriptions([]);
+    setMerchantNames({});
     setAuthMode(null);
   };
 
@@ -390,9 +501,7 @@ export default function MySubscriptions() {
 
   const displayName = authMode === "google"
     ? subscriber?.name || subscriber?.email
-    : walletAddress
-    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-    : null;
+    : null; // wallet address shown by ConnectButton
 
   return (
     <div style={c.page}>
@@ -420,25 +529,19 @@ export default function MySubscriptions() {
             </div>
           </div>
 
-          {authMode && displayName && (
+          {/* Header right — show name + sign out for Google, nothing extra for wallet */}
+          {authMode === "google" && displayName && (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {authMode === "google" && subscriber?.avatar_url && (
+              {subscriber?.avatar_url && (
                 <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} />
               )}
-              <span style={{ fontSize: 13, color: "#94a3b8", fontFamily: authMode === "wallet" ? "monospace" : "inherit" }}>
-                {displayName}
-              </span>
-              {authMode === "google" && (
-                <button
-                  onClick={handleLogout}
-                  style={{ background: "none", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "4px 10px", color: "#64748b", fontSize: 12, cursor: "pointer" }}
-                >
-                  Sign out
-                </button>
-              )}
-              {authMode === "wallet" && (
-                <ConnectButton showBalance={false} />
-              )}
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>{displayName}</span>
+              <button
+                onClick={handleLogout}
+                style={{ background: "none", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "4px 10px", color: "#64748b", fontSize: 12, cursor: "pointer" }}
+              >
+                Sign out
+              </button>
             </div>
           )}
         </div>
@@ -450,7 +553,7 @@ export default function MySubscriptions() {
           </div>
         )}
 
-        {/* Login screen — no auth yet */}
+        {/* Login screen */}
         {authStatus === "ready" && !authMode && (
           <div style={{ ...c.card, maxWidth: 420, margin: "60px auto" }}>
             <div style={{ textAlign: "center", marginBottom: 24 }}>
@@ -463,7 +566,6 @@ export default function MySubscriptions() {
               </div>
             </div>
 
-            {/* Wallet connect */}
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textAlign: "center" }}>
                 Subscribed with MetaMask or another wallet?
@@ -473,15 +575,13 @@ export default function MySubscriptions() {
               </div>
             </div>
 
-            {/* Divider */}
             <div style={c.divider}>
               <div style={c.dividerLine} />
               <span style={{ fontSize: 11, color: "#475569" }}>or</span>
               <div style={c.dividerLine} />
             </div>
 
-            {/* Google login */}
-            <div style={{ marginBottom: 4 }}>
+            <div>
               <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textAlign: "center" }}>
                 Subscribed via card or fiat payment?
               </div>
@@ -499,7 +599,7 @@ export default function MySubscriptions() {
           </div>
         )}
 
-        {/* Logged in — show subscriptions */}
+        {/* Subscriptions */}
         {authStatus === "ready" && authMode && (
           <>
             {errorMsg && <div style={c.error}>{errorMsg}</div>}
@@ -518,18 +618,18 @@ export default function MySubscriptions() {
                 </div>
                 <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
                   No subscriptions found for this {authMode === "wallet" ? "wallet" : "account"}.
-                  {authMode === "wallet" && (
-                    <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>
-                      If you subscribed via Google/card,{" "}
-                      <button
-                        onClick={handleGoogleLogin}
-                        style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}
-                      >
-                        sign in with Google instead
-                      </button>.
-                    </div>
-                  )}
                 </div>
+                {authMode === "wallet" && (
+                  <div style={{ marginTop: 12, fontSize: 12, color: "#64748b" }}>
+                    Subscribed via Google/card?{" "}
+                    <button
+                      onClick={handleGoogleLogin}
+                      style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}
+                    >
+                      Sign in with Google instead
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -543,7 +643,7 @@ export default function MySubscriptions() {
                     key={sub.id}
                     sub={sub}
                     isCustodied={isCustodied}
-                    walletAddress={walletToQuery}
+                    merchantName={merchantNames[sub.merchant?.toLowerCase()]}
                     onCancelled={loadSubscriptions}
                   />
                 ))}
@@ -560,7 +660,7 @@ export default function MySubscriptions() {
                     key={sub.id}
                     sub={sub}
                     isCustodied={isCustodied}
-                    walletAddress={walletToQuery}
+                    merchantName={merchantNames[sub.merchant?.toLowerCase()]}
                     onCancelled={loadSubscriptions}
                   />
                 ))}
