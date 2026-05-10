@@ -11,7 +11,7 @@ import {
 
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http("https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT"),
+  transport: http("https://sepolia.base.org"),
 });
 
 const BASE_URL = "https://authonce.io/pay";
