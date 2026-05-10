@@ -514,10 +514,14 @@ export default function PayPage() {
                   Connect your wallet to subscribe:
                 </div>
                 {connectors
-                  .filter(c => c.id !== "injected" || !connectors.find(x => x.id === "metaMask"))
-                  .map(connector => (
-                    <ConnectorButton key={connector.uid} connector={connector} onClick={() => handleConnect(connector)} />
-                  ))}
+  .filter((c, index, self) =>
+    // Keep only: metaMask, coinbaseWallet, walletConnect — deduplicated by id
+    ["metaMask", "coinbaseWallet", "walletConnect"].includes(c.id) &&
+    self.findIndex(x => x.id === c.id) === index
+  )
+  .map(connector => (
+    <ConnectorButton key={connector.uid} connector={connector} onClick={() => handleConnect(connector)} />
+  ))}
                 <div style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 14 }}>
                   MetaMask · Coinbase Wallet · WalletConnect supported
                 </div>
