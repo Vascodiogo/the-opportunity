@@ -510,9 +510,9 @@ export default function PayPage() {
             {/* Idle — wallet chooser */}
             {flowStatus === "idle" && (
               <>
-                <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 14 }}>
-                  Connect your wallet to subscribe:
-                </div>
+                <div style={{ fontSize: 9, color: "#475569", marginBottom: 8 }}>
+      {connectors.map(c => c.id).join(", ")}
+    </div>
                 {connectors
   .filter((c, index, self) =>
     // Keep only: metaMask, coinbaseWallet, walletConnect — deduplicated by id
