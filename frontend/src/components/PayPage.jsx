@@ -516,7 +516,7 @@ export default function PayPage() {
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
                   <ConnectButton />
                 </div>
-                <div style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: "#64748b", textAlign: "center", marginTop: 8 }}>
                   MetaMask · Coinbase Wallet · WalletConnect supported
                 </div>
               </>

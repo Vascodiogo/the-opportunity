@@ -498,7 +498,7 @@ export default function MySubscriptions() {
             >
               Sign in with Google →
             </button>
-            <div style={{ fontSize: 11, color: "#334155", marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 12 }}>
               No password required · Secure · Private
             </div>
           </div>
