@@ -176,7 +176,7 @@ function PaymentHistory({ subscriptionId, merchantAddress }) {
 }
 
 // ─── Subscription Card ────────────────────────────────────────────────────────
-function SubscriptionCard({ sub, isCustodied, merchantName, onCancelled }) {
+function SubscriptionCard({ sub, isCustodied, merchantName, productName, onCancelled }) {
   const [cancelling, setCancelling]     = useState(false);
   const [cancelTxHash, setCancelTxHash] = useState(null);
   const [errorMsg, setErrorMsg]         = useState("");
