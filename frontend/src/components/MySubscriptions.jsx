@@ -467,9 +467,7 @@ export default function MySubscriptions() {
       const names = {};
       await Promise.all(uniqueMerchants.map(async addr => {
         try {
-          const res = await fetch(`${API_BASE}/api/merchants/${addr}`, {
-            headers: { "X-Merchant-Address": addr },
-          });
+                    const res = await fetch(`${API_BASE}/api/merchants/${addr}`);
           if (res.ok) {
             const data = await res.json();
             if (data.business_name) names[addr] = data.business_name;
