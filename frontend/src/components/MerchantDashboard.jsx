@@ -631,16 +631,28 @@ export default function MerchantDashboard({ address }) {
           ) : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "10px 20px", fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)" }}>
-                <span>Vault Address</span><span>Amount</span><span>Interval</span><span>Status</span><span>Last Pull</span>
+                <span>Subscriber</span><span>Amount</span><span>Interval</span><span>Status</span><span>Last Pull</span>
               </div>
-              {subscribers.map(sub => (
-                <div key={sub.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: "0.5px solid var(--border)" }}>
-                  <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-primary)" }}>{shortAddress(sub.safeVault || sub.owner)}</span>
-                  <span style={{ color: "var(--green)", fontWeight: 600, fontFamily: "monospace" }}>{formatUSDC(sub.amount)}</span>
-                  <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[sub.interval]}</span>
-                  <StatusBadge status={sub.status} />
+              {subscribers.map((sub, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: "0.5px solid var(--border)" }}>
+                  <div>
+                    {sub.name && (
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>{sub.name}</div>
+                    )}
+                    {sub.email && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>{sub.email}</div>
+                    )}
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: sub.name || sub.email ? "var(--text-muted)" : "var(--text-primary)" }}>
+                      {shortAddress(sub.vault_address)}
+                      {sub.type === "fiat" && <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>fiat</span>}
+                      {sub.type === "crypto" && <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(52,211,153,0.1)", color: "var(--green)" }}>crypto</span>}
+                    </div>
+                  </div>
+                  <span style={{ color: "var(--green)", fontWeight: 600, fontFamily: "monospace" }}>${sub.amount_usdc}</span>
+                  <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[{ weekly: 0, monthly: 1, yearly: 2 }[sub.interval]] || sub.interval}</span>
+                  <StatusBadge status={{ active: 0, paused: 1, cancelled: 2, expired: 3 }[sub.status] ?? sub.status} />
                   <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                    {sub.lastPulledAt > 0n ? new Date(Number(sub.lastPulledAt) * 1000).toLocaleDateString() : "Never"}
+                    {sub.last_pulled_at ? new Date(sub.last_pulled_at).toLocaleDateString() : "Never"}
                   </span>
                 </div>
               ))}
