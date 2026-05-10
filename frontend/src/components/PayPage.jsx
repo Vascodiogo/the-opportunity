@@ -5,10 +5,11 @@
 // Trial support:      ?trial=N in URL → N free days before first payment
 // Intro pricing:      loaded from product API (introAmount, introPulls)
 
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import {
-  useAccount, useConnect, useDisconnect,
+  useAccount, useDisconnect,
   useWriteContract, useWaitForTransactionReceipt,
   useReadContract, useChainId, useSwitchChain,
 } from "wagmi";
@@ -510,14 +511,15 @@ export default function PayPage() {
             {/* Idle — wallet chooser */}
             {flowStatus === "idle" && (
               <>
-                {connectors
-                  .filter((c, i, self) =>
-                    ["metaMaskSDK", "coinbaseWallet", "coinbaseWalletSDK", "walletConnect"].includes(c.id) &&
-                    self.findIndex(x => x.id === c.id) === i
-                  )
-                  .map(connector => (
-                    <ConnectorButton key={connector.uid} connector={connector} onClick={() => handleConnect(connector)} />
-                  ))}
+                <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>
+                  Connect your wallet to subscribe:
+                </div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                  <ConnectButton />
+                </div>
+                <div style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 8 }}>
+                  MetaMask · Coinbase Wallet · WalletConnect supported
+                </div>
               </>
             )}
 
