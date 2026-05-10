@@ -245,8 +245,9 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_products_merchant ON products(merchant_address)`);
   // Migration: add trial_days to existing products table
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS trial_days INTEGER NOT NULL DEFAULT 0`);
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_amount NUMERIC(18,6) NOT NULL DEFAULT 0`);
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_pulls  INTEGER       NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_amount   NUMERIC(18,6) NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_pulls    INTEGER       NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS yearly_amount  NUMERIC(18,6) DEFAULT NULL`);
 
   // Stripe checkout sessions — track pending payments before on-chain confirmation
   await query(`
@@ -422,21 +423,22 @@ async function getMerchantWebhook(merchantAddress) {
 // -----------------------------------------------------------------------------
 
 async function upsertProduct(merchantAddress, data) {
-  const { slug, name, amount, interval, trialDays = 0, introAmount = 0, introPulls = 0 } = data;
+  const { slug, name, amount, interval, trialDays = 0, introAmount = 0, introPulls = 0, yearlyAmount = null } = data;
   const res = await query(`
-    INSERT INTO products (merchant_address, slug, name, amount, interval, trial_days, intro_amount, intro_pulls, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+    INSERT INTO products (merchant_address, slug, name, amount, interval, trial_days, intro_amount, intro_pulls, yearly_amount, created_at, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
     ON CONFLICT (merchant_address, slug) DO UPDATE SET
-      name         = EXCLUDED.name,
-      amount       = EXCLUDED.amount,
-      interval     = EXCLUDED.interval,
-      trial_days   = EXCLUDED.trial_days,
-      intro_amount = EXCLUDED.intro_amount,
-      intro_pulls  = EXCLUDED.intro_pulls,
-      active       = TRUE,
-      updated_at   = NOW()
+      name          = EXCLUDED.name,
+      amount        = EXCLUDED.amount,
+      interval      = EXCLUDED.interval,
+      trial_days    = EXCLUDED.trial_days,
+      intro_amount  = EXCLUDED.intro_amount,
+      intro_pulls   = EXCLUDED.intro_pulls,
+      yearly_amount = EXCLUDED.yearly_amount,
+      active        = TRUE,
+      updated_at    = NOW()
     RETURNING *
-  `, [merchantAddress, slug, name, amount, interval, trialDays, introAmount, introPulls]);
+  `, [merchantAddress, slug, name, amount, interval, trialDays, introAmount, introPulls, yearlyAmount]);
   return res.rows[0];
 }
 
