@@ -388,6 +388,59 @@ app.get("/api/merchants/:address/payments", requireMerchantAuth, async (req, res
 });
 
 // -----------------------------------------------------------------------------
+// GET /api/merchants/:address/subscribers
+// Cross-references on-chain vault addresses with the subscribers table
+// Returns name + email for fiat subscribers, wallet address only for crypto-native
+// -----------------------------------------------------------------------------
+app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    // Get all subscriptions for this merchant from DB
+    const subsResult = await db.query(`
+      SELECT id, owner_address, safe_vault, amount, interval, status, last_pulled_at, created_at
+      FROM subscriptions
+      WHERE merchant_address = $1
+      ORDER BY created_at DESC
+    `, [address]);
+
+    // For each subscription, try to match vault address to a subscriber record
+    const subscribers = await Promise.all(subsResult.rows.map(async (sub) => {
+      const vaultAddress = sub.safe_vault || sub.owner_address;
+
+      // Look up subscriber by wallet address
+      const subscriberResult = await db.query(
+        "SELECT email, name, avatar_url, created_at FROM subscribers WHERE wallet_address = $1",
+        [vaultAddress.toLowerCase()]
+      );
+      const subscriberRecord = subscriberResult.rows[0];
+
+      return {
+        subscription_id:  sub.id,
+        vault_address:    vaultAddress,
+        amount_usdc:      (parseFloat(sub.amount) / 1e6).toFixed(2),
+        interval:         sub.interval,
+        status:           sub.status,
+        last_pulled_at:   sub.last_pulled_at,
+        subscribed_at:    sub.created_at,
+        // Subscriber identity — null for crypto-native (anonymous)
+        email:            subscriberRecord?.email || null,
+        name:             subscriberRecord?.name  || null,
+        type:             subscriberRecord ? "fiat" : "crypto",
+      };
+    }));
+
+    res.json({ merchant_address: address, subscribers, count: subscribers.length });
+  } catch (err) {
+    console.error("[API] Merchant subscribers error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // POST /api/webhooks/test
 // -----------------------------------------------------------------------------
 app.post("/api/webhooks/test", requireMerchantAuth, async (req, res) => {
