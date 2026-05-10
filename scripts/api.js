@@ -919,6 +919,115 @@ app.get("/auth/google/callback",
   }
 );
 
+// POST /api/subscriber/cancel/:subscriptionId
+// Type B (custodied wallet) cancel — backend signs the transaction
+app.post("/api/subscriber/cancel/:subscriptionId", async (req, res) => {
+  try {
+    // Verify subscriber JWT
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "unauthorized" });
+    const token = auth.slice(7);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded.type !== "subscriber") return res.status(401).json({ error: "invalid_token_type" });
+    } catch {
+      return res.status(401).json({ error: "invalid_token" });
+    }
+
+    const subscriptionId = parseInt(req.params.subscriptionId);
+    if (isNaN(subscriptionId)) return res.status(400).json({ error: "invalid_subscription_id" });
+
+    // Get subscriber record
+    const subscriber = await db.getSubscriberByEmail(decoded.email);
+    if (!subscriber) return res.status(404).json({ error: "subscriber_not_found" });
+
+    // Must have a custodied wallet key to use this endpoint
+    if (!subscriber.wallet_private_key) {
+      return res.status(400).json({
+        error: "not_custodied",
+        message: "This subscription was created with your own wallet. Please connect your wallet to cancel.",
+      });
+    }
+
+    // Decrypt private key
+    const privateKey = db.decrypt(subscriber.wallet_private_key);
+
+    // Sign and send cancelSubscription transaction
+    const { ethers } = require("ethers");
+    const provider   = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL || "https://sepolia.base.org");
+    const signer     = new ethers.Wallet(privateKey, provider);
+
+    const VAULT_ABI_CANCEL = [
+      {
+        name: "cancelSubscription",
+        type: "function",
+        inputs: [{ name: "id", type: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+      },
+      {
+        name: "subscriptions",
+        type: "function",
+        inputs: [{ name: "id", type: "uint256" }],
+        outputs: [
+          { name: "owner",    type: "address" },
+          { name: "guardian", type: "address" },
+          { name: "merchant", type: "address" },
+          { name: "safeVault",type: "address" },
+          { name: "amount",   type: "uint256" },
+          { name: "introAmount", type: "uint256" },
+          { name: "introPulls",  type: "uint256" },
+          { name: "pullCount",   type: "uint256" },
+          { name: "interval",    type: "uint8"   },
+          { name: "lastPulledAt",type: "uint256" },
+          { name: "pausedAt",    type: "uint256" },
+          { name: "expiresAt",   type: "uint256" },
+          { name: "trialEndsAt", type: "uint256" },
+          { name: "gracePeriodDays", type: "uint256" },
+          { name: "status",      type: "uint8"   },
+        ],
+        stateMutability: "view",
+      },
+    ];
+
+    const VAULT_ADDRESS = process.env.VAULT_ADDRESS;
+    if (!VAULT_ADDRESS) return res.status(500).json({ error: "vault_not_configured" });
+
+    const vault = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI_CANCEL, signer);
+
+    // Verify this subscriber owns the subscription
+    const sub = await vault.subscriptions(BigInt(subscriptionId));
+    const subOwner    = sub[0].toLowerCase();
+    const subVault    = sub[3].toLowerCase();
+    const subscriberWallet = subscriber.wallet_address.toLowerCase();
+
+    if (subOwner !== subscriberWallet && subVault !== subscriberWallet) {
+      return res.status(403).json({ error: "not_your_subscription" });
+    }
+
+    // Check it's cancellable (Active=0 or Paused=1)
+    const status = Number(sub[14]);
+    if (status !== 0 && status !== 1) {
+      return res.status(400).json({ error: "not_cancellable", message: "Subscription is already cancelled or expired." });
+    }
+
+    console.log(`[CANCEL] Subscriber ${decoded.email} cancelling subscription #${subscriptionId}`);
+    const tx      = await vault.cancelSubscription(BigInt(subscriptionId));
+    const receipt = await tx.wait();
+    console.log(`[CANCEL] ✅ Cancelled subscription #${subscriptionId} — tx: ${tx.hash}`);
+
+    res.json({
+      success:         true,
+      subscription_id: subscriptionId,
+      tx_hash:         tx.hash,
+      block_number:    receipt.blockNumber,
+    });
+  } catch (err) {
+    console.error("[CANCEL] Error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
 app.get("/api/subscriber/me", async (req, res) => {
   try {
     const auth = req.headers.authorization;
