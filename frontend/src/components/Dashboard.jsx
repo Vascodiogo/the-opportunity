@@ -142,7 +142,7 @@ export default function Dashboard({ address, isAdmin }) {
           });
           if (sub[0] === "0x0000000000000000000000000000000000000000") break;
           if (sub[0].toLowerCase() === address.toLowerCase()) {
-            subs.push({ id, owner: sub[0], guardian: sub[1], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[5]), lastPulledAt: sub[6], pausedAt: sub[7], status: Number(sub[8]) });
+            subs.push({ id, owner: sub[0], guardian: sub[1], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[8]), lastPulledAt: sub[9], pausedAt: sub[10], status: Number(sub[14]) });
           }
           id++;
         } catch { break; }
