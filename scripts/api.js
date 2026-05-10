@@ -264,7 +264,7 @@ app.post("/api/merchants/register", async (req, res) => {
 // -----------------------------------------------------------------------------
 // GET /api/merchants/:address
 // -----------------------------------------------------------------------------
-app.get("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
+app.get("/api/merchants/:address", async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
     if (address !== req.merchantAddress) {
