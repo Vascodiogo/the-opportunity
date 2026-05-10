@@ -4,7 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
-  VAULT_ADDRESS, VAULT_ABI,
+  VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI,
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS,
   shortAddress, formatUSDC,
 } from "../config.js";
@@ -17,6 +17,7 @@ const client = createPublicClient({
 const BASE_URL = "https://authonce.io/pay";
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
+// ─── Stat Card ───────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent }) {
   return (
     <div style={{
@@ -32,9 +33,10 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const name = STATUS_NAMES[status] || "Unknown";
-  const cfg = STATUS_COLORS[name] || { bg: "rgba(148,163,184,0.12)", color: "#94a3b8" };
+  const cfg  = STATUS_COLORS[name] || { bg: "rgba(148,163,184,0.12)", color: "#94a3b8" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: cfg.bg, color: cfg.color }}>
       <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.color, display: "inline-block" }} />
@@ -43,6 +45,7 @@ function StatusBadge({ status }) {
   );
 }
 
+// ─── Tab ─────────────────────────────────────────────────────────────────────
 function Tab({ label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -57,22 +60,117 @@ function Tab({ label, active, onClick }) {
   );
 }
 
-function AddProductModal({ merchantAddress, onClose, onAdded }) {
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [interval, setInterval] = useState("1");
+// ─── MRR Chart ───────────────────────────────────────────────────────────────
+function MRRChart({ payments }) {
+  if (!payments || payments.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)", fontSize: 12 }}>
+        No payment data yet. Chart will appear after the first pull.
+      </div>
+    );
+  }
+  const now    = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-GB", { month: "short" }), total: 0 };
+  });
+  payments.forEach(p => {
+    const key    = p.executed_at?.slice(0, 7);
+    const bucket = months.find(m => m.key === key);
+    if (bucket) bucket.total += parseFloat(p.merchant_received_usdc || 0);
+  });
+  const max    = Math.max(...months.map(m => m.total), 1);
+  const chartH = 120;
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: chartH + 28, paddingBottom: 24, position: "relative" }}>
+        {months.map((m, i) => {
+          const barH = Math.max((m.total / max) * chartH, m.total > 0 ? 4 : 0);
+          return (
+            <div key={m.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
+              {m.total > 0 && <div style={{ fontSize: 10, color: "var(--green)", fontFamily: "monospace", marginBottom: 2 }}>${m.total.toFixed(0)}</div>}
+              <div style={{ width: "100%", height: barH, background: i === 5 ? "linear-gradient(180deg, #34d399, #3b82f6)" : "rgba(52,211,153,0.25)", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} />
+              <div style={{ fontSize: 10, color: "var(--text-muted)", position: "absolute", bottom: 0 }}>{m.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-  const [saving, setSaving] = useState(false);
+// ─── Trial Link Popover ───────────────────────────────────────────────────────
+function TrialPopover({ product, address, onClose }) {
+  const [days, setDays]     = useState("30");
+  const [copied, setCopied] = useState(false);
+  const clampedDays = Math.min(Math.max(parseInt(days) || 1, 1), 60);
+  const url = `${BASE_URL}/${address.toLowerCase()}/${product.slug}?trial=${clampedDays}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => { setCopied(false); onClose(); }, 1500);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={onClose}>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>Trial link — {product.name}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>Subscribers who use this link get a free trial before their first payment.</div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Trial duration (days · 1–60)</label>
+          <input type="number" min="1" max="60" value={days} onChange={e => setDays(e.target.value)}
+            style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
+        </div>
+        <div style={{ background: "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.2)", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", wordBreak: "break-all" }}>
+          {url}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleCopy} style={{ flex: 1, background: copied ? "rgba(52,211,153,0.12)" : "linear-gradient(135deg, #34d399, #3b82f6)", border: copied ? "0.5px solid rgba(52,211,153,0.3)" : "none", borderRadius: 8, color: copied ? "var(--green)" : "#080c14", fontWeight: 700, fontSize: 13, padding: "10px", cursor: "pointer" }}>
+            {copied ? "✓ Copied!" : "Copy Trial Link"}
+          </button>
+          <button onClick={onClose} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 16px", cursor: "pointer" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Product Modal ────────────────────────────────────────────────────────
+function AddProductModal({ merchantAddress, onClose, onAdded }) {
+  const [name, setName]             = useState("");
+  const [amount, setAmount]         = useState("");
+  const [interval, setInterval]     = useState("1");
+  const [hasIntro, setHasIntro]     = useState(false);
+  const [introAmount, setIntroAmount] = useState("");
+  const [introPulls, setIntroPulls] = useState("1");
+  const [saving, setSaving]         = useState(false);
+
+  const intervalMap   = { "0": "weekly", "1": "monthly", "2": "yearly" };
+  const intervalLabel = { "0": "week", "1": "month", "2": "year" };
 
   const handleAdd = async () => {
     if (!name || !amount) return;
+    if (hasIntro && (!introAmount || parseFloat(introAmount) <= 0)) {
+      alert("Please enter a valid intro price.");
+      return;
+    }
+    if (hasIntro && parseFloat(introAmount) > parseFloat(amount)) {
+      alert("Intro price cannot be higher than the full price.");
+      return;
+    }
     setSaving(true);
     try {
-      const intervalMap = { "0": "weekly", "1": "monthly", "2": "yearly" };
       const res = await fetch(`${API_BASE}/api/products/${merchantAddress}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
-        body: JSON.stringify({ name, amount: parseFloat(amount), interval: intervalMap[interval] }),
+        body: JSON.stringify({
+          name,
+          amount:       parseFloat(amount),
+          interval:     intervalMap[interval],
+          intro_amount: hasIntro ? parseFloat(introAmount) : 0,
+          intro_pulls:  hasIntro ? parseInt(introPulls) : 0,
+        }),
       });
       if (!res.ok) throw new Error("Failed to save product");
       onAdded();
@@ -87,20 +185,26 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
-      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>New Product / Plan</h2>
           <button onClick={onClose} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "4px 10px", color: "var(--text-secondary)", cursor: "pointer" }}>✕</button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* Name */}
           <div>
             <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Plan name</label>
             <input placeholder="e.g. Standard, Premium, Ultra" value={name} onChange={e => setName(e.target.value)} />
           </div>
+
+          {/* Full price */}
           <div>
-            <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Price (USDC)</label>
-            <input type="number" placeholder="15.00" value={amount} onChange={e => setAmount(e.target.value)} />
+            <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Full price (USDC)</label>
+            <input type="number" placeholder="20.00" value={amount} onChange={e => setAmount(e.target.value)} />
           </div>
+
+          {/* Interval */}
           <div>
             <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Billing interval</label>
             <select value={interval} onChange={e => setInterval(e.target.value)}>
@@ -109,15 +213,77 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               <option value="2">Yearly</option>
             </select>
           </div>
+
+          {/* Introductory pricing toggle */}
+          <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setHasIntro(v => !v)}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>🎁 Introductory pricing</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                  e.g. $5 for first month, then $20/month
+                </div>
+              </div>
+              <div style={{
+                width: 36, height: 20, borderRadius: 99, background: hasIntro ? "var(--green)" : "var(--border)",
+                position: "relative", transition: "background 0.2s", flexShrink: 0,
+              }}>
+                <div style={{
+                  position: "absolute", top: 2, left: hasIntro ? 18 : 2, width: 16, height: 16,
+                  borderRadius: "50%", background: "white", transition: "left 0.2s",
+                }} />
+              </div>
+            </div>
+
+            {hasIntro && (
+              <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>Intro price (USDC)</label>
+                  <input
+                    type="number"
+                    placeholder="5.00"
+                    value={introAmount}
+                    onChange={e => setIntroAmount(e.target.value)}
+                    style={{ width: "100%", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+                    Number of {intervalLabel[interval]}s at intro price
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="12"
+                    placeholder="1"
+                    value={introPulls}
+                    onChange={e => setIntroPulls(e.target.value)}
+                    style={{ width: "100%", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {hasIntro && introAmount && amount && (
+              <div style={{ marginTop: 10, fontSize: 11, color: "var(--amber)", background: "rgba(251,191,36,0.06)", border: "0.5px solid rgba(251,191,36,0.2)", borderRadius: 6, padding: "6px 10px" }}>
+                Subscriber pays ${parseFloat(introAmount || 0).toFixed(2)} for the first {introPulls} {intervalLabel[interval]}{parseInt(introPulls) > 1 ? "s" : ""}, then ${parseFloat(amount || 0).toFixed(2)}/{intervalLabel[interval]}
+              </div>
+            )}
+          </div>
+
+          {/* Preview */}
           {name && amount && (
             <div style={{ background: "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.2)", borderRadius: 8, padding: "10px 14px" }}>
               <div style={{ fontSize: 11, color: "var(--green)", marginBottom: 4 }}>Pay link preview</div>
               <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", wordBreak: "break-all" }}>
                 {BASE_URL}/{shortAddress(merchantAddress)}/{name.toLowerCase().replace(/\s+/g, "-")}
               </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+                💡 Add a free trial after creating — use the "Trial Link" button.
+              </div>
             </div>
           )}
-<button onClick={handleAdd} disabled={saving} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginTop: 8 }}>
+
+          <button onClick={handleAdd} disabled={saving} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginTop: 4 }}>
             {saving ? "Saving..." : "Create Product"}
           </button>
         </div>
@@ -125,10 +291,11 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     </div>
   );
 }
-function WebhookModal({ merchantAddress, onClose }) {
-  const [url, setUrl] = useState("");
-  const [saved, setSaved] = useState(false);
 
+// ─── Webhook Modal ────────────────────────────────────────────────────────────
+function WebhookModal({ merchantAddress, onClose }) {
+  const [url, setUrl]     = useState("");
+  const [saved, setSaved] = useState(false);
   const handleSave = () => {
     if (!url) return;
     const webhooks = JSON.parse(localStorage.getItem(`webhooks_${merchantAddress}`) || "[]");
@@ -137,7 +304,6 @@ function WebhookModal({ merchantAddress, onClose }) {
     setSaved(true);
     setTimeout(onClose, 1500);
   };
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
       <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
@@ -156,49 +322,92 @@ function WebhookModal({ merchantAddress, onClose }) {
               <div key={e} style={{ fontSize: 12, color: "var(--text-muted)", padding: "2px 0" }}>✓ {e}</div>
             ))}
           </div>
-          <div style={{ background: "var(--bg-tag)", borderRadius: 8, padding: "10px 14px" }}>
-            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>Security</div>
-<div style={{ fontSize: 11, color: "var(--text-muted)" }}>All requests signed with HMAC-SHA256. Verify the X-AuthOnce-Signature header before processing.</div>          </div>
-          {saved ? (
-            <div style={{ textAlign: "center", color: "var(--green)", fontSize: 14 }}>✅ Webhook saved!</div>
-          ) : (
-            <button onClick={handleSave} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: "pointer" }}>
-              Save Webhook
-            </button>
-          )}
+          {saved
+            ? <div style={{ textAlign: "center", color: "var(--green)", fontSize: 14 }}>✅ Webhook saved!</div>
+            : <button onClick={handleSave} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: "pointer" }}>Save Webhook</button>
+          }
         </div>
       </div>
     </div>
   );
 }
 
+// ─── CSV Export ───────────────────────────────────────────────────────────────
+function exportPaymentsCSV(payments, address) {
+  const rows = [
+    ["Date", "Amount USDC", "You Received USDC", "Protocol Fee USDC", "Transaction Hash"].join(","),
+    ...payments.map(p => [
+      new Date(p.executed_at).toISOString().slice(0, 10),
+      p.amount_usdc, p.merchant_received_usdc, p.protocol_fee_usdc, p.tx_hash,
+    ].join(",")),
+  ];
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `authonce-payments-${address.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function MerchantDashboard({ address }) {
-  const [tab, setTab] = useState("overview");
-  const [subscribers, setSubscribers] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [webhooks, setWebhooks] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [settings, setSettings] = useState(() => JSON.parse(localStorage.getItem("merchant_settings_" + address) || JSON.stringify({ businessName: "", email: "", notifications: "email" })));
-  const [showAddProduct, setShowAddProduct] = useState(false);
-  const [showAddWebhook, setShowAddWebhook] = useState(false);
-  const [copied, setCopied] = useState(null);
-  const [qrProduct, setQrProduct] = useState(null);
+  const [tab, setTab]                         = useState("overview");
+  const [subscribers, setSubscribers]         = useState([]);
+  const [products, setProducts]               = useState([]);
+  const [webhooks, setWebhooks]               = useState([]);
+  const [payments, setPayments]               = useState([]);
+  const [loading, setLoading]                 = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [isApproved, setIsApproved]           = useState(null);
+  const [settings, setSettings]               = useState(() =>
+    JSON.parse(localStorage.getItem("merchant_settings_" + address) ||
+    JSON.stringify({ businessName: "", email: "", notifications: "email" }))
+  );
+  const [showAddProduct, setShowAddProduct]   = useState(false);
+  const [showAddWebhook, setShowAddWebhook]   = useState(false);
+  const [copied, setCopied]                   = useState(null);
+  const [qrProduct, setQrProduct]             = useState(null);
+  const [trialProduct, setTrialProduct]       = useState(null);
+
+  // On-chain approval check
+  useEffect(() => {
+    if (!address) return;
+    client.readContract({ address: REGISTRY_ADDRESS, abi: REGISTRY_ABI, functionName: "isApproved", args: [address] })
+      .then(result => setIsApproved(result))
+      .catch(() => setIsApproved(false));
+  }, [address]);
+
   const loadProducts = useCallback(async () => {
-  if (!address) return;
-  try {
-    const res = await fetch(`${API_BASE}/api/products/${address}`, {
-      headers: { "X-Merchant-Address": address },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      // Normalize interval: API returns 'weekly'/'monthly'/'yearly', map to numeric for existing UI
-      const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
-      setProducts(data.products.map(p => ({ ...p, interval: INTERVAL_MAP[p.interval] ?? p.interval })));
-    }
-  } catch (err) {
-    console.error("[Dashboard] loadProducts error:", err);
-  }
-}, [address]);  const loadWebhooks = useCallback(() => setWebhooks(JSON.parse(localStorage.getItem(`webhooks_${address}`) || "[]")), [address]);
+    if (!address) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/products/${address}`, { headers: { "X-Merchant-Address": address } });
+      if (res.ok) {
+        const data = await res.json();
+        const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
+        setProducts(data.products.map(p => ({
+          ...p,
+          interval:     INTERVAL_MAP[p.interval] ?? p.interval,
+          intro_amount: parseFloat(p.intro_amount || 0),
+          intro_pulls:  parseInt(p.intro_pulls || 0),
+        })));
+      }
+    } catch (err) { console.error("[Dashboard] loadProducts error:", err); }
+  }, [address]);
+
+  const loadPayments = useCallback(async () => {
+    if (!address) return;
+    setPaymentsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/merchants/${address}/payments`, { headers: { "X-Merchant-Address": address } });
+      if (res.ok) { const data = await res.json(); setPayments(data.payments); }
+    } catch (err) { console.error("[Dashboard] loadPayments error:", err); }
+    finally { setPaymentsLoading(false); }
+  }, [address]);
+
+  const loadWebhooks = useCallback(() => {
+    setWebhooks(JSON.parse(localStorage.getItem(`webhooks_${address}`) || "[]"));
+  }, [address]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!address) return;
@@ -211,7 +420,7 @@ export default function MerchantDashboard({ address }) {
           const sub = await client.readContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "subscriptions", args: [BigInt(id)] });
           if (sub[0] === "0x0000000000000000000000000000000000000000") break;
           if (sub[2].toLowerCase() === address.toLowerCase()) {
-            subs.push({ id, owner: sub[0], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[5]), lastPulledAt: sub[6], status: Number(sub[8]) });
+            subs.push({ id, owner: sub[0], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[8]), lastPulledAt: sub[9], status: Number(sub[14]) });
           }
           id++;
         } catch { break; }
@@ -221,69 +430,103 @@ export default function MerchantDashboard({ address }) {
     finally { setLoading(false); }
   }, [address]);
 
-  useEffect(() => { fetchSubscribers(); loadProducts(); loadWebhooks(); }, [fetchSubscribers, loadProducts, loadWebhooks]);
+  useEffect(() => {
+    fetchSubscribers();
+    loadProducts();
+    loadWebhooks();
+    loadPayments();
+  }, [fetchSubscribers, loadProducts, loadWebhooks, loadPayments]);
 
-  const copyLink = (text, id) => { navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(null), 2000); };
+  const copyLink = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
 
-  const activeSubs = subscribers.filter(s => s.status === 0);
-  const totalMRR = activeSubs.reduce((acc, s) => { const amt = Number(s.amount) / 1e6; return acc + (s.interval === 0 ? amt * 4.33 : s.interval === 1 ? amt : amt / 12); }, 0);
+  const activeSubs   = subscribers.filter(s => s.status === 0);
+  const totalMRR     = activeSubs.reduce((acc, s) => {
+    const amt = Number(s.amount) / 1e6;
+    return acc + (s.interval === 0 ? amt * 4.33 : s.interval === 1 ? amt : amt / 12);
+  }, 0);
   const totalRevenue = subscribers.reduce((acc, s) => acc + Number(s.amount) / 1e6, 0);
-  const protocolFee = totalRevenue * 0.005;
-  const netRevenue = totalRevenue - protocolFee;
+  const protocolFee  = totalRevenue * 0.005;
+  const netRevenue   = totalRevenue - protocolFee;
 
   const sectionLabel = { fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 16 };
   const card = { background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, padding: 20, boxShadow: "var(--shadow)" };
-  const row = { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid var(--border)" };
+  const row  = { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid var(--border)" };
+
+  const approvalBadge = isApproved === null
+    ? { label: "Checking...", bg: "rgba(148,163,184,0.12)", color: "#94a3b8" }
+    : isApproved
+    ? { label: "✓ Approved Merchant", bg: "rgba(52,211,153,0.12)", color: "var(--green)" }
+    : { label: "⚠ Pending Approval",  bg: "rgba(251,191,36,0.12)", color: "var(--amber)" };
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 24px" }}>
 
+      {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Merchant Portal</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>{shortAddress(address)}</h1>
-          <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600 }}>Approved Merchant</span>
+          <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, background: approvalBadge.bg, color: approvalBadge.color, fontWeight: 600 }}>
+            {approvalBadge.label}
+          </span>
         </div>
+        {isApproved === false && (
+          <div style={{ fontSize: 12, color: "var(--amber)", marginTop: 8 }}>
+            Your wallet is not yet approved on-chain. Contact AuthOnce to get approved.
+          </div>
+        )}
       </div>
 
+      {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
         <StatCard label="Active Subscribers" value={activeSubs.length} sub="paying subscribers" accent="linear-gradient(90deg,#34d399,#3b82f6)" />
-        <StatCard label="Monthly Revenue" value={`$${totalMRR.toFixed(2)}`} sub="MRR — USDC" accent="linear-gradient(90deg,#a78bfa,#ec4899)" />
-        <StatCard label="Net Revenue" value={`$${netRevenue.toFixed(2)}`} sub="after 0.5% protocol fee" accent="linear-gradient(90deg,#60a5fa,#34d399)" />
-        <StatCard label="Products" value={products.length} sub="active plans" accent="linear-gradient(90deg,#fbbf24,#f87171)" />
+        <StatCard label="Monthly Revenue"    value={`$${totalMRR.toFixed(2)}`} sub="MRR — USDC" accent="linear-gradient(90deg,#a78bfa,#ec4899)" />
+        <StatCard label="Net Revenue"        value={`$${netRevenue.toFixed(2)}`} sub="after 0.5% protocol fee" accent="linear-gradient(90deg,#60a5fa,#34d399)" />
+        <StatCard label="Products"           value={products.length} sub="active plans" accent="linear-gradient(90deg,#fbbf24,#f87171)" />
       </div>
 
+      {/* Tabs */}
       <div style={{ borderBottom: "0.5px solid var(--border)", marginBottom: 20, display: "flex", gap: 4 }}>
-        <Tab label="Overview" active={tab === "overview"} onClick={() => setTab("overview")} />
-        <Tab label="Products & Pay Links" active={tab === "products"} onClick={() => setTab("products")} />
-        <Tab label="Subscribers" active={tab === "subscribers"} onClick={() => setTab("subscribers")} />
-        <Tab label="Webhooks" active={tab === "webhooks"} onClick={() => setTab("webhooks")} />
-        <Tab label="Settings" active={tab === "settings"} onClick={() => setTab("settings")} />
+        <Tab label="Overview"             active={tab === "overview"}    onClick={() => setTab("overview")} />
+        <Tab label="Products & Pay Links" active={tab === "products"}    onClick={() => setTab("products")} />
+        <Tab label="Subscribers"          active={tab === "subscribers"} onClick={() => setTab("subscribers")} />
+        <Tab label="Payments"             active={tab === "payments"}    onClick={() => { setTab("payments"); loadPayments(); }} />
+        <Tab label="Webhooks"             active={tab === "webhooks"}    onClick={() => setTab("webhooks")} />
+        <Tab label="Settings"             active={tab === "settings"}    onClick={() => setTab("settings")} />
       </div>
 
+      {/* ── Overview ── */}
       {tab === "overview" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div style={card}>
-            <div style={sectionLabel}>Revenue breakdown</div>
-            {[
-              { label: "Gross revenue", value: `$${totalRevenue.toFixed(2)}`, color: "var(--text-primary)" },
-              { label: "Protocol fee (0.5%)", value: `-$${protocolFee.toFixed(2)}`, color: "var(--red)" },
-              { label: "Net to you", value: `$${netRevenue.toFixed(2)}`, color: "var(--green)" },
-            ].map(r => (
-              <div key={r.label} style={row}>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{r.label}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: r.color, fontFamily: "monospace" }}>{r.value}</span>
+          <div style={{ ...card, gridColumn: "1 / -1" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={sectionLabel}>Monthly Revenue (USDC)</div>
+              <div style={{ display: "flex", gap: 24 }}>
+                {[
+                  { label: "Gross", value: `$${totalRevenue.toFixed(2)}`, color: "var(--text-primary)" },
+                  { label: "Fee",   value: `-$${protocolFee.toFixed(4)}`, color: "var(--red)" },
+                  { label: "Net",   value: `$${netRevenue.toFixed(2)}`,   color: "var(--green)" },
+                ].map(r => (
+                  <div key={r.label} style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{r.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: r.color, fontFamily: "monospace" }}>{r.value}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            <MRRChart payments={payments} />
           </div>
-
           <div style={card}>
             <div style={sectionLabel}>Subscriber status</div>
             {[
-              { label: "Active", count: subscribers.filter(s => s.status === 0).length, color: "var(--green)" },
+              { label: "Active",                count: subscribers.filter(s => s.status === 0).length, color: "var(--green)" },
               { label: "Paused (grace period)", count: subscribers.filter(s => s.status === 1).length, color: "var(--amber)" },
-              { label: "Cancelled", count: subscribers.filter(s => s.status === 2).length, color: "var(--red)" },
-              { label: "Expired", count: subscribers.filter(s => s.status === 3).length, color: "var(--text-secondary)" },
+              { label: "Cancelled",             count: subscribers.filter(s => s.status === 2).length, color: "var(--red)" },
+              { label: "Expired",               count: subscribers.filter(s => s.status === 3).length, color: "var(--text-secondary)" },
             ].map(r => (
               <div key={r.label} style={row}>
                 <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{r.label}</span>
@@ -291,10 +534,9 @@ export default function MerchantDashboard({ address }) {
               </div>
             ))}
           </div>
-
-          <div style={{ ...card, gridColumn: "1 / -1" }}>
+          <div style={card}>
             <div style={sectionLabel}>Quick actions</div>
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button onClick={() => { setTab("products"); setShowAddProduct(true); }} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>+ Add Product</button>
               <button onClick={() => setTab("products")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>View Pay Links</button>
               <button onClick={() => setTab("webhooks")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>Manage Webhooks</button>
@@ -303,6 +545,7 @@ export default function MerchantDashboard({ address }) {
         </div>
       )}
 
+      {/* ── Products ── */}
       {tab === "products" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -313,40 +556,78 @@ export default function MerchantDashboard({ address }) {
             <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No products yet. Create your first plan to generate a pay link.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {products.map(p => (`${BASE_URL}/${address.toLowerCase()}/${p.slug || p.name.toLowerCase().replace(/\s+/g, "-")}`
-                <div key={p.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "var(--shadow)" }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>${p.amount.toFixed(2)} USDC · {INTERVAL_NAMES[p.interval]}</div>
+              {products.map(p => (
+                <div key={p.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "16px 20px", boxShadow: "var(--shadow)" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>{p.name}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        ${p.amount.toFixed(2)} USDC · {INTERVAL_NAMES[p.interval]}
+                        {p.intro_amount > 0 && p.intro_pulls > 0 && (
+                          <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 7px", borderRadius: 99, background: "rgba(251,191,36,0.1)", color: "var(--amber)", fontWeight: 600 }}>
+                            🎁 ${p.intro_amount.toFixed(2)} intro × {p.intro_pulls}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm("Delete " + p.name + "?")) return;
+                        try {
+                          const res = await fetch(`${API_BASE}/api/products/${address}/${p.slug}`, { method: "DELETE", headers: { "X-Merchant-Address": address } });
+                          if (res.ok) loadProducts(); else alert("Could not delete product.");
+                        } catch { alert("Could not reach server."); }
+                      }}
+                      style={{ background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", borderRadius: 8, color: "#f87171", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      Delete
+                    </button>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", background: "var(--bg-tag)", padding: "6px 12px", borderRadius: 6, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", background: "var(--bg-tag)", padding: "6px 12px", borderRadius: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                       {`https://authonce.io/pay/${address.toLowerCase()}/${p.slug}`}
                     </div>
-                    <button onClick={() => copyLink(`${BASE_URL}/${address.toLowerCase()}/${p.slug}`, p.id)}
-                      style={{ background: copied === p.id ? "rgba(52,211,153,0.12)" : "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: copied === p.id ? "var(--green)" : "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
+                    <button
+                      onClick={() => copyLink(`${BASE_URL}/${address.toLowerCase()}/${p.slug}`, p.id)}
+                      style={{ background: copied === p.id ? "rgba(52,211,153,0.12)" : "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: copied === p.id ? "var(--green)" : "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                    >
                       {copied === p.id ? "Copied!" : "Copy Link"}
                     </button>
-                    <button onClick={() => setQrProduct(p)}
-                      style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
+                    <button
+                      onClick={() => setTrialProduct(p)}
+                      style={{ background: "rgba(251,191,36,0.08)", border: "0.5px solid rgba(251,191,36,0.25)", borderRadius: 8, color: "var(--amber)", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      🎁 Trial Link
+                    </button>
+                    <button
+                      onClick={() => setQrProduct(p)}
+                      style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                    >
                       QR Code
                     </button>
-                    <button onClick={() => { if (window.confirm("Delete " + p.name + "?")) { const updated = products.filter(x => x.id !== p.id); localStorage.setItem("products_" + address, JSON.stringify(updated)); loadProducts(); } }} style={{ background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", borderRadius: 8, color: "#f87171", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
               ))}
             </div>
           )}
+          <div style={{ marginTop: 16, padding: "12px 16px", background: "rgba(251,191,36,0.06)", border: "0.5px solid rgba(251,191,36,0.15)", borderRadius: 10 }}>
+            <div style={{ fontSize: 12, color: "var(--amber)", fontWeight: 600, marginBottom: 4 }}>🎁 Offers & trials</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+              <strong>Introductory pricing</strong> is set per product — e.g. $5 for first month, then $20/month. Set it when creating the product.<br />
+              <strong>Free trial links</strong> are campaign-based — click "Trial Link" to generate a pay link with 1–60 free days. Share different links for different campaigns.
+            </div>
+          </div>
         </div>
       )}
 
+      {/* ── Subscribers ── */}
       {tab === "subscribers" && (
         <div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{subscribers.length} total subscriber{subscribers.length !== 1 ? "s" : ""}</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{subscribers.length} total</div>
           {loading ? (
             <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Loading...</div>
           ) : subscribers.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No subscribers yet. Share your pay links to get started.</div>
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No subscribers yet.</div>
           ) : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "10px 20px", fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)" }}>
@@ -358,7 +639,9 @@ export default function MerchantDashboard({ address }) {
                   <span style={{ color: "var(--green)", fontWeight: 600, fontFamily: "monospace" }}>{formatUSDC(sub.amount)}</span>
                   <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[sub.interval]}</span>
                   <StatusBadge status={sub.status} />
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{sub.lastPulledAt > 0n ? new Date(Number(sub.lastPulledAt) * 1000).toLocaleDateString() : "Never"}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                    {sub.lastPulledAt > 0n ? new Date(Number(sub.lastPulledAt) * 1000).toLocaleDateString() : "Never"}
+                  </span>
                 </div>
               ))}
             </>
@@ -366,14 +649,51 @@ export default function MerchantDashboard({ address }) {
         </div>
       )}
 
+      {/* ── Payments ── */}
+      {tab === "payments" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{payments.length} payment{payments.length !== 1 ? "s" : ""} recorded</div>
+            {payments.length > 0 && (
+              <button onClick={() => exportPaymentsCSV(payments, address)} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "7px 14px", cursor: "pointer" }}>
+                ⬇ Export CSV
+              </button>
+            )}
+          </div>
+          {paymentsLoading ? (
+            <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Loading...</div>
+          ) : payments.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No payments yet.</div>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "10px 20px", fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)" }}>
+                <span>Date</span><span>Amount</span><span>You Received</span><span>Fee</span><span>Transaction</span>
+              </div>
+              {payments.map(p => (
+                <div key={p.payment_id} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: "0.5px solid var(--border)" }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  <span style={{ color: "var(--text-primary)", fontFamily: "monospace", fontWeight: 600 }}>${p.amount_usdc}</span>
+                  <span style={{ color: "var(--green)", fontFamily: "monospace", fontWeight: 600 }}>${p.merchant_received_usdc}</span>
+                  <span style={{ color: "var(--red)", fontFamily: "monospace", fontSize: 12 }}>-${p.protocol_fee_usdc}</span>
+                  <a href={`https://sepolia.basescan.org/tx/${p.tx_hash}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, color: "var(--green)", textDecoration: "none" }}>
+                    {p.tx_hash?.slice(0, 10)}...{p.tx_hash?.slice(-6)} ↗
+                  </a>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Webhooks ── */}
       {tab === "webhooks" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{webhooks.length} webhook{webhooks.length !== 1 ? "s" : ""} configured</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{webhooks.length} webhook{webhooks.length !== 1 ? "s" : ""}</div>
             <button onClick={() => setShowAddWebhook(true)} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "8px 18px", cursor: "pointer" }}>+ Add Webhook</button>
           </div>
           {webhooks.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No webhooks yet. Add an endpoint to receive payment notifications.</div>
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No webhooks yet.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {webhooks.map(wh => (
@@ -383,9 +703,7 @@ export default function MerchantDashboard({ address }) {
                     <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600 }}>Active</span>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {wh.events.map(e => (
-                      <span key={e} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "var(--bg-tag)", color: "var(--text-muted)", fontFamily: "monospace" }}>{e}</span>
-                    ))}
+                    {wh.events.map(e => (<span key={e} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "var(--bg-tag)", color: "var(--text-muted)", fontFamily: "monospace" }}>{e}</span>))}
                   </div>
                 </div>
               ))}
@@ -395,13 +713,13 @@ export default function MerchantDashboard({ address }) {
             <div style={sectionLabel}>Webhook security</div>
             <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
               Every request includes a <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>X-AuthOnce-Signature</span> header signed with HMAC-SHA256.
-              Failed deliveries are retried: 10s → 1min → 5min → 30min → 2hr.
+              Failed deliveries retry: 10s → 1min → 5min → 30min → 2hr.
             </div>
           </div>
         </div>
       )}
 
-      {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
+      {/* ── Settings ── */}
       {tab === "settings" && (
         <div style={{ maxWidth: 520, padding: "0 4px" }}>
           <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Manage your business profile and notification preferences.</div>
@@ -411,18 +729,20 @@ export default function MerchantDashboard({ address }) {
               <input value={settings.businessName} onChange={e => setSettings(s => ({ ...s, businessName: e.target.value }))} placeholder="Your business name" style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Business Email (public contact)</label>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Business Email</label>
               <input value={settings.email} onChange={e => setSettings(s => ({ ...s, email: e.target.value }))} placeholder="info@yourbusiness.com" type="email" style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Shown to subscribers on the payment page.</div>
             </div>
             <div>
               <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Notification Email</label>
               <input value={settings.notifyEmail || ""} onChange={e => setSettings(s => ({ ...s, notifyEmail: e.target.value }))} placeholder="alerts@yourbusiness.com" type="email" style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Where AuthOnce sends payment alerts. Can be different from your business email.</div>
             </div>
             <div>
               <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 8 }}>Notification Preference</label>
-              {[["email", "Email only", "Recommended. AuthOnce sends you an email for every payment event."], ["webhook", "Webhook only", "For developers. Your server receives instant POST notifications."], ["both", "Both email and webhook", "Receive email notifications and fire your webhook endpoint."]].map(([val, label, desc]) => (
+              {[
+                ["email",   "Email only",            "Recommended."],
+                ["webhook", "Webhook only",           "For developers."],
+                ["both",    "Both email and webhook", "Email + webhook."],
+              ].map(([val, label, desc]) => (
                 <div key={val} onClick={() => setSettings(s => ({ ...s, notifications: val }))} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 14px", borderRadius: 8, border: `0.5px solid ${settings.notifications === val ? "var(--green)" : "var(--border)"}`, background: settings.notifications === val ? "rgba(52,211,153,0.06)" : "var(--bg-card)", cursor: "pointer", marginBottom: 8 }}>
                   <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${settings.notifications === val ? "var(--green)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 }}>
                     {settings.notifications === val && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green)" }} />}
@@ -434,73 +754,62 @@ export default function MerchantDashboard({ address }) {
                 </div>
               ))}
             </div>
-            <button onClick={async () => {
-                      localStorage.setItem("merchant_settings_" + address, JSON.stringify(settings));
-                      try {
-                        const res = await fetch("https://the-opportunity-production.up.railway.app/api/merchants/register", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ wallet_address: address, business_name: settings.businessName, email: settings.notifyEmail || settings.email, settlement_preference: "usdc" })
-                        });
-                        if (res.ok) { alert("Settings saved!"); }
-                        else { alert("Saved locally. Could not sync to server."); }
-                      } catch { alert("Saved locally. Could not reach server."); }
-                    }} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "10px 24px", cursor: "pointer", alignSelf: "flex-start" }}>Save Settings</button>
+            <button
+              onClick={async () => {
+                localStorage.setItem("merchant_settings_" + address, JSON.stringify(settings));
+                try {
+                  const res = await fetch(`${API_BASE}/api/merchants/register`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ wallet_address: address, business_name: settings.businessName, email: settings.notifyEmail || settings.email, settlement_preference: "usdc" }),
+                  });
+                  if (res.ok) alert("Settings saved!"); else alert("Saved locally. Could not sync to server.");
+                } catch { alert("Saved locally. Could not reach server."); }
+              }}
+              style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "10px 24px", cursor: "pointer", alignSelf: "flex-start" }}
+            >
+              Save Settings
+            </button>
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
       {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} />}
+      {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
+
+      {/* QR Modal */}
       {qrProduct && (
-  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-    onClick={() => setQrProduct(null)}>
-    <div id="qr-modal" style={{ background: "var(--bg-card)", borderRadius: 16, padding: 32, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-      onClick={e => e.stopPropagation()}>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{qrProduct.name}</div>
-      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>${qrProduct.amount.toFixed(2)} USDC · {INTERVAL_NAMES[qrProduct.interval]}</div>
-      <QRCodeSVG value={`${BASE_URL}/${address}/${qrProduct.name.toLowerCase().replace(/\s+/g, "-")}`} size={200} />
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16, fontFamily: "monospace", wordBreak: "break-all", maxWidth: 240 }}>
-        {BASE_URL}/{shortAddress(address)}/{qrProduct.name.toLowerCase().replace(/\s+/g, "-")}
-      </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "center", flexWrap: "wrap" }}>
-        <button onClick={() => {
-          const svg = document.querySelector("#qr-modal svg");
-          const svgData = new XMLSerializer().serializeToString(svg);
-          const canvas = document.createElement("canvas");
-          canvas.width = 200; canvas.height = 200;
-          const ctx = canvas.getContext("2d");
-          const img = new Image();
-          img.onload = () => { ctx.drawImage(img, 0, 0); const a = document.createElement("a"); a.download = `${qrProduct.name}-qr.png`; a.href = canvas.toDataURL(); a.click(); };
-          img.src = "data:image/svg+xml;base64," + btoa(svgData);
-        }} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
-          ⬇ Download
-        </button>
-        <button onClick={() => window.print()} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
-          🖨 Print
-        </button>
-        <button onClick={() => {
-          const url = `${BASE_URL}/${address}/${qrProduct.name.toLowerCase().replace(/\s+/g, "-")}`;
-          const msg = encodeURIComponent(`Subscribe to ${qrProduct.name} — $${qrProduct.amount.toFixed(2)} USDC/${INTERVAL_NAMES[qrProduct.interval]}: ${url}`);
-          window.open(`https://wa.me/?text=${msg}`, "_blank");
-        }} style={{ background: "rgba(37,211,102,0.12)", border: "0.5px solid rgba(37,211,102,0.3)", borderRadius: 8, color: "#25d366", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
-          WhatsApp
-        </button>
-        <button onClick={() => setQrProduct(null)} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
-          Close
-        </button>
-        <button onClick={() => {
-                      if (window.confirm(`Delete "${p.name}"?`)) {
-                        const updated = products.filter(x => x.id !== p.id);
-                        localStorage.setItem(`products_${address}`, JSON.stringify(updated));
-                        loadProducts();
-                      }
-                    }}
-                      style={{ background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", borderRadius: 8, color: "#f87171", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
-                      Delete
-                    </button>
-      </div>
-    </div>
-  </div>
-)}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setQrProduct(null)}>
+          <div id="qr-modal" style={{ background: "var(--bg-card)", borderRadius: 16, padding: 32, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{qrProduct.name}</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>${qrProduct.amount.toFixed(2)} USDC · {INTERVAL_NAMES[qrProduct.interval]}</div>
+            <QRCodeSVG value={`${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`} size={200} />
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16, fontFamily: "monospace", wordBreak: "break-all", maxWidth: 240 }}>
+              {BASE_URL}/{address.toLowerCase()}/{qrProduct.slug}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "center", flexWrap: "wrap" }}>
+              <button onClick={() => {
+                const svg     = document.querySelector("#qr-modal svg");
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const canvas  = document.createElement("canvas");
+                canvas.width  = 200; canvas.height = 200;
+                const ctx     = canvas.getContext("2d");
+                const img     = new Image();
+                img.onload    = () => { ctx.drawImage(img, 0, 0); const a = document.createElement("a"); a.download = `${qrProduct.name}-qr.png`; a.href = canvas.toDataURL(); a.click(); };
+                img.src       = "data:image/svg+xml;base64," + btoa(svgData);
+              }} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>⬇ Download</button>
+              <button onClick={() => window.print()} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>🖨 Print</button>
+              <button onClick={() => {
+                const url = `${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`;
+                const msg = encodeURIComponent(`Subscribe to ${qrProduct.name} — $${qrProduct.amount.toFixed(2)} USDC/${INTERVAL_NAMES[qrProduct.interval]}: ${url}`);
+                window.open(`https://wa.me/?text=${msg}`, "_blank");
+              }} style={{ background: "rgba(37,211,102,0.12)", border: "0.5px solid rgba(37,211,102,0.3)", borderRadius: 8, color: "#25d366", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>WhatsApp</button>
+              <button onClick={() => setQrProduct(null)} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
