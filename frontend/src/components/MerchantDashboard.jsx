@@ -141,51 +141,108 @@ function PriceChangeModal({ product, address, onClose }) {
   const [noticeDays, setNoticeDays] = useState("30");
   const [saving, setSaving]         = useState(false);
   const [done, setDone]             = useState(false);
-  const { writeContractAsync }      = useWriteContract ? require("wagmi").useWriteContract() : { writeContractAsync: null };
+  const { writeContractAsync }      = useWriteContract();
 
-  const expiresAt = Math.floor(Date.now() / 1000) + (parseInt(noticeDays) || 30) * 86400;
+  const expiresAt  = Math.floor(Date.now() / 1000) + Math.max(parseInt(noticeDays) || 30, 30) * 86400;
   const expiryDate = new Date(expiresAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  // Scan on-chain for active subscriptions matching this product
+  useEffect(() => {
+    const INTERVAL_MAP     = { weekly: 0, monthly: 1, yearly: 2 };
+    const productInterval  = typeof product.interval === "number" ? product.interval : (INTERVAL_MAP[product.interval] ?? 1);
+    const productAmountRaw = Math.round(product.amount * 1e6);
+    const subs = [];
+    let id = 0;
+    const scan = async () => {
+      setLoadingSubs(true);
+      while (true) {
+        try {
+          const sub = await client.readContract({
+            address: VAULT_ADDRESS, abi: VAULT_ABI,
+            functionName: "subscriptions", args: [BigInt(id)],
+          });
+          if (sub[0] === "0x0000000000000000000000000000000000000000") break;
+          if (
+            sub[2].toLowerCase() === address.toLowerCase() &&
+            Number(sub[4]) === productAmountRaw &&
+            Number(sub[8]) === productInterval &&
+            Number(sub[14]) === 0
+          ) { subs.push(id); }
+          id++;
+        } catch { break; }
+      }
+      setSubscriptions(subs);
+      setLoadingSubs(false);
+    };
+    scan();
+  }, [product, address]);
+
+  const handleSchedule = async () => {
+    if (subscriptions.length === 0) return;
+    setSaving(true);
+    setErrorMsg("");
+    setProgress({ done: 0, total: subscriptions.length });
+    for (let i = 0; i < subscriptions.length; i++) {
+      try {
+        await writeContractAsync({
+          address: VAULT_ADDRESS, abi: VAULT_ABI,
+          functionName: "setProductExpiry",
+          args: [BigInt(subscriptions[i]), BigInt(expiresAt)],
+        });
+        setProgress({ done: i + 1, total: subscriptions.length });
+      } catch (err) {
+        setErrorMsg(`Failed on subscription #${subscriptions[i]}: ${err.shortMessage || err.message}`);
+        setSaving(false);
+        return;
+      }
+    }
+    setSaving(false);
+    setDone(true);
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={onClose}>
-      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
-          📢 Price Change Notice — {product.name}
-        </div>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>📢 Price Change Notice — {product.name}</div>
         <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
-          Schedule a price change. Subscribers will be notified automatically and can cancel before the change takes effect. Minimum 30 days notice is enforced on-chain.
+          Schedule a price change for all active subscribers. Each will be notified by email and can cancel before the expiry date. Minimum 30 days enforced on-chain.
+        </div>
+        <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "var(--text-muted)" }}>
+          {loadingSubs ? "Scanning active subscriptions..." : (
+            <span>Found <strong style={{ color: "var(--text-primary)" }}>{subscriptions.length}</strong> active subscription{subscriptions.length !== 1 ? "s" : ""}{subscriptions.length === 0 ? " — nothing to notify." : "."}</span>
+          )}
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Notice period (days · min 30)</label>
-          <input
-            type="number" min="30" max="365" value={noticeDays}
-            onChange={e => setNoticeDays(e.target.value)}
-            style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }}
-          />
+          <input type="number" min="30" max="365" value={noticeDays} onChange={e => setNoticeDays(e.target.value)} disabled={saving || done}
+            style={{ width: "100%", background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
         </div>
         <div style={{ background: "rgba(248,113,113,0.06)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "var(--text-muted)" }}>
-          Subscriptions will expire on <strong style={{ color: "var(--red)" }}>{expiryDate}</strong>. Subscribers will receive an email notice 30 days before.
+          Subscriptions expire on <strong style={{ color: "var(--red)" }}>{expiryDate}</strong>. Subscribers receive email notice and can cancel before that date.
         </div>
+        {progress && !done && (
+          <div style={{ background: "rgba(59,130,246,0.06)", border: "0.5px solid rgba(59,130,246,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#93c5fd" }}>
+            Scheduling... {progress.done} / {progress.total}
+            <div style={{ marginTop: 6, background: "rgba(59,130,246,0.2)", borderRadius: 4, height: 4 }}>
+              <div style={{ background: "#3b82f6", height: 4, borderRadius: 4, width: `${(progress.done / progress.total) * 100}%`, transition: "width 0.3s" }} />
+            </div>
+          </div>
+        )}
+        {errorMsg && <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#f87171" }}>{errorMsg}</div>}
         {done ? (
-          <div style={{ textAlign: "center", color: "var(--green)", fontSize: 13 }}>✅ Price change scheduled on-chain.</div>
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
+            <div style={{ color: "var(--green)", fontSize: 13, fontWeight: 600 }}>Scheduled for {subscriptions.length} subscription{subscriptions.length !== 1 ? "s" : ""}</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Subscribers can cancel before {expiryDate}.</div>
+            <button onClick={onClose} style={{ marginTop: 16, background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "8px 20px", cursor: "pointer" }}>Close</button>
+          </div>
         ) : (
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              disabled={saving || !writeContractAsync}
-              onClick={async () => {
-                setSaving(true);
-                try {
-                  alert("Price change notice requires subscription IDs. Use setProductExpiry() directly via Basescan for now — full UI coming soon.");
-                  onClose();
-                } catch (err) {
-                  alert("Error: " + err.message);
-                } finally { setSaving(false); }
-              }}
-              style={{ flex: 1, background: "var(--red)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px", cursor: "pointer", opacity: saving ? 0.6 : 1 }}
-            >
-              {saving ? "Scheduling..." : "Schedule Price Change"}
+            <button disabled={saving || loadingSubs || subscriptions.length === 0} onClick={handleSchedule}
+              style={{ flex: 1, background: "linear-gradient(135deg, #f87171, #ef4444)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px", cursor: saving || loadingSubs || subscriptions.length === 0 ? "not-allowed" : "pointer", opacity: saving || loadingSubs || subscriptions.length === 0 ? 0.6 : 1 }}>
+              {saving ? `Scheduling ${progress?.done || 0}/${progress?.total || subscriptions.length}...` : `Schedule for ${subscriptions.length} subscriber${subscriptions.length !== 1 ? "s" : ""}`}
             </button>
-            <button onClick={onClose} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 16px", cursor: "pointer" }}>Cancel</button>
+            <button onClick={onClose} disabled={saving} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 16px", cursor: "pointer" }}>Cancel</button>
           </div>
         )}
       </div>

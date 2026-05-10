@@ -449,48 +449,44 @@ export default function PayPage() {
 
               {/* Trial badge */}
               {hasTrial && (
-                <div style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 6 }}>
                   🎁 {trialDays}-day free trial
                 </div>
               )}
 
               {/* Intro pricing badge */}
-              {hasIntro && !hasTrial && (
-                <div style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 8 }}>
-                  🎁 Intro offer
+              {hasIntro && (
+                <div style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 8, marginLeft: hasTrial ? 6 : 0 }}>
+                  🎁 Intro: ${product.intro_amount.toFixed(2)} × {product.intro_pulls}
                 </div>
               )}
 
               {/* Price display */}
-              {hasIntro && !hasTrial ? (
-                <div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
-                    <span style={{ fontSize: 30, fontWeight: 800, color: "#fbbf24", fontFamily: "monospace" }}>
-                      ${product.intro_amount.toFixed(2)}
-                    </span>
-                    <span style={{ fontSize: 13, color: "#94a3b8" }}>
-                      / {intervalLabel} · first {product.intro_pulls} {product.intro_pulls === 1 ? intervalLabel.toLowerCase() : intervalLabel.toLowerCase() + "s"}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                    Then ${product.amount.toFixed(2)} / {intervalLabel}
-                  </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span style={{ fontSize: 30, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
+                    ${product.amount?.toFixed(2)}
+                  </span>
+                  <span style={{ fontSize: 13, color: "#94a3b8" }}>/ {intervalLabel}</span>
                 </div>
-              ) : (
-                <div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: 30, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
-                      ${product.amount?.toFixed(2)}
-                    </span>
-                    <span style={{ fontSize: 13, color: "#94a3b8" }}>/ {intervalLabel}</span>
+                {hasTrial && hasIntro && (
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4, lineHeight: 1.6 }}>
+                    Free for {trialDays} days →<br/>
+                    Then ${product.intro_amount.toFixed(2)} / {intervalLabel} × {product.intro_pulls} →<br/>
+                    Then ${product.amount?.toFixed(2)} / {intervalLabel}
                   </div>
-                  {hasTrial && (
-                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                      Free for {trialDays} days, then ${product.amount?.toFixed(2)} / {intervalLabel}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+                {hasTrial && !hasIntro && (
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                    Free for {trialDays} days, then ${product.amount?.toFixed(2)} / {intervalLabel}
+                  </div>
+                )}
+                {!hasTrial && hasIntro && (
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                    ${product.intro_amount.toFixed(2)} / {intervalLabel} for {product.intro_pulls} {product.intro_pulls === 1 ? intervalLabel.toLowerCase() : ({ Weekly: "weeks", Monthly: "months", Yearly: "years" })[intervalLabel]}, then ${product.amount?.toFixed(2)}
+                  </div>
+                )}
+              </div>
             </div>
 
             {isWrongNetwork && (
