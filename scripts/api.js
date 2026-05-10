@@ -1049,6 +1049,36 @@ app.get("/api/subscriber/me", async (req, res) => {
   }
 });
 
+// GET /api/subscriber/payments/:subscriptionId — payment history for a subscription
+app.get("/api/subscriber/payments/:subscriptionId", async (req, res) => {
+  try {
+    const subscriptionId = parseInt(req.params.subscriptionId);
+    if (isNaN(subscriptionId)) return res.status(400).json({ error: "invalid_id" });
+
+    const result = await db.query(`
+      SELECT id, amount, merchant_received, fee, tx_hash, executed_at
+      FROM payments
+      WHERE subscription_id = $1
+      ORDER BY executed_at DESC
+      LIMIT 50
+    `, [subscriptionId]);
+
+    res.json({
+      payments: result.rows.map(p => ({
+        payment_id:             p.id,
+        amount_usdc:            (parseFloat(p.amount) / 1e6).toFixed(2),
+        merchant_received_usdc: (parseFloat(p.merchant_received) / 1e6).toFixed(2),
+        protocol_fee_usdc:      (parseFloat(p.fee) / 1e6).toFixed(4),
+        tx_hash:                p.tx_hash,
+        executed_at:            p.executed_at,
+      })),
+    });
+  } catch (err) {
+    console.error("[API] Subscriber payments error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 // =============================================================================
 // DataOnce — reserved routes
 // =============================================================================
