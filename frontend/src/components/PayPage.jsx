@@ -238,8 +238,6 @@ export default function PayPage() {
         intro_pulls:   parseInt(data.intro_pulls || 0),
         yearly_amount: data.yearly_amount ? parseFloat(data.yearly_amount) : null,
       }))
-        intro_pulls:  parseInt(data.intro_pulls || 0),
-      }))
       .catch(() => setProduct(null))
       .finally(() => setProductLoading(false));
   }, [merchantAddress, productSlug]);
