@@ -338,12 +338,12 @@ export default function MySubscriptions() {
     }
   }, []);
 
-  // When wallet connects — switch to wallet mode
+  // When wallet connects or is already connected — switch to wallet mode
   useEffect(() => {
-    if (isConnected && walletAddress && authMode === null) {
+    if (isConnected && walletAddress && authMode === null && authStatus === "ready") {
       setAuthMode("wallet");
     }
-  }, [isConnected, walletAddress]);
+  }, [isConnected, walletAddress, authStatus]);
 
   // Load subscriptions when mode and address are known
   const walletToQuery = authMode === "wallet"
