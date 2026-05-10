@@ -564,10 +564,9 @@ app.get("/api/products/:merchantAddress/:productSlug", async (req, res) => {
 });
 
 // GET /api/products/:merchantAddress — list all active products (merchant auth)
-app.get("/api/products/:merchantAddress", requireMerchantAuth, async (req, res) => {
+app.get("/api/products/:merchantAddress", async (req, res) => {
   try {
     const address = req.params.merchantAddress.toLowerCase();
-    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
     const products = await db.getMerchantProducts(address);
     res.json({
       products: products.map(p => ({
