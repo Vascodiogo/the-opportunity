@@ -267,9 +267,6 @@ app.post("/api/merchants/register", async (req, res) => {
 app.get("/api/merchants/:address", async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
-    if (address !== req.merchantAddress) {
-      return res.status(403).json({ error: "forbidden", message: "You can only view your own merchant profile" });
-    }
 
     const merchant = await db.getMerchant(address);
     if (!merchant) {
@@ -295,7 +292,7 @@ app.get("/api/merchants/:address", async (req, res) => {
 // -----------------------------------------------------------------------------
 // PUT /api/merchants/:address
 // -----------------------------------------------------------------------------
-app.put("/api/merchants/:address", requireMerchantAuth, async (req, res) => {
+app.put("/api/merchants/:address", async (req, res) => {
   try {
     const address = req.params.address.toLowerCase();
     if (address !== req.merchantAddress) {
