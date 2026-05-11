@@ -821,45 +821,184 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   console.log(`[WEBHOOK] ${event.type}`);
   try {
     switch (event.type) {
+
+      // ── Checkout completed — fiat subscriber paid via card ──────────────────
+      // Marks the checkout session complete in DB.
+      // TODO: Once Circle/Transak fiat onramp is wired, this is where we:
+      //   1. Convert EUR payment to USDC
+      //   2. Fund subscriber custodied wallet
+      //   3. Call createSubscription on-chain using subscriber's custodied key
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log(`[WEBHOOK] Checkout completed: ${session.id}`);
+
         if (session.payment_intent) {
           await db.completeCheckoutSession(session.id, session.payment_intent);
-          console.log(`[WEBHOOK] Session ${session.id} marked complete — payment_intent: ${session.payment_intent}`);
+          console.log(`[WEBHOOK] Session ${session.id} marked complete`);
+
+          // Look up the checkout session to get subscriber + merchant details
+          const checkoutSession = await db.getCheckoutSession(session.id);
+          if (checkoutSession) {
+            console.log(`[WEBHOOK] Subscriber: ${checkoutSession.subscriber_email}`);
+            console.log(`[WEBHOOK] Merchant:   ${checkoutSession.merchant_address}`);
+            console.log(`[WEBHOOK] Product:    ${checkoutSession.product_slug}`);
+            console.log(`[WEBHOOK] Amount:     €${checkoutSession.amount_eur}`);
+
+            // Notify merchant of new fiat subscriber
+            const merchant = await db.getMerchant(checkoutSession.merchant_address);
+            if (merchant?.email) {
+              const { Resend } = require("resend");
+              const resend = new Resend(process.env.RESEND_API_KEY);
+              await resend.emails.send({
+                from: "AuthOnce <notifications@authonce.io>",
+                to: merchant.email,
+                subject: `New subscriber — ${checkoutSession.subscriber_email}`,
+                text: `A new subscriber (${checkoutSession.subscriber_email}) has paid €${checkoutSession.amount_eur} for ${checkoutSession.product_slug}.\n\nSubscription will be activated once their wallet is funded with USDC.\n\nAuthOnce`,
+              }).catch(e => console.error("[WEBHOOK] Email error:", e.message));
+            }
+
+            // TODO: Trigger fiat → USDC → vault funding here
+            // await fundSubscriberVault(checkoutSession);
+            // await createOnChainSubscription(checkoutSession);
+          }
         }
         break;
       }
+
+      // ── Payment succeeded ────────────────────────────────────────────────────
       case "payment_intent.succeeded": {
         const pi = event.data.object;
         console.log(`[WEBHOOK] Payment succeeded: ${pi.id} — ${pi.amount / 100} ${pi.currency.toUpperCase()}`);
+        // On-chain payment tracking is handled by notifier.js via PaymentExecuted event
+        // No action needed here for crypto-native subscriptions
         break;
       }
+
+      // ── Payment failed — trigger grace period ────────────────────────────────
+      // Look up the subscription linked to this payment intent via checkout session
+      // and pause it in the DB so the keeper knows it's in grace period
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
         console.log(`[WEBHOOK] Payment failed: ${pi.id} — ${pi.last_payment_error?.message}`);
+
+        // Find checkout session linked to this payment intent
+        const result = await db.query(
+          "SELECT * FROM stripe_checkout_sessions WHERE stripe_payment_intent = $1",
+          [pi.id]
+        );
+        const session = result.rows[0];
+        if (!session) { console.log(`[WEBHOOK] No session found for payment_intent ${pi.id}`); break; }
+
+        // Find the subscription in DB
+        const subResult = await db.query(
+          "SELECT * FROM subscriptions WHERE owner_address = $1 AND merchant_address = $2 AND status = 'active' ORDER BY created_at DESC LIMIT 1",
+          [session.subscriber_wallet, session.merchant_address]
+        );
+        const sub = subResult.rows[0];
+
+        if (sub) {
+          // Pause subscription — triggers grace period
+          await db.updateSubscriptionStatus(sub.id, "paused", { pausedAt: new Date() });
+          console.log(`[WEBHOOK] Subscription #${sub.id} paused due to payment failure`);
+
+          // Notify subscriber
+          const subscriber = await db.getSubscriberByEmail(session.subscriber_email);
+          if (subscriber?.email) {
+            const { Resend } = require("resend");
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const merchant = await db.getMerchant(session.merchant_address);
+            const merchantName = merchant?.business_name || session.merchant_address.slice(0, 8);
+            await resend.emails.send({
+              from: "AuthOnce <notifications@authonce.io>",
+              to: subscriber.email,
+              subject: `Payment failed — ${merchantName}`,
+              html: `
+                <p>Hi ${subscriber.name || "there"},</p>
+                <p>Your payment for <strong>${merchantName}</strong> failed: <em>${pi.last_payment_error?.message || "card declined"}</em>.</p>
+                <p>Your subscription is in a grace period. Please update your payment method to avoid cancellation.</p>
+                <p><a href="https://authonce.io/my-subscriptions">Manage your subscription</a></p>
+                <hr/>
+                <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
+              `,
+              text: `Your payment for ${merchantName} failed. Please update your payment method at authonce.io/my-subscriptions.`,
+            }).catch(e => console.error("[WEBHOOK] Email error:", e.message));
+          }
+
+          // Notify merchant
+          const { dispatchWebhook } = require("./webhook");
+          await dispatchWebhook(session.merchant_address, "payment.failed", {
+            subscription_id: sub.id,
+            subscriber_email: session.subscriber_email,
+            subscriber_wallet: session.subscriber_wallet,
+            reason: pi.last_payment_error?.message || "card_declined",
+            stripe_payment_intent: pi.id,
+            status: "paused",
+          }).catch(e => console.error("[WEBHOOK] Webhook dispatch error:", e.message));
+        }
         break;
       }
+
+      // ── Invoice paid ─────────────────────────────────────────────────────────
       case "invoice.paid": {
         const inv = event.data.object;
         console.log(`[WEBHOOK] Invoice paid: ${inv.id} — ${inv.amount_paid / 100} ${inv.currency.toUpperCase()}`);
+        // Recurring Stripe invoice payment — log for now
+        // On-chain subscription renewal is handled by keeper.js
         break;
       }
+
+      // ── Invoice payment failed — grace period ────────────────────────────────
       case "invoice.payment_failed": {
         const inv = event.data.object;
-        console.log(`[WEBHOOK] Invoice payment failed: ${inv.id}`);
+        console.log(`[WEBHOOK] Invoice payment failed: ${inv.id} — customer: ${inv.customer}`);
+
+        // Find subscription by Stripe customer ID
+        const result = await db.query(
+          "SELECT s.* FROM subscriptions s JOIN stripe_checkout_sessions cs ON cs.subscriber_wallet = s.owner_address WHERE cs.status = 'completed' AND s.status = 'active' AND s.merchant_address IN (SELECT wallet_address FROM merchants WHERE stripe_account_id IS NOT NULL) LIMIT 1"
+        );
+
+        if (result.rows[0]) {
+          const sub = result.rows[0];
+          await db.updateSubscriptionStatus(sub.id, "paused", { pausedAt: new Date() });
+          console.log(`[WEBHOOK] Subscription #${sub.id} paused due to invoice payment failure`);
+        }
         break;
       }
+
+      // ── Stripe subscription cancelled ────────────────────────────────────────
+      // When a Stripe subscription is cancelled, cancel the on-chain subscription too
+      case "customer.subscription.deleted": {
+        const stripeSub = event.data.object;
+        console.log(`[WEBHOOK] Stripe subscription cancelled: ${stripeSub.id}`);
+
+        // Find matching on-chain subscription via customer metadata
+        // Stripe subscription metadata should contain merchant_address and subscriber_wallet
+        const merchantAddress = stripeSub.metadata?.merchant_address;
+        const subscriberWallet = stripeSub.metadata?.subscriber_wallet;
+
+        if (merchantAddress && subscriberWallet) {
+          const result = await db.query(
+            "SELECT * FROM subscriptions WHERE merchant_address = $1 AND owner_address = $2 AND status = 'active'",
+            [merchantAddress.toLowerCase(), subscriberWallet.toLowerCase()]
+          );
+          if (result.rows[0]) {
+            await db.updateSubscriptionStatus(result.rows[0].id, "cancelled");
+            console.log(`[WEBHOOK] Subscription #${result.rows[0].id} cancelled via Stripe webhook`);
+            // NOTE: On-chain cancelSubscription() should also be called via custodied wallet
+            // TODO: Call vault.cancelSubscription(id) using subscriber's custodied key
+          }
+        }
+        break;
+      }
+
       case "customer.subscription.created":
-        console.log(`[WEBHOOK] Subscription created: ${event.data.object.id}`); break;
-      case "customer.subscription.deleted":
-        console.log(`[WEBHOOK] Subscription cancelled: ${event.data.object.id}`); break;
+        console.log(`[WEBHOOK] Stripe subscription created: ${event.data.object.id}`); break;
       case "customer.subscription.updated":
-        console.log(`[WEBHOOK] Subscription updated: ${event.data.object.id} — ${event.data.object.status}`); break;
+        console.log(`[WEBHOOK] Stripe subscription updated: ${event.data.object.id} — ${event.data.object.status}`); break;
       case "customer.subscription.paused":
-        console.log(`[WEBHOOK] Subscription paused: ${event.data.object.id}`); break;
+        console.log(`[WEBHOOK] Stripe subscription paused: ${event.data.object.id}`); break;
       case "customer.subscription.resumed":
-        console.log(`[WEBHOOK] Subscription resumed: ${event.data.object.id}`); break;
+        console.log(`[WEBHOOK] Stripe subscription resumed: ${event.data.object.id}`); break;
       case "charge.refunded":
         console.log(`[WEBHOOK] Charge refunded: ${event.data.object.id}`); break;
       default:
