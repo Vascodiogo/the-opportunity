@@ -1,4 +1,4 @@
-import { http, createConfig } from "wagmi";
+import { http, fallback, createConfig } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { injected, metaMask, coinbaseWallet, walletConnect } from "wagmi/connectors";
 
@@ -13,9 +13,21 @@ export const wagmiConfig = createConfig({
     injected(),
   ],
   transports: {
-    [baseSepolia.id]: http("https://sepolia.base.org"),
+    [baseSepolia.id]: fallback([
+      http("https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT"), // Alchemy — primary
+      http("https://sepolia.base.org"),                                      // Base public — fallback
+      http("https://84532.rpc.thirdweb.com"),                               // Thirdweb — tertiary
+    ]),
   },
 });
+
+// ─── RPC URLs — used by createPublicClient in components ─────────────────────
+// Alchemy primary, public fallback, Thirdweb tertiary
+export const RPC_URLS = [
+  "https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT",
+  "https://sepolia.base.org",
+  "https://84532.rpc.thirdweb.com",
+];
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
 // Updated after v4 redeploy — replace with new addresses after running deploy.js

@@ -1,7 +1,7 @@
 // src/components/Dashboard.jsx
 import { useState, useEffect, useCallback } from "react";
 import { useWriteContract } from "wagmi";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
   VAULT_ADDRESS, REGISTRY_ADDRESS, USDC_ADDRESS,
@@ -12,7 +12,7 @@ import {
 
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http("https://sepolia.base.org"),
+  transport: fallback(RPC_URLS.map(url => http(url))),
 });
 
 function StatCard({ label, value, sub, accent }) {

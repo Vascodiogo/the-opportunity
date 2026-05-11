@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useWriteContract } from "wagmi";
 import { QRCodeSVG } from "qrcode.react";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
   VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI,
@@ -12,7 +12,7 @@ import {
 
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http("https://sepolia.base.org"),
+  transport: fallback(RPC_URLS.map(url => http(url))),
 });
 
 const BASE_URL = "https://authonce.io/pay";
