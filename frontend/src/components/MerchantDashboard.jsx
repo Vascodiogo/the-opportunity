@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
-  VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI,
+  VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI, RPC_URLS,
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS,
   shortAddress, formatUSDC,
 } from "../config.js";
