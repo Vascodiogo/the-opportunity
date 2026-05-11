@@ -25,6 +25,8 @@ import {
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
+const [productError, setProductError] = useState("");
+
 const USDC_APPROVE_ABI = [
   {
     name: "approve",
@@ -230,7 +232,11 @@ export default function PayPage() {
   useEffect(() => {
     if (!merchantAddress || !productSlug) return;
     fetch(`${API_BASE}/api/products/${merchantAddress}/${productSlug}`)
-      .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
+      .then(r => {
+        if (r.status === 451) throw new Error("451");
+        if (!r.ok) throw new Error("Not found");
+        return r.json();
+      })
       .then(data => setProduct({
         ...data,
         interval:      INTERVAL_MAP[data.interval] ?? data.interval,
@@ -374,9 +380,26 @@ export default function PayPage() {
         {/* Not found */}
         {!productLoading && !product && (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-            <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Product not found</div>
-            <div style={{ color: "#94a3b8", fontSize: 13 }}>This pay link may be invalid or expired.</div>
+            {productError === "451" ? (
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🚫</div>
+                <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+                  Service unavailable in your region
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.6 }}>
+                  This service is not available in your region due to applicable sanctions regulations.
+                </div>
+                <div style={{ color: "#475569", fontSize: 11, marginTop: 12 }}>
+                  HTTP 451 — Unavailable For Legal Reasons
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+                <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Product not found</div>
+                <div style={{ color: "#94a3b8", fontSize: 13 }}>This pay link may be invalid or expired.</div>
+              </>
+            )}
           </div>
         )}
 

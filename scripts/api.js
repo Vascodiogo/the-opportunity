@@ -61,6 +61,99 @@ app.use((req, res, next) => {
 });
 
 // -----------------------------------------------------------------------------
+// Geofencing — OFAC + Swiss SECO + EU sanctions compliance
+//
+// Returns HTTP 451 (Unavailable For Legal Reasons) for requests from
+// sanctioned countries. IP is looked up but NEVER stored or logged.
+//
+// Sanctioned countries:
+//   OFAC:      CU IR KP RU SY
+//   OFAC+EU:   BY (Belarus)
+//   OFAC+EU:   VE (Venezuela — financial sanctions)
+//   Swiss SECO adds no additional countries beyond OFAC/EU for crypto
+//
+// Implementation uses ipapi.co — free tier, no API key, no IP logging.
+// Falls back to ALLOW on lookup failure (better UX than blocking on error).
+// -----------------------------------------------------------------------------
+
+const SANCTIONED_COUNTRIES = new Set(["CU", "IR", "KP", "RU", "SY", "BY", "VE"]);
+
+// Simple in-memory cache to avoid repeated lookups for the same IP
+// Cache entries expire after 1 hour. IP → { country, cachedAt }
+const geoCache = new Map();
+const GEO_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function lookupCountry(ip) {
+  // Skip lookup for localhost / private IPs
+  if (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("10.") ||
+    ip.startsWith("172.16.") ||
+    ip === "::ffff:127.0.0.1"
+  ) {
+    return null;
+  }
+
+  // Check cache
+  const cached = geoCache.get(ip);
+  if (cached && Date.now() - cached.cachedAt < GEO_CACHE_TTL) {
+    return cached.country;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout    = setTimeout(() => controller.abort(), 2000); // 2s timeout
+    const response   = await fetch(`https://ipapi.co/${ip}/country/`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "AuthOnce-Compliance/1.0" },
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+    const country = (await response.text()).trim().toUpperCase();
+
+    // Validate it looks like a country code (2 letters)
+    if (!/^[A-Z]{2}$/.test(country)) return null;
+
+    // Cache the result — do NOT log the IP
+    geoCache.set(ip, { country, cachedAt: Date.now() });
+
+    // Clean old cache entries periodically
+    if (geoCache.size > 10000) {
+      const now = Date.now();
+      for (const [key, val] of geoCache.entries()) {
+        if (now - val.cachedAt > GEO_CACHE_TTL) geoCache.delete(key);
+      }
+    }
+
+    return country;
+  } catch {
+    return null; // Fail open — don't block on lookup error
+  }
+}
+
+async function geofenceMiddleware(req, res, next) {
+  // Get real IP — Railway sets X-Forwarded-For
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip        = forwarded ? forwarded.split(",")[0].trim() : req.socket.remoteAddress;
+
+  const country = await lookupCountry(ip);
+
+  if (country && SANCTIONED_COUNTRIES.has(country)) {
+    console.log(`[GEOFENCE] Blocked request from sanctioned country: ${country} (IP not logged)`);
+    return res.status(451).json({
+      error:   "unavailable_for_legal_reasons",
+      message: "This service is not available in your region due to applicable sanctions regulations.",
+      status:  451,
+    });
+  }
+
+  next();
+}
+
+// -----------------------------------------------------------------------------
 // Auth middleware — merchant wallet
 // -----------------------------------------------------------------------------
 
@@ -592,8 +685,8 @@ app.post("/api/merchants/notify-admin", async (req, res) => {
 // NOTE: Two-param route MUST be registered before one-param route.
 // =============================================================================
 
-// GET /api/products/:merchantAddress/:productSlug — PUBLIC
-app.get("/api/products/:merchantAddress/:productSlug", async (req, res) => {
+// GET /api/products/:merchantAddress/:productSlug — PUBLIC (geofenced)
+app.get("/api/products/:merchantAddress/:productSlug", geofenceMiddleware, async (req, res) => {
   try {
     const address = req.params.merchantAddress.toLowerCase();
     const slug    = req.params.productSlug;
@@ -1075,7 +1168,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   }));
 }
 
-app.get("/auth/google", (req, res, next) => {
+app.get("/auth/google", geofenceMiddleware, (req, res, next) => {
   const returnTo = req.query.returnTo || "/";
   const origin = req.query.origin || process.env.FRONTEND_URL || "https://authonce.io";
   const state = Buffer.from(JSON.stringify({ returnTo, origin })).toString("base64");
@@ -1113,7 +1206,7 @@ app.get("/auth/google/callback",
 
 // POST /api/subscriber/cancel/:subscriptionId
 // Type B (custodied wallet) cancel — backend signs the transaction
-app.post("/api/subscriber/cancel/:subscriptionId", async (req, res) => {
+app.post("/api/subscriber/cancel/:subscriptionId", geofenceMiddleware, async (req, res) => {
   try {
     // Verify subscriber JWT
     const auth = req.headers.authorization;
