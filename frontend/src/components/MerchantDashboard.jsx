@@ -564,6 +564,72 @@ export default function MerchantDashboard({ address }) {
   const [qrProduct, setQrProduct]             = useState(null);
   const [trialProduct, setTrialProduct]       = useState(null);
   const [priceChangeProduct, setPriceChangeProduct] = useState(null);
+  const [stripeStatus, setStripeStatus]       = useState(null); // null=loading, object=status
+  const [stripeConnecting, setStripeConnecting] = useState(false);
+
+  // Check Stripe Connect status on mount + handle ?connect= return param
+  useEffect(() => {
+    if (!address) return;
+
+    // Handle redirect back from Stripe OAuth
+    const params = new URLSearchParams(window.location.search);
+    const connectResult = params.get("connect");
+    if (connectResult) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("connect");
+      window.history.replaceState({}, "", url.toString());
+      if (connectResult === "success") {
+        alert("✅ Stripe connected successfully! Card payments are now available for your products.");
+      } else if (connectResult === "declined") {
+        alert("Stripe connection was cancelled.");
+      } else if (connectResult === "error" || connectResult === "expired") {
+        alert("Stripe connection failed. Please try again.");
+      }
+    }
+
+    // Fetch Stripe connection status
+    fetch(`${API_BASE}/api/connect/status`, { headers: { "X-Merchant-Address": address } })
+      .then(r => r.json())
+      .then(data => setStripeStatus(data))
+      .catch(() => setStripeStatus({ connected: false }));
+  }, [address]);
+
+  const handleStripeConnect = async () => {
+    setStripeConnecting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/connect/authorize`, {
+        headers: { "X-Merchant-Address": address },
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.message || "Could not start Stripe connection.");
+        setStripeConnecting(false);
+      }
+    } catch {
+      alert("Could not reach server.");
+      setStripeConnecting(false);
+    }
+  };
+
+  const handleStripeDisconnect = async () => {
+    if (!window.confirm("Disconnect Stripe? Card payments will be disabled for your subscribers.")) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/connect/disconnect`, {
+        method: "DELETE",
+        headers: { "X-Merchant-Address": address },
+      });
+      if (res.ok) {
+        setStripeStatus({ connected: false });
+        alert("Stripe disconnected.");
+      } else {
+        alert("Could not disconnect. Please try again.");
+      }
+    } catch {
+      alert("Could not reach server.");
+    }
+  };
 
   // On-chain approval check
   useEffect(() => {
@@ -973,6 +1039,86 @@ export default function MerchantDashboard({ address }) {
                 </div>
               ))}
             </div>
+            {/* ── Stripe Connect ── */}
+            <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "18px 20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                    💳 Stripe — Card & Bank Payments
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    Connect Stripe to accept card, MB Way, Multibanco, and SEPA payments from subscribers who don't have crypto wallets.
+                  </div>
+                </div>
+                {stripeStatus?.connected && (
+                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>
+                    ✓ Connected
+                  </span>
+                )}
+              </div>
+
+              {stripeStatus === null && (
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Checking connection...</div>
+              )}
+
+              {stripeStatus?.connected ? (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                    {[
+                      ["Charges", stripeStatus.charges_enabled ? "✓ Enabled" : "⚠ Pending"],
+                      ["Payouts", stripeStatus.payouts_enabled ? "✓ Enabled" : "⚠ Pending"],
+                      ["Account", stripeStatus.stripe_account_id?.slice(0, 14) + "..."],
+                      ["Connected", stripeStatus.connected_at ? new Date(stripeStatus.connected_at).toLocaleDateString() : "—"],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ background: "var(--bg-tag)", borderRadius: 8, padding: "8px 12px" }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{label}</div>
+                        <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {!stripeStatus.charges_enabled && (
+                    <div style={{ fontSize: 12, color: "var(--amber)", background: "rgba(251,191,36,0.06)", border: "0.5px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+                      ⚠ Your Stripe account needs additional verification before charges are enabled. Check your Stripe dashboard.
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <a
+                      href="https://dashboard.stripe.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 12, padding: "7px 14px", borderRadius: 8, background: "var(--bg-tag)", border: "0.5px solid var(--border)", color: "var(--text-secondary)", textDecoration: "none", display: "inline-block" }}
+                    >
+                      Open Stripe Dashboard ↗
+                    </a>
+                    <button
+                      onClick={handleStripeDisconnect}
+                      style={{ fontSize: 12, padding: "7px 14px", borderRadius: 8, background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", color: "#f87171", cursor: "pointer" }}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </div>
+              ) : stripeStatus !== null && (
+                <div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                    {["💳 Visa / Mastercard", "🇵🇹 MB Way", "🏧 Multibanco", "🏦 SEPA Transfer"].map(m => (
+                      <span key={m} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--bg-tag)", color: "var(--text-muted)" }}>{m}</span>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleStripeConnect}
+                    disabled={stripeConnecting}
+                    style={{ background: "linear-gradient(135deg, #635bff, #7c6fff)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px 20px", cursor: stripeConnecting ? "not-allowed" : "pointer", opacity: stripeConnecting ? 0.7 : 1 }}
+                  >
+                    {stripeConnecting ? "Redirecting to Stripe..." : "Connect Stripe Account →"}
+                  </button>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+                    You'll be redirected to Stripe to connect your account. Payments go directly to you — AuthOnce never holds funds.
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={async () => {
                 localStorage.setItem("merchant_settings_" + address, JSON.stringify(settings));
