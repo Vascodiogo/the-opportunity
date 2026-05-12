@@ -138,15 +138,18 @@ function TrialPopover({ product, address, onClose }) {
 }
 // ─── Price Change Modal ───────────────────────────────────────────────────────
 function PriceChangeModal({ product, address, onClose }) {
-  const [noticeDays, setNoticeDays] = useState("30");
-  const [saving, setSaving]         = useState(false);
-  const [done, setDone]             = useState(false);
-  const { writeContractAsync }      = useWriteContract();
+  const [noticeDays, setNoticeDays]       = useState("30");
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loadingSubs, setLoadingSubs]     = useState(true);
+  const [progress, setProgress]           = useState(null);
+  const [saving, setSaving]               = useState(false);
+  const [done, setDone]                   = useState(false);
+  const [errorMsg, setErrorMsg]           = useState("");
+  const { writeContractAsync }            = useWriteContract();
 
   const expiresAt  = Math.floor(Date.now() / 1000) + Math.max(parseInt(noticeDays) || 30, 30) * 86400;
   const expiryDate = new Date(expiresAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-  // Scan on-chain for active subscriptions matching this product
   useEffect(() => {
     const INTERVAL_MAP     = { weekly: 0, monthly: 1, yearly: 2 };
     const productInterval  = typeof product.interval === "number" ? product.interval : (INTERVAL_MAP[product.interval] ?? 1);
