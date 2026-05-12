@@ -739,7 +739,7 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
     const address = req.params.merchantAddress.toLowerCase();
     if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
 
-    const { name, amount, interval, trial_days = 0, intro_amount = 0, intro_pulls = 0, yearly_amount = null } = req.body;
+    const { name, amount, interval, trial_days = 0, intro_amount = 0, intro_pulls = 0, yearly_amount = null, payment_methods = ["crypto"] } = req.body;
     if (!name || !amount || !interval) {
       return res.status(400).json({ error: "missing_fields", message: "name, amount, interval required." });
     }
@@ -750,22 +750,26 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
     }
 
-    const trialDays    = Math.min(Math.max(parseInt(trial_days)    || 0, 0), 90);
-    const introAmount  = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), parseFloat(amount));
-    const introPulls   = Math.min(Math.max(parseInt(intro_pulls)    || 0, 0), 12);
-    const yearlyAmount = yearly_amount && parseFloat(yearly_amount) > 0 ? parseFloat(yearly_amount) : null;
+    const trialDays      = Math.min(Math.max(parseInt(trial_days)    || 0, 0), 90);
+    const introAmount    = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), parseFloat(amount));
+    const introPulls     = Math.min(Math.max(parseInt(intro_pulls)    || 0, 0), 12);
+    const yearlyAmount   = yearly_amount && parseFloat(yearly_amount) > 0 ? parseFloat(yearly_amount) : null;
+    const paymentMethods = Array.isArray(payment_methods) && payment_methods.length > 0
+      ? payment_methods.filter(m => ["crypto","card","sepa","ideal","bancontact","eps","klarna","blik","mbway","multibanco"].includes(m))
+      : ["crypto"];
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval, trialDays, introAmount, introPulls, yearlyAmount });
+    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval, trialDays, introAmount, introPulls, yearlyAmount, paymentMethods });
 
-    console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (yearly: $${yearlyAmount || "none"})`);
+    console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (methods: ${paymentMethods.join(",")})`);
     res.status(201).json({
       id: product.id, slug: product.slug, name: product.name,
-      amount:        parseFloat(product.amount),
-      interval:      product.interval,
-      trial_days:    product.trial_days   || 0,
-      intro_amount:  parseFloat(product.intro_amount || 0),
-      intro_pulls:   parseInt(product.intro_pulls    || 0),
-      yearly_amount: product.yearly_amount ? parseFloat(product.yearly_amount) : null,
+      amount:           parseFloat(product.amount),
+      interval:         product.interval,
+      trial_days:       product.trial_days   || 0,
+      intro_amount:     parseFloat(product.intro_amount || 0),
+      intro_pulls:      parseInt(product.intro_pulls    || 0),
+      yearly_amount:    product.yearly_amount ? parseFloat(product.yearly_amount) : null,
+      payment_methods:  product.payment_methods || ["crypto"],
     });
   } catch (err) {
     console.error("[API] Create product error:", err.message);
@@ -784,6 +788,173 @@ app.delete("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, a
   } catch (err) {
     console.error("[API] Delete product error:", err.message);
     res.status(500).json({ error: "server_error" });
+  }
+});
+
+// =============================================================================
+// Payment Methods — country-aware
+// =============================================================================
+
+// Country → available local payment methods
+const COUNTRY_METHODS = {
+  PT: ["crypto", "card", "mbway", "multibanco", "sepa"],
+  CH: ["crypto", "card", "sepa"],
+  DE: ["crypto", "card", "sepa", "klarna"],
+  AT: ["crypto", "card", "eps", "sepa"],
+  NL: ["crypto", "card", "ideal", "sepa"],
+  BE: ["crypto", "card", "bancontact", "sepa"],
+  PL: ["crypto", "card", "blik", "sepa"],
+  SE: ["crypto", "card", "klarna", "sepa"],
+  NO: ["crypto", "card", "klarna"],
+  FI: ["crypto", "card", "klarna", "sepa"],
+  FR: ["crypto", "card", "sepa", "klarna"],
+  ES: ["crypto", "card", "sepa"],
+  IT: ["crypto", "card", "sepa"],
+  // Default EU
+  DEFAULT_EU: ["crypto", "card", "sepa"],
+  // Default global
+  DEFAULT: ["crypto", "card"],
+};
+
+// EU countries for SEPA
+const EU_COUNTRIES = new Set(["AT","BE","BG","CY","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK"]);
+
+function getMethodsForCountry(countryCode) {
+  if (!countryCode) return COUNTRY_METHODS.DEFAULT;
+  const upper = countryCode.toUpperCase();
+  if (COUNTRY_METHODS[upper]) return COUNTRY_METHODS[upper];
+  if (EU_COUNTRIES.has(upper)) return COUNTRY_METHODS.DEFAULT_EU;
+  return COUNTRY_METHODS.DEFAULT;
+}
+
+// GET /api/products/:merchantAddress/:productSlug/payment-methods
+// Returns available payment methods for subscriber's country (IP-based)
+// Intersects merchant-enabled methods with country-available methods
+app.get("/api/products/:merchantAddress/:productSlug/payment-methods", async (req, res) => {
+  try {
+    const address = req.params.merchantAddress.toLowerCase();
+    const slug    = req.params.productSlug;
+    const product = await db.getProduct(address, slug);
+    if (!product) return res.status(404).json({ error: "not_found" });
+
+    // Get subscriber country from IP
+    const forwarded = req.headers["x-forwarded-for"];
+    const ip        = forwarded ? forwarded.split(",")[0].trim() : req.socket.remoteAddress;
+    let country     = null;
+
+    // Reuse geofencing country lookup (it's cached)
+    try {
+      country = await lookupCountry(ip);
+    } catch { /* fail open */ }
+
+    // Get country-available methods
+    const countryMethods = getMethodsForCountry(country);
+
+    // Get merchant-enabled methods (defaults to crypto only)
+    const merchantMethods = product.payment_methods || ["crypto"];
+
+    // Intersection: only show methods both merchant enabled AND available in country
+    const available = merchantMethods.filter(m => countryMethods.includes(m));
+
+    // Always include crypto if merchant has it enabled
+    if (merchantMethods.includes("crypto") && !available.includes("crypto")) {
+      available.unshift("crypto");
+    }
+
+    res.json({
+      methods:  available.length > 0 ? available : ["crypto"],
+      country:  country || "unknown",
+      all_merchant_methods: merchantMethods,
+    });
+  } catch (err) {
+    console.error("[API] Payment methods error:", err.message);
+    res.json({ methods: ["crypto"], country: "unknown" });
+  }
+});
+
+// POST /api/stripe/checkout — create Stripe Checkout session for fiat subscriber
+app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
+  try {
+    const { merchant_address, product_slug, payment_method, interval, success_url, cancel_url } = req.body;
+    if (!merchant_address || !product_slug || !payment_method) {
+      return res.status(400).json({ error: "missing_fields" });
+    }
+
+    const address = merchant_address.toLowerCase();
+    const product = await db.getProduct(address, product_slug);
+    if (!product) return res.status(404).json({ error: "product_not_found" });
+
+    // Get merchant's Stripe connected account
+    const merchant = await db.getMerchant(address);
+    if (!merchant?.stripe_account_id) {
+      return res.status(400).json({ error: "stripe_not_connected", message: "This merchant has not connected Stripe. Only crypto payments are available." });
+    }
+
+    // Determine amount and currency
+    const isYearly    = interval === "yearly" && product.yearly_amount;
+    const amountUsdc  = isYearly ? parseFloat(product.yearly_amount) : parseFloat(product.amount);
+    // Convert USDC to EUR (approximate — use live rate in production)
+    // For now use 1:1 (USDC ≈ EUR for simplicity, merchant can adjust)
+    const amountEur   = Math.round(amountUsdc * 100); // in cents
+
+    // Map payment method to Stripe payment method types
+    const stripeMethodMap = {
+      card:       ["card"],
+      sepa:       ["sepa_debit"],
+      ideal:      ["ideal"],
+      bancontact: ["bancontact"],
+      eps:        ["eps"],
+      klarna:     ["klarna"],
+      blik:       ["blik"],
+      mbway:      ["card"], // MB Way goes through card flow on Stripe
+      multibanco: ["multibanco"],
+    };
+    const stripePaymentMethods = stripeMethodMap[payment_method] || ["card"];
+
+    // Create Stripe Checkout session on merchant's connected account
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: stripePaymentMethods,
+      line_items: [{
+        price_data: {
+          currency: "eur",
+          unit_amount: amountEur,
+          product_data: {
+            name: product.name,
+            description: `${product.name} — ${isYearly ? "yearly" : product.interval} subscription via AuthOnce`,
+          },
+        },
+        quantity: 1,
+      }],
+      mode: "payment",
+      success_url: success_url || `${process.env.FRONTEND_URL || "https://authonce.io"}/pay/${address}/${product_slug}?checkout=success`,
+      cancel_url:  cancel_url  || `${process.env.FRONTEND_URL || "https://authonce.io"}/pay/${address}/${product_slug}`,
+      metadata: {
+        merchant_address: address,
+        product_slug:     product_slug,
+        payment_method:   payment_method,
+        interval:         interval || product.interval,
+        authonce_protocol: "v4",
+      },
+    }, {
+      stripeAccount: merchant.stripe_account_id,
+    });
+
+    // Save checkout session to DB
+    await db.createCheckoutSession({
+      sessionId:        session.id,
+      merchantAddress:  address,
+      productSlug:      product_slug,
+      subscriberEmail:  "pending", // Will be filled when subscriber completes checkout
+      subscriberWallet: "pending",
+      amountEur:        amountUsdc,
+      currency:         "eur",
+    });
+
+    console.log(`[CHECKOUT] Created session ${session.id} for ${address}/${product_slug} via ${payment_method}`);
+    res.json({ url: session.url, session_id: session.id });
+  } catch (err) {
+    console.error("[CHECKOUT] Error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
   }
 });
 
