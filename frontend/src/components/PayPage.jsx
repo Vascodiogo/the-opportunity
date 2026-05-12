@@ -25,8 +25,6 @@ import {
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
-const [productError, setProductError] = useState("");
-
 const USDC_APPROVE_ABI = [
   {
     name: "approve",
@@ -190,14 +188,30 @@ export default function PayPage() {
 
   const [trialDays] = useState(() => getTrialDays());
 
+  // Handle return from Stripe Checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success") {
+      setFlowStatus("success");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("checkout");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
   const [product, setProduct]               = useState(null);
   const [merchant, setMerchant]             = useState(null);
   const [productLoading, setProductLoading] = useState(true);
+  const [productError, setProductError]     = useState("");
   const [flowStatus, setFlowStatus]         = useState("idle");
   const [errorMsg, setErrorMsg]             = useState("");
   const [approveTxHash, setApproveTxHash]   = useState(null);
   const [subscribeTxHash, setSubscribeTxHash] = useState(null);
-  const [selectedInterval, setSelectedInterval] = useState("monthly"); // "monthly" | "yearly"
+  const [selectedInterval, setSelectedInterval] = useState("monthly");
+  const [paymentMethod, setPaymentMethod]   = useState("crypto"); // "crypto" | "card" | "sepa" | "ideal" | "bancontact" | "eps" | "klarna" | "blik" | "mbway" | "multibanco"
+  const [subscriberCountry, setSubscriberCountry] = useState(null);
+  const [availableMethods, setAvailableMethods] = useState(null);
+  const [stripeLoading, setStripeLoading]   = useState(false);
 
   const { address, isConnected } = useAccount();
   const chainId                  = useChainId();
@@ -244,7 +258,7 @@ export default function PayPage() {
         intro_pulls:   parseInt(data.intro_pulls || 0),
         yearly_amount: data.yearly_amount ? parseFloat(data.yearly_amount) : null,
       }))
-      .catch(() => setProduct(null))
+      .catch(err => { setProductError(err.message); setProduct(null); })
       .finally(() => setProductLoading(false));
   }, [merchantAddress, productSlug]);
 
@@ -256,6 +270,24 @@ export default function PayPage() {
       .then(data => setMerchant(data))
       .catch(() => setMerchant({ business_name: null }));
   }, [merchantAddress]);
+
+  // Load available payment methods for subscriber's country
+  useEffect(() => {
+    if (!merchantAddress || !productSlug) return;
+    fetch(`${API_BASE}/api/products/${merchantAddress}/${productSlug}/payment-methods`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setSubscriberCountry(data.country);
+          setAvailableMethods(data.methods);
+          // Default to first available non-crypto method if card is available
+          if (data.methods?.length > 0) {
+            setPaymentMethod("crypto"); // always start with crypto
+          }
+        }
+      })
+      .catch(() => setAvailableMethods(["crypto"]));
+  }, [merchantAddress, productSlug]);
 
   useEffect(() => {
     if (isConnected && flowStatus === "idle") setFlowStatus("connected");
@@ -550,8 +582,100 @@ export default function PayPage() {
 
             {errorMsg && <div style={s.error}>{errorMsg}</div>}
 
-            {/* Idle — wallet chooser */}
-            {flowStatus === "idle" && (
+            {/* Payment method selector */}
+            {flowStatus === "idle" && availableMethods && availableMethods.length > 1 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+                  How would you like to pay?
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {availableMethods.map(method => {
+                    const methodConfig = {
+                      crypto:     { label: "Crypto (USDC)",        icon: "⛓",  desc: "MetaMask, Coinbase Wallet, WalletConnect" },
+                      card:       { label: "Credit / Debit Card",  icon: "💳", desc: "Visa, Mastercard — via Stripe" },
+                      sepa:       { label: "SEPA Bank Transfer",   icon: "🏦", desc: "EU bank account — free" },
+                      ideal:      { label: "iDEAL",                icon: "🇳🇱", desc: "Netherlands bank payment" },
+                      bancontact: { label: "Bancontact",           icon: "🇧🇪", desc: "Belgian bank payment" },
+                      eps:        { label: "EPS",                  icon: "🇦🇹", desc: "Austrian bank payment" },
+                      klarna:     { label: "Klarna",               icon: "🛍", desc: "Buy now, pay later" },
+                      blik:       { label: "BLIK",                 icon: "🇵🇱", desc: "Polish mobile payment" },
+                      mbway:      { label: "MB Way",               icon: "📱", desc: "Portuguese mobile payment" },
+                      multibanco: { label: "Multibanco",           icon: "🏧", desc: "Portuguese ATM payment" },
+                    }[method] || { label: method, icon: "💳", desc: "" };
+
+                    const isSelected = paymentMethod === method;
+                    return (
+                      <div
+                        key={method}
+                        onClick={() => setPaymentMethod(method)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 12,
+                          padding: "12px 14px", borderRadius: 10, cursor: "pointer",
+                          border: `0.5px solid ${isSelected ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.08)"}`,
+                          background: isSelected ? "rgba(52,211,153,0.06)" : "rgba(255,255,255,0.02)",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>{methodConfig.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{methodConfig.label}</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>{methodConfig.desc}</div>
+                        </div>
+                        <div style={{
+                          width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                          border: `2px solid ${isSelected ? "#34d399" : "rgba(255,255,255,0.2)"}`,
+                          background: isSelected ? "#34d399" : "none",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {isSelected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#080c14" }} />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Stripe payment flow — non-crypto methods */}
+            {flowStatus === "idle" && paymentMethod !== "crypto" && (
+              <button
+                onClick={async () => {
+                  setStripeLoading(true);
+                  setErrorMsg("");
+                  try {
+                    const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        merchant_address: merchantAddress,
+                        product_slug:     productSlug,
+                        payment_method:   paymentMethod,
+                        interval:         isYearly ? "yearly" : "monthly",
+                        success_url:      `${window.location.origin}/pay/${merchantAddress}/${productSlug}?checkout=success`,
+                        cancel_url:       window.location.href,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                      window.location.href = data.url;
+                    } else {
+                      setErrorMsg(data.message || "Could not create checkout session.");
+                    }
+                  } catch {
+                    setErrorMsg("Could not reach server. Please try again.");
+                  } finally {
+                    setStripeLoading(false);
+                  }
+                }}
+                disabled={stripeLoading}
+                style={{ ...s.btn, ...s.btnPrimary, opacity: stripeLoading ? 0.6 : 1 }}
+              >
+                {stripeLoading ? "Redirecting to payment..." : `Pay ${isYearly ? `$${product?.yearly_amount?.toFixed(2)}/year` : `$${product?.amount?.toFixed(2)}/${intervalLabel}`} →`}
+              </button>
+            )}
+
+            {/* Crypto flow — wallet chooser */}
+            {flowStatus === "idle" && paymentMethod === "crypto" && (
               <>
                 <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>
                   Connect your wallet to subscribe:

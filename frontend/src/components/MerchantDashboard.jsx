@@ -260,16 +260,23 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [introPulls, setIntroPulls]   = useState("1");
   const [hasYearly, setHasYearly]     = useState(false);
   const [yearlyAmount, setYearlyAmount] = useState("");
+  const [paymentMethods, setPaymentMethods] = useState(["crypto"]);
   const [saving, setSaving]           = useState(false);
 
   const intervalMap   = { "0": "weekly", "1": "monthly", "2": "yearly" };
   const intervalLabel = { "0": "week", "1": "month", "2": "year" };
 
-  // Auto-calculate yearly discount suggestion (20% off × 12)
   const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
   const yearlyDiscount   = amount && yearlyAmount
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
     : 0;
+
+  const toggleMethod = (method) => {
+    if (method === "crypto") return; // crypto always on
+    setPaymentMethods(prev =>
+      prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]
+    );
+  };
 
   const handleAdd = async () => {
     if (!name || !amount) return;
@@ -292,11 +299,12 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
         body: JSON.stringify({
           name,
-          amount:        parseFloat(amount),
-          interval:      intervalMap[interval],
-          intro_amount:  hasIntro  ? parseFloat(introAmount)  : 0,
-          intro_pulls:   hasIntro  ? parseInt(introPulls)     : 0,
-          yearly_amount: hasYearly ? parseFloat(yearlyAmount) : null,
+          amount:          parseFloat(amount),
+          interval:        intervalMap[interval],
+          intro_amount:    hasIntro  ? parseFloat(introAmount)  : 0,
+          intro_pulls:     hasIntro  ? parseInt(introPulls)     : 0,
+          yearly_amount:   hasYearly ? parseFloat(yearlyAmount) : null,
+          payment_methods: paymentMethods,
         }),
       });
       if (!res.ok) throw new Error("Failed to save product");
@@ -433,6 +441,54 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               )}
             </div>
           )}
+
+          {/* Payment methods */}
+          <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>💳 Payment methods</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
+              Choose which payment methods subscribers can use. Crypto is always available.
+              Card/banking options require your Stripe account to be connected in Settings.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                { id: "crypto",     label: "⛓ Crypto (USDC)",      always: true },
+                { id: "card",       label: "💳 Card (Visa/MC)" },
+                { id: "sepa",       label: "🏦 SEPA Transfer" },
+                { id: "mbway",      label: "📱 MB Way (PT)" },
+                { id: "multibanco", label: "🏧 Multibanco (PT)" },
+                { id: "ideal",      label: "🇳🇱 iDEAL (NL)" },
+                { id: "bancontact", label: "🇧🇪 Bancontact (BE)" },
+                { id: "eps",        label: "🇦🇹 EPS (AT)" },
+                { id: "klarna",     label: "🛍 Klarna" },
+                { id: "blik",       label: "🇵🇱 BLIK (PL)" },
+              ].map(({ id, label, always }) => {
+                const isEnabled = paymentMethods.includes(id);
+                return (
+                  <div
+                    key={id}
+                    onClick={() => toggleMethod(id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "8px 10px", borderRadius: 8, cursor: always ? "default" : "pointer",
+                      border: `0.5px solid ${isEnabled ? "rgba(52,211,153,0.3)" : "var(--border)"}`,
+                      background: isEnabled ? "rgba(52,211,153,0.06)" : "var(--bg-tag)",
+                      opacity: always ? 0.7 : 1,
+                    }}
+                  >
+                    <div style={{
+                      width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                      border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`,
+                      background: isEnabled ? "var(--green)" : "none",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {isEnabled && <span style={{ color: "#080c14", fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Preview */}
           {name && amount && (
