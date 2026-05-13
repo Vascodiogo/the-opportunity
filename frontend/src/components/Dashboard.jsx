@@ -4,10 +4,21 @@ import { useWriteContract } from "wagmi";
 import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
-  VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI, RPC_URLS,
+  VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI, RPC_URLS, USDC_ADDRESS,
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS,
   shortAddress, formatUSDC,
 } from "../config.js";
+
+// Minimal ERC-20 ABI — balanceOf only
+const USDC_ABI = [
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs:  [{ name: "account", type: "address" }],
+    outputs: [{ name: "",        type: "uint256"  }],
+  },
+];
 
 const client = createPublicClient({
   chain: baseSepolia,
