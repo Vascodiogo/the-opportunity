@@ -14,7 +14,7 @@ export const wagmiConfig = createConfig({
   ],
   transports: {
     [baseSepolia.id]: fallback([
-      http("https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT"), // Alchemy — primary
+      http(`https://base-sepolia.g.alchemy.com/v2/${import.meta.env.VITE_ALCHEMY_KEY}`), // Alchemy — primary
       http("https://sepolia.base.org"),                                      // Base public — fallback
       http("https://84532.rpc.thirdweb.com"),                               // Thirdweb — tertiary
     ]),
