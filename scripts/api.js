@@ -425,8 +425,7 @@ app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req
     }
 
     const { status, limit = 50, offset = 0 } = req.query;
-    const subs = await db.getMerchantSubscriptions(address, { status, limit: parseInt(limit), offset: parseInt(offset) });
-
+    const subs = await db.getSubscriptionsByMerchant(address, { status, limit: parseInt(limit), offset: parseInt(offset) });
     res.json({
       merchant_address: address,
       subscriptions: subs.map(s => ({
@@ -457,8 +456,7 @@ app.get("/api/merchants/:address/payments", requireMerchantAuth, async (req, res
     }
 
     const { limit = 50, offset = 0 } = req.query;
-    const payments = await db.getMerchantPayments(address, { limit: parseInt(limit), offset: parseInt(offset) });
-
+    const payments = await db.getPaymentsByMerchant(address, { limit: parseInt(limit), offset: parseInt(offset) });
     res.json({
       merchant_address: address,
       payments: payments.map(p => ({
