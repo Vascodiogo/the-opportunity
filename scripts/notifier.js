@@ -651,7 +651,7 @@ async function main() {
   }
 
   let provider  = new ethers.JsonRpcProvider(RPC_URL);
-  let lastBlock = 0;
+  let lastBlock = 41000000; // SubscriptionVault v4 deployment block
 
   try {
     lastBlock = (await provider.getBlockNumber()) - BLOCK_LAG;
