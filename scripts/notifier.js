@@ -599,27 +599,38 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
     const toBlock      = currentBlock - BLOCK_LAG;
     if (toBlock <= lastBlock) return lastBlock;
 
-    const logs = await provider.getLogs({
-      address: VAULT_ADDRESS,
-      fromBlock: lastBlock + 1,
-      toBlock,
-    });
+    const CHUNK_SIZE = 9; // Stay under Alchemy free tier 10-block limit
+    let fromBlock    = lastBlock + 1;
+    let processed    = lastBlock;
 
-    if (logs.length > 0) {
-      console.log(`[NOTIFIER] Processing ${logs.length} event(s) from blocks ${lastBlock + 1}–${toBlock}`);
+    while (fromBlock <= toBlock) {
+      const chunkTo = Math.min(fromBlock + CHUNK_SIZE - 1, toBlock);
+
+      const logs = await provider.getLogs({
+        address: VAULT_ADDRESS,
+        fromBlock,
+        toBlock: chunkTo,
+      });
+
+      if (logs.length > 0) {
+        console.log(`[NOTIFIER] Processing ${logs.length} event(s) from blocks ${fromBlock}–${chunkTo}`);
+      }
+
+      for (const log of logs) {
+        const topic     = log.topics[0];
+        const eventName = topicMap[topic];
+        if (!eventName) continue;
+        const handler = EVENT_HANDLERS[eventName];
+        if (!handler) continue;
+        try { await handler(log, iface); }
+        catch (err) { console.error(`[NOTIFIER] Error processing ${eventName}:`, err.message); }
+      }
+
+      processed  = chunkTo;
+      fromBlock  = chunkTo + 1;
     }
 
-    for (const log of logs) {
-      const topic     = log.topics[0];
-      const eventName = topicMap[topic];
-      if (!eventName) continue;
-      const handler = EVENT_HANDLERS[eventName];
-      if (!handler) continue;
-      try { await handler(log, iface); }
-      catch (err) { console.error(`[NOTIFIER] Error processing ${eventName}:`, err.message); }
-    }
-
-    return toBlock;
+    return processed;
   } catch (err) {
     console.error(`[NOTIFIER] Poll error:`, err.message);
     return lastBlock;
