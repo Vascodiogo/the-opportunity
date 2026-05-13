@@ -669,7 +669,6 @@ async function main() {
 
   const poll = async () => {
     try {
-      provider  = new ethers.JsonRpcProvider(RPC_URL);
       lastBlock = await pollEvents(provider, iface, topicMap, lastBlock);
 
       // Run proactive checks every 5 cycles
