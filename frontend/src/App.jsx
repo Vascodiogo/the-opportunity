@@ -3,6 +3,7 @@ import AdminLogin from "./components/AdminLogin.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import MySubscriptions from "./components/MySubscriptions.jsx";
 import PayPage from "./components/PayPage.jsx";
+import Pricing from "./components/Pricing.jsx";
 import { useState, useEffect } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -21,6 +22,7 @@ export default function App() {
   const isAdminRoute           = window.location.pathname.startsWith("/admin");
   const isMySubscriptionsRoute = window.location.pathname.startsWith("/my-subscriptions");
   const isPayRoute             = window.location.pathname.startsWith("/pay");
+  const isPricingRoute         = window.location.pathname.startsWith("/pricing");
   const [view, setView] = useState("subscriber");
   const [showApp, setShowApp] = useState(false);
 
@@ -86,10 +88,23 @@ export default function App() {
     return <MySubscriptions />;
   }
 
-  // Pay page — standalone, handled by router in main.jsx
-  // (kept here as fallback in case routing is flat)
+  // Pay page — standalone
   if (isPayRoute) {
     return <PayPage />;
+  }
+
+  // Pricing page — standalone, no wallet required
+  if (isPricingRoute) {
+    return (
+      <Pricing
+        lang={lang}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        onLaunchApp={() => {
+          window.location.href = "/";
+        }}
+      />
+    );
   }
 
   // ── Main app ────────────────────────────────────────────────────────────────
