@@ -320,7 +320,7 @@ function SubscriptionCard({ sub, token, onCancelled }) {
             </button>
           )}
           {sub.status === "cancelled" && sub.merchant_address && sub.product_slug && (
-            
+            <a
               href={`https://authonce.io/pay/${sub.merchant_address}/${sub.product_slug}`}
               style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: "8px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center" }}
             >
