@@ -6,58 +6,68 @@ const TIERS = [
     name:     { en: "Starter",  pt: "Starter"  },
     price:    { en: "Free",     pt: "Grátis"   },
     sub:      { en: "Forever",  pt: "Para sempre" },
-    fee:      "1.0%",
+    fee:      "0.5%",
     feeLabel: { en: "per transaction", pt: "por transação" },
     accent:   "#64748b",
     highlight: false,
-    cta:      { en: "Apply Today →",   pt: "Registar →"      },
+    cta:      { en: "Apply Today →", pt: "Registar →" },
     features: {
       en: [
-        "Hosted pay link",
+        "3 active products",
         "Up to 100 active subscribers",
         "USDC direct to your wallet",
-        "Basic email notifications",
+        "Hosted pay link",
         "7-day grace period & dunning",
-        "Webhook delivery (5 retries)",
+        "Basic email notifications",
+        "Webhook delivery (5 retries, HMAC-SHA256)",
+        "Basescan transaction verification",
         "CSV export",
       ],
       pt: [
-        "Link de pagamento alojado",
+        "3 produtos ativos",
         "Até 100 subscritores ativos",
         "USDC direto para a sua carteira",
-        "Notificações básicas por email",
+        "Link de pagamento alojado",
         "Período de graça de 7 dias",
-        "Entrega de webhooks (5 tentativas)",
+        "Notificações básicas por email",
+        "Entrega de webhooks (5 tentativas, HMAC-SHA256)",
+        "Verificação de transações no Basescan",
         "Exportação CSV",
       ],
     },
   },
   {
-    name:     { en: "Growth",   pt: "Growth"   },
-    price:    { en: "€49",      pt: "€49"      },
-    sub:      { en: "/ month",  pt: "/ mês"    },
+    name:     { en: "Growth",  pt: "Growth" },
+    price:    { en: "€49",     pt: "€49"    },
+    sub:      { en: "/ month", pt: "/ mês"  },
     fee:      "0.5%",
     feeLabel: { en: "per transaction", pt: "por transação" },
     accent:   "#34d399",
     highlight: true,
-    cta:      { en: "Apply Today →",   pt: "Registar →"      },
+    cta:      { en: "Apply Today →", pt: "Registar →" },
     features: {
       en: [
         "Everything in Starter",
-        "Unlimited active subscribers",
+        "Unlimited products & subscribers",
+        "Trial periods & intro pricing",
+        "Configurable grace period (1–30 days)",
         "Branded email notifications",
-        "Embeddable Subscribe widget",
+        "3-day pre-payment subscriber alerts",
         "Stripe fiat onramp (card / MB Way / SEPA)",
-        "1–30 day configurable grace period",
+        "Embeddable subscribe widget",
+        "QR code physical access control ✦",
         "Priority support",
       ],
       pt: [
         "Tudo do Starter",
-        "Subscritores ilimitados",
-        "Emails com a sua marca",
-        "Widget de subscrição incorporável",
-        "Onramp fiat via Stripe (cartão / MB Way / SEPA)",
+        "Produtos e subscritores ilimitados",
+        "Períodos de trial e preços introdutórios",
         "Período de graça configurável (1–30 dias)",
+        "Emails com a sua marca",
+        "Alertas 3 dias antes de cada pagamento",
+        "Onramp fiat via Stripe (cartão / MB Way / SEPA)",
+        "Widget de subscrição incorporável",
+        "Controlo de acesso físico por QR code ✦",
         "Suporte prioritário",
       ],
     },
@@ -66,27 +76,31 @@ const TIERS = [
     name:     { en: "Business", pt: "Business" },
     price:    { en: "€199",     pt: "€199"     },
     sub:      { en: "/ month",  pt: "/ mês"    },
-    fee:      "0.3%",
+    fee:      "0.5%",
     feeLabel: { en: "per transaction", pt: "por transação" },
     accent:   "#3b82f6",
     highlight: false,
-    cta:      { en: "Apply Today →",   pt: "Registar →"      },
+    cta:      { en: "Apply Today →", pt: "Registar →" },
     features: {
       en: [
         "Everything in Growth",
         "Full REST API access",
-        "Multi-product catalogue",
+        "Revenue analytics & MRR dashboard",
+        "Fiat settlement (EUR/USD via Circle) ✦",
         "Custom webhook endpoints",
-        "Fiat settlement (USD/EUR via Circle)",
+        "Subscriber portal white-label ✦",
+        "DataOnce early access ✦",
         "SLA uptime guarantee",
         "Dedicated onboarding",
       ],
       pt: [
         "Tudo do Growth",
         "Acesso completo à API REST",
-        "Catálogo multi-produto",
+        "Analytics de receita e dashboard MRR",
+        "Liquidação fiat (EUR/USD via Circle) ✦",
         "Webhooks personalizados",
-        "Liquidação fiat (USD/EUR via Circle)",
+        "Portal de subscritor white-label ✦",
+        "Acesso antecipado ao DataOnce ✦",
         "Garantia de uptime SLA",
         "Integração dedicada",
       ],
@@ -95,8 +109,6 @@ const TIERS = [
 ];
 
 export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onLaunchApp }) {
-  const [billing, setBilling] = useState("monthly"); // reserved for future yearly toggle
-
   const bg      = isDark ? "#080c14"                : "#f8fafc";
   const cardBg  = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
   const border  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";
@@ -178,10 +190,15 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
             </span></>
           )}
         </h1>
-        <p style={{ fontSize: 17, color: muted, maxWidth: 520, margin: "0 auto", lineHeight: 1.7, fontWeight: 300 }}>
+        <p style={{ fontSize: 17, color: muted, maxWidth: 520, margin: "0 auto 16px", lineHeight: 1.7, fontWeight: 300 }}>
           {lang === "en"
             ? "Start free. Scale as you grow. Subscribers always pay exactly the price you set — we never add fees on top."
             : "Comece grátis. Cresça sem limites. Os subscritores pagam sempre o preço que definiu — nunca adicionamos taxas extra."}
+        </p>
+        <p style={{ fontSize: 13, color: muted, margin: "0 auto", fontStyle: "italic", fontWeight: 300 }}>
+          {lang === "en"
+            ? "Full feature availability at mainnet — September 2026."
+            : "Disponibilidade completa de funcionalidades no mainnet — Setembro 2026."}
         </p>
       </section>
 
@@ -202,7 +219,7 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
       </div>
 
       {/* ── Tier Cards ── */}
-      <section style={{ maxWidth: 960, margin: "0 auto", padding: "0 40px 80px" }}>
+      <section style={{ maxWidth: 960, margin: "0 auto", padding: "0 40px 24px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))", gap: 20 }}>
           {TIERS.map((tier, i) => (
             <div key={i} style={{
@@ -213,28 +230,24 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
                 ? "0.5px solid rgba(52,211,153,0.35)"
                 : `0.5px solid ${border}`,
               borderRadius: 20, padding: 32,
-              display: "flex", flexDirection: "column", gap: 0,
+              display: "flex", flexDirection: "column",
               position: "relative",
             }}>
-              {/* Popular badge */}
               {tier.highlight && (
                 <div style={{
                   position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)",
                   background: "linear-gradient(135deg, #34d399, #3b82f6)",
                   borderRadius: 99, padding: "4px 14px",
-                  fontSize: 11, fontWeight: 700, color: "#080c14",
-                  whiteSpace: "nowrap",
+                  fontSize: 11, fontWeight: 700, color: "#080c14", whiteSpace: "nowrap",
                 }}>
                   {lang === "en" ? "Most Popular" : "Mais Popular"}
                 </div>
               )}
 
-              {/* Tier name */}
               <p style={{ fontSize: 11, fontWeight: 700, color: tier.accent, letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 16px" }}>
                 {tier.name[lang]}
               </p>
 
-              {/* Price */}
               <div style={{ marginBottom: 6 }}>
                 <span style={{ fontSize: 40, fontWeight: 700, color: text, letterSpacing: "-0.03em", fontFamily: "'DM Mono', monospace" }}>
                   {tier.price[lang]}
@@ -244,11 +257,9 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
                 </span>
               </div>
 
-              {/* Protocol fee */}
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
-                background: `${tier.accent}14`,
-                border: `0.5px solid ${tier.accent}33`,
+                background: `${tier.accent}14`, border: `0.5px solid ${tier.accent}33`,
                 borderRadius: 8, padding: "5px 10px",
                 marginBottom: 24, alignSelf: "flex-start",
               }}>
@@ -256,10 +267,8 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
                 <span style={{ fontSize: 12, color: muted }}>{tier.feeLabel[lang]}</span>
               </div>
 
-              {/* Divider */}
               <div style={{ height: "0.5px", background: border, marginBottom: 24 }} />
 
-              {/* Features */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, flexGrow: 1, marginBottom: 28 }}>
                 {tier.features[lang].map((f, j) => (
                   <div key={j} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -269,34 +278,32 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
                 ))}
               </div>
 
-              {/* CTA */}
-              <button
-                onClick={scrollToApply}
-                style={{
-                  width: "100%",
-                  background: tier.highlight
-                    ? "linear-gradient(135deg, #34d399, #3b82f6)"
-                    : "none",
-                  border: tier.highlight
-                    ? "none"
-                    : `0.5px solid ${border}`,
-                  borderRadius: 10, padding: "13px",
-                  color: tier.highlight ? "#080c14" : text,
-                  fontSize: 14, fontWeight: 700,
-                  cursor: "pointer", letterSpacing: "-0.01em",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
+              <button onClick={scrollToApply} style={{
+                width: "100%",
+                background: tier.highlight ? "linear-gradient(135deg, #34d399, #3b82f6)" : "none",
+                border: tier.highlight ? "none" : `0.5px solid ${border}`,
+                borderRadius: 10, padding: "13px",
+                color: tier.highlight ? "#080c14" : text,
+                fontSize: 14, fontWeight: 700, cursor: "pointer",
+                letterSpacing: "-0.01em", fontFamily: "'DM Sans', sans-serif",
+              }}>
                 {tier.cta[lang]}
               </button>
             </div>
           ))}
         </div>
 
+        {/* ✦ footnote */}
+        <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 20, fontWeight: 300, fontStyle: "italic" }}>
+          {lang === "en"
+            ? "✦ Launching at mainnet — September 2026."
+            : "✦ Disponível no mainnet — Setembro 2026."}
+        </p>
+
         {/* Enterprise row */}
         <div style={{
           background: cardBg, border: `0.5px solid ${border}`,
-          borderRadius: 16, padding: "28px 32px", marginTop: 20,
+          borderRadius: 16, padding: "28px 32px", marginTop: 12,
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20,
         }}>
           <div>
@@ -306,8 +313,8 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
             </h3>
             <p style={{ fontSize: 13, color: muted, margin: 0, fontWeight: 300 }}>
               {lang === "en"
-                ? "0.1–0.2% protocol fee · Dedicated SLA · White-label option · Plugin licencing for WooCommerce & PrestaShop"
-                : "0,1–0,2% de taxa · SLA dedicado · Opção white-label · Licenciamento de plugin para WooCommerce & PrestaShop"}
+                ? "0.5% protocol fee · Volume discounts negotiable · White-label option · Custom integrations · Dedicated account manager"
+                : "0,5% de taxa · Descontos por volume negociáveis · Opção white-label · Integrações personalizadas · Gestor de conta dedicado"}
             </p>
           </div>
           <a href="mailto:vasco@authonce.io" style={{
@@ -323,7 +330,7 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
       </section>
 
       {/* ── Fee Comparison ── */}
-      <section style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
+      <section style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px", marginTop: 56 }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
@@ -335,11 +342,11 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
           </div>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 16, overflow: "hidden" }}>
             {[
-              { label: lang === "en" ? "Subscriber pays"        : "Subscritor paga",         value: "€100.00", color: text,    mono: true  },
-              { label: lang === "en" ? "AuthOnce protocol fee"  : "Taxa de protocolo",        value: "− €0.50", color: "#f87171", mono: true },
-              { label: lang === "en" ? "You receive (Growth)"   : "Recebe (Growth)",          value: "€99.50",  color: accent,  mono: true, bold: true  },
-              { label: lang === "en" ? "Monthly platform fee"   : "Taxa mensal da plataforma",value: "− €49",   color: muted,   mono: false },
-              { label: lang === "en" ? "Break-even (Growth)"    : "Break-even (Growth)",      value: lang === "en" ? "98 subscribers" : "98 subscritores", color: muted, mono: false },
+              { label: lang === "en" ? "Subscriber pays"        : "Subscritor paga",          value: "€100.00", color: text,      mono: true             },
+              { label: lang === "en" ? "AuthOnce protocol fee"  : "Taxa de protocolo",         value: "− €0.50", color: "#f87171", mono: true             },
+              { label: lang === "en" ? "You receive"            : "Recebe",                    value: "€99.50",  color: accent,    mono: true, bold: true  },
+              { label: lang === "en" ? "Monthly platform fee"   : "Taxa mensal da plataforma", value: "− €49",   color: muted,     mono: false            },
+              { label: lang === "en" ? "Break-even (Growth)"    : "Break-even (Growth)",       value: lang === "en" ? "50 subscribers" : "50 subscritores", color: muted, mono: false },
             ].map((row, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -368,9 +375,7 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
       <section style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
-              FAQ
-            </p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>FAQ</p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
               {lang === "en" ? "Common questions" : "Perguntas frequentes"}
             </h2>
@@ -378,18 +383,18 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {(lang === "en" ? [
               { q: "Do subscribers pay any fees?",         a: "No. Subscribers always pay exactly the price you set. All fees are absorbed by the merchant." },
-              { q: "What currency do I receive?",          a: "USDC on Base Network by default. Growth and Business merchants can enable automatic fiat settlement (USD/EUR) via Circle — funds arrive in your bank account." },
+              { q: "What currency do I receive?",          a: "USDC on Base Network by default. Business merchants can enable automatic fiat settlement (EUR/USD) via Circle — funds arrive in your bank account." },
               { q: "What happens if a payment fails?",     a: "AuthOnce has a built-in grace period (7 days by default, configurable 1–30 days on Growth+). The keeper bot retries daily and notifies the subscriber automatically. Subscriptions only cancel after the grace period expires." },
-              { q: "Can I change my plan later?",          a: "Yes. You can upgrade or downgrade at any time. Changes take effect at the start of the next billing cycle." },
+              { q: "Can I change my plan later?",          a: "Yes. Upgrade or downgrade at any time. Changes take effect at the start of the next billing cycle." },
               { q: "Is there a setup fee or contract?",    a: "No setup fee. No contract. Cancel any time." },
-              { q: "What is the protocol fee charged on?", a: "The protocol fee is charged on each successful subscription pull — not on the monthly platform fee." },
+              { q: "What is the protocol fee charged on?", a: "The 0.5% protocol fee is charged on each successful subscription pull — not on the monthly platform fee." },
             ] : [
               { q: "Os subscritores pagam taxas?",              a: "Não. Os subscritores pagam sempre exatamente o preço que definiu. Todas as taxas são absorvidas pelo comerciante." },
-              { q: "Em que moeda recebo?",                       a: "USDC na Base Network por padrão. Os planos Growth e Business podem ativar liquidação fiat automática (USD/EUR) via Circle — os fundos chegam à sua conta bancária." },
+              { q: "Em que moeda recebo?",                       a: "USDC na Base Network por padrão. Os planos Business podem ativar liquidação fiat automática (EUR/USD) via Circle." },
               { q: "O que acontece se um pagamento falhar?",     a: "O AuthOnce tem um período de graça integrado (7 dias por padrão, configurável de 1 a 30 dias no Growth+). O keeper bot tenta diariamente e notifica o subscritor automaticamente." },
-              { q: "Posso mudar de plano?",                      a: "Sim. Pode fazer upgrade ou downgrade a qualquer momento. As alterações entram em vigor no início do próximo ciclo de faturação." },
+              { q: "Posso mudar de plano?",                      a: "Sim. Upgrade ou downgrade a qualquer momento. As alterações entram em vigor no início do próximo ciclo de faturação." },
               { q: "Existe taxa de adesão ou contrato?",         a: "Sem taxa de adesão. Sem contrato. Cancele quando quiser." },
-              { q: "Sobre o que é cobrada a taxa de protocolo?", a: "A taxa de protocolo é cobrada em cada cobrança de subscrição bem-sucedida — não sobre a taxa mensal da plataforma." },
+              { q: "Sobre o que é cobrada a taxa de protocolo?", a: "A taxa de 0,5% é cobrada em cada cobrança de subscrição bem-sucedida — não sobre a taxa mensal da plataforma." },
             ]).map((item, i, arr) => (
               <div key={i} style={{
                 borderBottom: i < arr.length - 1 ? `0.5px solid ${border}` : "none",
@@ -405,8 +410,7 @@ export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onL
 
       {/* ── CTA ── */}
       <section style={{
-        borderTop: `0.5px solid ${border}`,
-        padding: "80px 40px",
+        borderTop: `0.5px solid ${border}`, padding: "80px 40px",
         background: isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.015)",
         textAlign: "center",
       }}>
