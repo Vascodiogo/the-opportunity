@@ -308,7 +308,7 @@ function SubscriptionCard({ sub, token, onCancelled }) {
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button style={{ ...s.btn, ...s.btnSecondary, fontSize: 12, padding: "8px 16px" }}
                   onClick={() => setShowPayments(true)}>
             Payment History
@@ -318,6 +318,14 @@ function SubscriptionCard({ sub, token, onCancelled }) {
                     onClick={() => setShowCancel(true)}>
               Cancel
             </button>
+          )}
+          {sub.status === "cancelled" && sub.merchant_address && sub.product_slug && (
+            
+              href={`https://authonce.io/pay/${sub.merchant_address}/${sub.product_slug}`}
+              style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: "8px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+            >
+              Re-subscribe →
+            </a>
           )}
         </div>
       </div>
