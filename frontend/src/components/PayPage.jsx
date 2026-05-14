@@ -368,6 +368,9 @@ export default function PayPage() {
   };
 
   const intervalLabel  = product ? INTERVAL_NAMES[product.interval] : "";
+  const intervalPlural = { weekly: "weeks", monthly: "months", yearly: "years" }[
+  Object.keys(INTERVAL_MAP).find(k => INTERVAL_MAP[k] === product?.interval) || "monthly"
+] || "months";
   const merchantName   = merchant?.business_name
     || `${merchantAddress?.slice(0, 6)}...${merchantAddress?.slice(-4)}`;
   const stepApprove    = flowStatus === "approving";
@@ -454,7 +457,7 @@ export default function PayPage() {
             )}
             {hasIntro && !hasTrial && (
               <div style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 12 }}>
-                🎁 Intro price: ${product.intro_amount.toFixed(2)} for first {product.intro_pulls} {product.intro_pulls === 1 ? intervalLabel.toLowerCase() : ({ Weekly: "weeks", Monthly: "months", Yearly: "years" })[intervalLabel] || intervalLabel.toLowerCase()}
+                🎁 Intro price: ${product.intro_amount.toFixed(2)} for first {product.intro_pulls} {product.intro_pulls === 1 ? intervalPlural : ({ Weekly: "weeks", Monthly: "months", Yearly: "years" })[intervalLabel] || intervalPlural}
               </div>
             )}
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>
@@ -562,7 +565,7 @@ export default function PayPage() {
                 )}
                 {!isYearly && !hasTrial && hasIntro && (
                   <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                    ${product.intro_amount.toFixed(2)} / {intervalLabel} for {product.intro_pulls} {product.intro_pulls === 1 ? intervalLabel.toLowerCase() : ({ Weekly: "weeks", Monthly: "months", Yearly: "years" })[intervalLabel]}, then ${product.amount?.toFixed(2)}
+                    ${product.intro_amount.toFixed(2)} / {intervalLabel} for {product.intro_pulls} {product.intro_pulls === 1 ? intervalPlural : ({ Weekly: "weeks", Monthly: "months", Yearly: "years" })[intervalLabel]}, then ${product.amount?.toFixed(2)}
                   </div>
                 )}
               </div>
@@ -726,8 +729,7 @@ export default function PayPage() {
                       ["⚡", "Two transactions — approve USDC, then subscribe"],
                       isYearly ? ["📅", `Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`] : null,
                       hasTrial ? ["🎁", `${trialDays}-day free trial — first payment after trial ends`] : null,
-                      hasIntro && !hasTrial && !isYearly ? ["🎁", `Intro price $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalLabel.toLowerCase()}${product.intro_pulls > 1 ? "s" : ""}, then $${product.amount?.toFixed(2)}`] : null,
-                      ["🔔", "3-day notice before every payment"],
+                      ["🎁", `Intro price $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalPlural}, then $${product.amount?.toFixed(2)}`] : null,                      ["🔔", "3-day notice before every payment"],
                       ["🛡️", "Cancel anytime at authonce.io/my-subscriptions"],
                       ["🔒", "AuthOnce never holds your funds"],
                     ].filter(Boolean).map(([icon, text]) => (
