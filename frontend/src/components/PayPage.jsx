@@ -729,7 +729,8 @@ export default function PayPage() {
                       ["⚡", "Two transactions — approve USDC, then subscribe"],
                       isYearly ? ["📅", `Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`] : null,
                       hasTrial ? ["🎁", `${trialDays}-day free trial — first payment after trial ends`] : null,
-                      ["🎁", `Intro price $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalPlural}, then $${product.amount?.toFixed(2)}`] : null,                      ["🔔", "3-day notice before every payment"],
+                      product.intro_amount ? ["🎁", `Intro price $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalPlural}, then $${product.amount?.toFixed(2)}`] : null,
+                      ["🔔", "3-day notice before every payment"],
                       ["🛡️", "Cancel anytime at authonce.io/my-subscriptions"],
                       ["🔒", "AuthOnce never holds your funds"],
                     ].filter(Boolean).map(([icon, text]) => (
