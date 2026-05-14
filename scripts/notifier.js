@@ -422,6 +422,25 @@ async function onInsufficientFunds(log, iface) {
 
   await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
 
+  // Email merchant
+    const merchantEmailSuccess = await getMerchantEmail(sub.merchant_address);
+  if (merchantEmailSuccess) {
+    const merchantName = await getMerchantName(sub.merchant_address);
+    const amountUsdc   = (Number(amount) / 1e6).toFixed(2);
+    const eurStr       = merchantReceivedEur ? ` (≈ €${merchantReceivedEur})` : "";
+    await sendEmail({
+      to: merchantEmailSuccess,
+      subject: `Payment received — $${amountUsdc} USDC`,
+      html: `
+        <p>A subscription payment of <strong>$${amountUsdc} USDC${eurStr}</strong> was collected successfully.</p>
+        <p>Date: ${new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
+        <p><a href="https://sepolia.basescan.org/tx/${log.transactionHash}">View transaction on Basescan</a></p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
+      `,
+      text: `Payment of $${amountUsdc} USDC${eurStr} received. Tx: ${log.transactionHash}`,
+    });
+  }
   // Email subscriber
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
   if (subscriber?.email) {
@@ -444,6 +463,40 @@ async function onInsufficientFunds(log, iface) {
     });
   }
 
+  // Email merchant
+    const merchantEmail = await getMerchantEmail(sub.merchant_address);
+  if (merchantEmail) {
+    const requiredUsdc = (Number(required) / 1e6).toFixed(2);
+    const graceDate    = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    await sendEmail({
+      to: merchantEmail,
+      subject: `Payment failed — subscriber needs to top up`,
+      html: `
+        <p>A subscriber's payment of <strong>$${requiredUsdc} USDC</strong> failed due to insufficient funds.</p>
+        <p>Their subscription has entered a grace period and will retry automatically. If the subscriber does not top up before <strong>${graceDate}</strong>, the subscription will be cancelled.</p>
+        <p>The subscriber has been notified.</p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
+      `,
+      text: `A subscriber payment of $${requiredUsdc} USDC failed. Grace period ends ${graceDate}. Subscriber has been notified.`,
+    });
+  }
+  // Email merchant
+    const merchantEmailAllowance = await getMerchantEmail(sub.merchant_address);
+  if (merchantEmailAllowance) {
+    const merchantName = await getMerchantName(sub.merchant_address);
+    await sendEmail({
+      to: merchantEmailAllowance,
+      subject: `Payment failed — subscriber approval expired`,
+      html: `
+        <p>A subscriber's USDC approval has expired or was insufficient.</p>
+        <p>Their subscription has been paused. The subscriber has been notified and asked to re-approve.</p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
+      `,
+      text: `A subscriber's USDC approval expired. Subscription paused. Subscriber has been notified.`,
+    });
+  }
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault,
