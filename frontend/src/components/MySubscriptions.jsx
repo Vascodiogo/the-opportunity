@@ -1,713 +1,551 @@
 // src/components/MySubscriptions.jsx
-// Standalone subscriber portal — authonce.io/my-subscriptions
-//
-// Two login paths:
-//   Type A — Crypto-native: connect wallet → read subscriptions for that address
-//   Type B — Fiat/custodied: sign in with Google → lookup custodied wallet
-//
-// Features:
-//   - Merchant business name (fetched from API)
-//   - Next payment date (fixed for new subscriptions)
-//   - Payment history per subscription
-//   - Cancel (Type A: wallet sign / Type B: backend)
+// Subscriber portal — authonce.io/my-subscriptions
+// Google OAuth login (no wallet required)
+// Shows active subscriptions, payment history, cancel button
 
-import { useState, useEffect, useCallback } from "react";
-import { useWriteContract, useWaitForTransactionReceipt, useAccount } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { createPublicClient, http } from "viem";
-import { baseSepolia } from "wagmi/chains";
-import {
-  VAULT_ADDRESS, VAULT_ABI,
-  INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS,
-  shortAddress, formatUSDC,
-} from "../config.js";
+import { useState, useEffect } from "react";
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
-const client = createPublicClient({
-  chain: baseSepolia,
-  transport: http("https://sepolia.base.org"),
-});
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getNextPullDate(lastPulledAt, interval) {
-  const intervals = { 0: 7, 1: 30, 2: 365 };
-  const days = intervals[interval] || 30;
-  // If never pulled, use now + interval as estimate
-  const base = (!lastPulledAt || lastPulledAt === 0n)
-    ? Date.now()
-    : Number(lastPulledAt) * 1000;
-  return new Date(base + days * 86400 * 1000);
-}
-
-function formatDate(date) {
-  if (!date) return "—";
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function daysUntil(date) {
-  if (!date) return null;
-  const diff = Math.ceil((date - Date.now()) / 86400000);
-  if (diff < 0)  return "overdue";
-  if (diff === 0) return "today";
-  if (diff === 1) return "tomorrow";
-  return `in ${diff} days`;
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const c = {
+const s = {
   page: {
     minHeight: "100vh",
     background: "#080c14",
     fontFamily: "'DM Sans', system-ui, sans-serif",
+    color: "#f1f5f9",
+  },
+  nav: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 24px",
+    height: 58,
+    borderBottom: "0.5px solid rgba(255,255,255,0.07)",
+    background: "rgba(8,12,20,0.95)",
+    backdropFilter: "blur(12px)",
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
+  },
+  logo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  logoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    background: "linear-gradient(135deg, #34d399, #3b82f6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#080c14",
+  },
+  logoText: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#f1f5f9",
+    letterSpacing: "-0.02em",
+  },
+  container: {
+    maxWidth: 720,
+    margin: "0 auto",
     padding: "40px 24px",
   },
-  container: { maxWidth: 680, margin: "0 auto" },
   card: {
     background: "rgba(255,255,255,0.03)",
     border: "0.5px solid rgba(255,255,255,0.08)",
-    borderRadius: 16, padding: 28, marginBottom: 16,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+    borderRadius: 16,
+    padding: 32,
+    marginBottom: 16,
+  },
+  loginCard: {
+    maxWidth: 420,
+    margin: "80px auto",
+    background: "rgba(255,255,255,0.03)",
+    border: "0.5px solid rgba(255,255,255,0.08)",
+    borderRadius: 20,
+    padding: 40,
+    textAlign: "center",
+    boxShadow: "0 32px 80px rgba(0,0,0,0.4)",
   },
   btn: {
-    border: "none", borderRadius: 10, fontWeight: 700,
-    fontSize: 14, padding: "11px 24px", cursor: "pointer",
+    border: "none",
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 14,
+    padding: "11px 20px",
+    cursor: "pointer",
     transition: "opacity 0.15s",
     fontFamily: "'DM Sans', system-ui, sans-serif",
   },
-  error: {
-    background: "rgba(248,113,113,0.08)",
-    border: "0.5px solid rgba(248,113,113,0.2)",
-    borderRadius: 8, padding: "10px 14px",
-    fontSize: 13, color: "#f87171", marginBottom: 16,
+  btnPrimary: {
+    background: "linear-gradient(135deg, #34d399, #3b82f6)",
+    color: "#080c14",
   },
-  divider: {
-    display: "flex", alignItems: "center", gap: 12, margin: "20px 0",
+  btnDanger: {
+    background: "rgba(248,113,113,0.1)",
+    border: "0.5px solid rgba(248,113,113,0.3)",
+    color: "#f87171",
   },
-  dividerLine: {
-    flex: 1, height: 1, background: "rgba(255,255,255,0.06)",
+  btnSecondary: {
+    background: "rgba(255,255,255,0.05)",
+    border: "0.5px solid rgba(255,255,255,0.1)",
+    color: "#94a3b8",
+  },
+  badge: (color) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "3px 9px",
+    borderRadius: 99,
+    fontSize: 11,
+    fontWeight: 600,
+    background: color.bg,
+    color: color.text,
+  }),
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: 13,
+  },
+  th: {
+    textAlign: "left",
+    padding: "8px 12px",
+    fontSize: 11,
+    color: "#475569",
+    fontWeight: 600,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+  },
+  td: {
+    padding: "12px 12px",
+    borderBottom: "0.5px solid rgba(255,255,255,0.04)",
+    color: "#94a3b8",
+    verticalAlign: "middle",
   },
 };
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  active:    { bg: "rgba(52,211,153,0.12)",  text: "#34d399" },
+  paused:    { bg: "rgba(251,191,36,0.12)",  text: "#fbbf24" },
+  cancelled: { bg: "rgba(148,163,184,0.12)", text: "#94a3b8" },
+  expired:   { bg: "rgba(148,163,184,0.12)", text: "#94a3b8" },
+};
+
+const INTERVAL_LABELS = { weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
+
 function StatusBadge({ status }) {
-  const name = STATUS_NAMES[status] || "Unknown";
-  const cfg  = STATUS_COLORS[name] || { bg: "rgba(148,163,184,0.12)", color: "#94a3b8" };
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.cancelled;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: cfg.bg, color: cfg.color }}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.color, display: "inline-block" }} />
-      {name}
+    <span style={s.badge(cfg)}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.text, display: "inline-block" }} />
+      {status?.charAt(0).toUpperCase() + status?.slice(1)}
     </span>
   );
 }
 
-// ─── Payment History ──────────────────────────────────────────────────────────
-function PaymentHistory({ subscriptionId, merchantAddress }) {
-  const [payments, setPayments]   = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [expanded, setExpanded]   = useState(false);
+// ─── Payment History Modal ────────────────────────────────────────────────────
+function PaymentModal({ subscriptionId, token, onClose }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading]   = useState(true);
 
-  const load = async () => {
-    if (payments.length > 0) { setExpanded(true); return; }
+  useEffect(() => {
+    fetch(`${API_BASE}/api/subscriber/payments/${subscriptionId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => setPayments(d.payments || []))
+      .catch(() => setPayments([]))
+      .finally(() => setLoading(false));
+  }, [subscriptionId]);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 200, padding: 24,
+    }} onClick={onClose}>
+      <div style={{ ...s.card, maxWidth: 560, width: "100%", margin: 0, maxHeight: "80vh", overflowY: "auto" }}
+           onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9" }}>Payment History</div>
+          <button onClick={onClose} style={{ ...s.btn, ...s.btnSecondary, padding: "6px 12px", fontSize: 12 }}>Close</button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 32, color: "#475569" }}>Loading...</div>
+        ) : payments.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 32, color: "#475569", fontSize: 13 }}>No payments yet.</div>
+        ) : (
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={s.th}>Date</th>
+                <th style={s.th}>Amount</th>
+                <th style={s.th}>Tx</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map(p => (
+                <tr key={p.payment_id}>
+                  <td style={s.td}>{new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+                  <td style={{ ...s.td, color: "#34d399", fontFamily: "monospace", fontWeight: 600 }}>${p.amount_usdc}</td>
+                  <td style={s.td}>
+                    <a href={`https://sepolia.basescan.org/tx/${p.tx_hash}`} target="_blank" rel="noopener noreferrer"
+                       style={{ color: "#3b82f6", fontSize: 11, fontFamily: "monospace", textDecoration: "none" }}>
+                      {p.tx_hash?.slice(0, 10)}...
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Cancel Confirm Modal ─────────────────────────────────────────────────────
+function CancelModal({ subscription, token, onClose, onCancelled }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const handleCancel = async () => {
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(
-        `${API_BASE}/api/subscriber/payments/${subscriptionId}`,
-        { headers: { "X-Subscription-Id": String(subscriptionId) } }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setPayments(data.payments || []);
-      }
+      const res = await fetch(`${API_BASE}/api/subscriber/cancel/${subscription.subscription_id}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Cancel failed");
+      onCancelled(subscription.subscription_id);
+      onClose();
     } catch (err) {
-      console.error("Payment history error:", err);
+      setError(err.message);
     } finally {
       setLoading(false);
-      setExpanded(true);
     }
   };
 
   return (
-    <div style={{ marginTop: 16, borderTop: "0.5px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
-      <button
-        onClick={expanded ? () => setExpanded(false) : load}
-        style={{ background: "none", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}
-      >
-        {expanded ? "▲" : "▼"} Payment history
-        {payments.length > 0 && <span style={{ color: "#475569" }}>({payments.length})</span>}
-      </button>
-
-      {loading && (
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>Loading...</div>
-      )}
-
-      {expanded && !loading && payments.length === 0 && (
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>No payments yet.</div>
-      )}
-
-      {expanded && payments.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.5fr", padding: "6px 0", fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "0.5px solid rgba(255,255,255,0.04)" }}>
-            <span>Date</span><span>Amount</span><span>Transaction</span>
-          </div>
-          {payments.map((p, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.5fr", padding: "8px 0", fontSize: 12, alignItems: "center", borderBottom: "0.5px solid rgba(255,255,255,0.03)" }}>
-              <span style={{ color: "#94a3b8" }}>
-                {new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-              </span>
-              <span style={{ color: "#34d399", fontFamily: "monospace", fontWeight: 600 }}>
-                ${p.amount_usdc}
-              </span>
-              <a
-                href={`https://sepolia.basescan.org/tx/${p.tx_hash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontFamily: "monospace", fontSize: 11, color: "#3b82f6", textDecoration: "none" }}
-              >
-                {p.tx_hash?.slice(0, 8)}...{p.tx_hash?.slice(-6)} ↗
-              </a>
-            </div>
-          ))}
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 200, padding: 24,
+    }} onClick={onClose}>
+      <div style={{ ...s.card, maxWidth: 380, width: "100%", margin: 0, textAlign: "center" }}
+           onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>Cancel Subscription</div>
+        <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24, lineHeight: 1.6 }}>
+          Are you sure you want to cancel your <strong style={{ color: "#f1f5f9" }}>{subscription.product_name || "subscription"}</strong>?
+          This cannot be undone.
         </div>
-      )}
+
+        {error && (
+          <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", marginBottom: 16 }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={{ ...s.btn, ...s.btnSecondary, flex: 1 }} onClick={onClose} disabled={loading}>Keep it</button>
+          <button style={{ ...s.btn, ...s.btnDanger, flex: 1, opacity: loading ? 0.6 : 1 }} onClick={handleCancel} disabled={loading}>
+            {loading ? "Cancelling..." : "Yes, cancel"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── Subscription Card ────────────────────────────────────────────────────────
-function SubscriptionCard({ sub, isCustodied, merchantName, productName, onCancelled }) {
-  const [cancelling, setCancelling]     = useState(false);
-  const [cancelTxHash, setCancelTxHash] = useState(null);
-  const [errorMsg, setErrorMsg]         = useState("");
-  const [showConfirm, setShowConfirm]   = useState(false);
-
-  const { address: connectedAddress } = useAccount();
-  const { writeContractAsync }        = useWriteContract();
-
-  const { isSuccess: cancelConfirmed } = useWaitForTransactionReceipt({
-    hash: cancelTxHash,
-    query: { enabled: !!cancelTxHash },
-  });
-
-  useEffect(() => {
-    if (cancelConfirmed) { setCancelling(false); onCancelled(); }
-  }, [cancelConfirmed]);
-
-  const isActive  = sub.status === 0;
-  const isPaused  = sub.status === 1;
-  const canCancel = isActive || isPaused;
-
-  const nextPull     = getNextPullDate(sub.lastPulledAt, sub.interval);
-  const nextPullWhen = isActive ? daysUntil(nextPull) : null;
-
-  // Type B — custodied: backend cancels
-  const handleCustodiedCancel = async () => {
-    setCancelling(true);
-    setErrorMsg("");
-    try {
-      const token = localStorage.getItem("subscriber_token");
-      const res = await fetch(`${API_BASE}/api/subscriber/cancel/${sub.id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Cancel failed.");
-      }
-      onCancelled();
-    } catch (err) {
-      setErrorMsg(err.message || "Could not cancel. Please try again.");
-      setCancelling(false);
-    }
-  };
-
-  // Type A — own wallet signs
-  const handleWalletCancel = async () => {
-    setCancelling(true);
-    setErrorMsg("");
-    try {
-      const hash = await writeContractAsync({
-        address: VAULT_ADDRESS,
-        abi: VAULT_ABI,
-        functionName: "cancelSubscription",
-        args: [BigInt(sub.id)],
-      });
-      setCancelTxHash(hash);
-    } catch (err) {
-      setErrorMsg(err.shortMessage || err.message || "Transaction rejected.");
-      setCancelling(false);
-    }
-  };
-
-  const handleCancel = isCustodied ? handleCustodiedCancel : handleWalletCancel;
-
-  const subOwner    = sub.safeVault?.toLowerCase() || sub.owner?.toLowerCase();
-  const wrongWallet = !isCustodied && connectedAddress && connectedAddress.toLowerCase() !== subOwner;
+function SubscriptionCard({ sub, token, onCancelled }) {
+  const [showPayments, setShowPayments] = useState(false);
+  const [showCancel, setShowCancel]     = useState(false);
+  const canCancel = sub.status === "active" || sub.status === "paused";
 
   return (
-    <div style={c.card}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
-            Subscription #{sub.id}
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 2 }}>
-            {merchantName || shortAddress(sub.merchant)}
-          </div>
-          {productName && (
-            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 6 }}>
-              {productName}
+    <>
+      <div style={s.card}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>
+              {sub.product_name || `Subscription #${sub.subscription_id}`}
             </div>
-          )}
+            <div style={{ fontSize: 12, color: "#475569" }}>
+              {sub.merchant_name || `${sub.merchant_address?.slice(0, 6)}...${sub.merchant_address?.slice(-4)}`}
+            </div>
+          </div>
           <StatusBadge status={sub.status} />
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 26, fontWeight: 800, color: "#34d399", fontFamily: "monospace" }}>
-            {formatUSDC(sub.amount)}
-          </div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>/ {INTERVAL_NAMES[sub.interval]}</div>
-          {sub.introAmount > 0n && sub.pullCount < sub.introPulls && (
-            <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 2 }}>
-              🎁 Intro price — {Number(sub.introPulls) - Number(sub.pullCount)} {INTERVAL_NAMES[sub.interval]?.toLowerCase()}s left
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Details grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        {(isActive || isPaused) && (
-          <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
-            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Next payment</div>
-            <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 500 }}>{formatDate(nextPull)}</div>
-            {nextPullWhen && (
-              <div style={{ fontSize: 11, color: nextPullWhen === "overdue" ? "#f87171" : "#34d399", marginTop: 2 }}>
-                {nextPullWhen}
-              </div>
-            )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+          {[
+            ["Amount", `$${parseFloat(sub.amount_usdc || 0).toFixed(2)} USDC`],
+            ["Billing", INTERVAL_LABELS[sub.interval] || sub.interval],
+            ["Since", sub.created_at ? new Date(sub.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"],
+          ].map(([label, value]) => (
+            <div key={label} style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
+              <div style={{ fontSize: 11, color: "#475569", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", fontFamily: "monospace" }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {sub.last_pulled_at && (
+          <div style={{ fontSize: 11, color: "#475569", marginBottom: 16 }}>
+            Last payment: {new Date(sub.last_pulled_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
           </div>
         )}
-        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Interval</div>
-          <div style={{ fontSize: 13, color: "#f1f5f9", fontWeight: 500 }}>
-            {INTERVAL_NAMES[sub.interval]}
-          </div>
-          {sub.trialEndsAt > 0n && Date.now() < Number(sub.trialEndsAt) * 1000 && (
-            <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 2 }}>
-              Trial ends {formatDate(new Date(Number(sub.trialEndsAt) * 1000))}
-            </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={{ ...s.btn, ...s.btnSecondary, fontSize: 12, padding: "8px 16px" }}
+                  onClick={() => setShowPayments(true)}>
+            Payment History
+          </button>
+          {canCancel && (
+            <button style={{ ...s.btn, ...s.btnDanger, fontSize: 12, padding: "8px 16px" }}
+                    onClick={() => setShowCancel(true)}>
+              Cancel
+            </button>
           )}
         </div>
       </div>
 
-      {/* Error */}
-      {errorMsg && <div style={c.error}>{errorMsg}</div>}
-
-      {/* Cancel */}
-      {canCancel && (
-        wrongWallet ? (
-          <div style={{ fontSize: 12, color: "#f87171" }}>
-            Wrong wallet connected. Please connect {shortAddress(subOwner)} to cancel.
-          </div>
-        ) : !showConfirm ? (
-          <button
-            onClick={() => setShowConfirm(true)}
-            style={{ ...c.btn, background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", color: "#f87171", fontSize: 13 }}
-          >
-            Cancel subscription
-          </button>
-        ) : (
-          <div style={{ background: "rgba(248,113,113,0.06)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontSize: 13, color: "#f1f5f9", marginBottom: 12 }}>
-              Are you sure? This cannot be undone.
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                style={{ ...c.btn, background: "#f87171", color: "#fff", opacity: cancelling ? 0.6 : 1 }}
-              >
-                {cancelling ? (cancelTxHash ? "Confirming..." : "Cancelling...") : "Yes, cancel"}
-              </button>
-              <button
-                onClick={() => setShowConfirm(false)}
-                style={{ ...c.btn, background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", color: "#94a3b8" }}
-              >
-                Keep it
-              </button>
-            </div>
-          </div>
-        )
+      {showPayments && (
+        <PaymentModal
+          subscriptionId={sub.subscription_id}
+          token={token}
+          onClose={() => setShowPayments(false)}
+        />
       )}
 
-      {!canCancel && (
-        <div style={{ fontSize: 12, color: "#475569", fontStyle: "italic" }}>
-          This subscription is {STATUS_NAMES[sub.status]?.toLowerCase()}.
-        </div>
+      {showCancel && (
+        <CancelModal
+          subscription={sub}
+          token={token}
+          onClose={() => setShowCancel(false)}
+          onCancelled={onCancelled}
+        />
       )}
-
-      {/* Payment history */}
-      <PaymentHistory subscriptionId={sub.id} merchantAddress={sub.merchant} />
-    </div>
+    </>
   );
-}
-
-// ─── Load subscriptions from chain ───────────────────────────────────────────
-async function fetchSubscriptionsForWallet(walletAddress) {
-  const subs = [];
-  let id = 0;
-  while (true) {
-    try {
-      const sub = await client.readContract({
-        address: VAULT_ADDRESS,
-        abi: VAULT_ABI,
-        functionName: "subscriptions",
-        args: [BigInt(id)],
-      });
-      if (sub[0] === "0x0000000000000000000000000000000000000000") break;
-      if (
-        sub[0].toLowerCase() === walletAddress.toLowerCase() ||
-        sub[3].toLowerCase() === walletAddress.toLowerCase()
-      ) {
-        subs.push({
-          id,
-          owner:           sub[0],
-          guardian:        sub[1],
-          merchant:        sub[2],
-          safeVault:       sub[3],
-          amount:          sub[4],
-          introAmount:     sub[5],
-          introPulls:      sub[6],
-          pullCount:       sub[7],
-          interval:        Number(sub[8]),
-          lastPulledAt:    sub[9],
-          pausedAt:        sub[10],
-          expiresAt:       sub[11],
-          trialEndsAt:     sub[12],
-          gracePeriodDays: sub[13],
-          status:          Number(sub[14]),
-        });
-      }
-      id++;
-    } catch { break; }
-  }
-  return subs;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function MySubscriptions() {
+  const [token, setToken]                 = useState(() => sessionStorage.getItem("subscriber_token") || "");
   const [subscriber, setSubscriber]       = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [merchantNames, setMerchantNames] = useState({}); // address → name
-  const [productNames, setProductNames]   = useState({}); // `${merchant}-${amount}-${interval}` → name
   const [loading, setLoading]             = useState(false);
-  const [errorMsg, setErrorMsg]           = useState("");
-  const [authMode, setAuthMode]           = useState(null);
-  const [authStatus, setAuthStatus]       = useState("checking");
+  const [error, setError]                 = useState("");
+  const [filter, setFilter]               = useState("active");
 
-  const { address: walletAddress, isConnected } = useAccount();
-
-  // Handle Google OAuth return + existing token
+  // Handle Google OAuth return — token in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token  = params.get("subscriber_token");
-    if (token) {
-      localStorage.setItem("subscriber_token", token);
-      const url = new URL(window.location.href);
-      url.searchParams.delete("subscriber_token");
-      window.history.replaceState({}, "", url.toString());
-    }
-
-    const existingToken = localStorage.getItem("subscriber_token");
-    if (existingToken) {
-      fetch(`${API_BASE}/api/subscriber/me`, {
-        headers: { Authorization: `Bearer ${existingToken}` },
-      })
-        .then(r => { if (!r.ok) throw new Error("expired"); return r.json(); })
-        .then(data => {
-          setSubscriber(data);
-          setAuthMode("google");
-          setAuthStatus("ready");
-        })
-        .catch(() => {
-          localStorage.removeItem("subscriber_token");
-          setAuthStatus("ready");
-        });
-    } else {
-      setAuthStatus("ready");
+    const urlToken = params.get("subscriber_token");
+    if (urlToken) {
+      sessionStorage.setItem("subscriber_token", urlToken);
+      setToken(urlToken);
+      // Clean URL
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("subscriber_token");
+      window.history.replaceState({}, "", clean.toString());
     }
   }, []);
 
-  // Auto-detect connected wallet
+  // Load subscriber profile
   useEffect(() => {
-    if (isConnected && walletAddress && authMode === null && authStatus === "ready") {
-      setAuthMode("wallet");
-    }
-  }, [isConnected, walletAddress, authStatus]);
-
-  const walletToQuery = authMode === "wallet"
-    ? walletAddress
-    : authMode === "google"
-    ? subscriber?.wallet_address
-    : null;
+    if (!token) return;
+    fetch(`${API_BASE}/api/subscriber/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => {
+        if (!r.ok) throw new Error("Invalid session");
+        return r.json();
+      })
+      .then(setSubscriber)
+      .catch(() => {
+        sessionStorage.removeItem("subscriber_token");
+        setToken("");
+      });
+  }, [token]);
 
   // Load subscriptions
-  const loadSubscriptions = useCallback(async () => {
-    if (!walletToQuery) return;
-    setLoading(true);
-    setErrorMsg("");
-    try {
-      const subs = await fetchSubscriptionsForWallet(walletToQuery);
-      setSubscriptions(subs);
-
-      // Fetch merchant names for all unique merchants
-      const uniqueMerchants = [...new Set(subs.map(s => s.merchant.toLowerCase()))];
-      const names = {};
-      await Promise.all(uniqueMerchants.map(async addr => {
-        try {
-                    const res = await fetch(`${API_BASE}/api/merchants/${addr}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.business_name) names[addr] = data.business_name;
-          }
-        } catch { /* use address fallback */ }
-      }));
-      setMerchantNames(names);
-
-      // Fetch products for all unique merchants to match product names
-      const INTERVAL_MAP = { 0: "weekly", 1: "monthly", 2: "yearly" };
-      const pnames = {};
-      await Promise.all(uniqueMerchants.map(async addr => {
-        try {
-          const res = await fetch(`${API_BASE}/api/products/${addr}`);
-          if (res.ok) {
-            const data = await res.json();
-            (data.products || []).forEach(p => {
-              const key = `${addr}-${Math.round(parseFloat(p.amount) * 1e6)}-${p.interval}`;
-              pnames[key] = p.name;
-            });
-          }
-        } catch { /* no product name */ }
-      }));
-      setProductNames(pnames);
-    } catch (err) {
-      setErrorMsg("Could not load subscriptions. Please try again.");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [walletToQuery]);
-
   useEffect(() => {
-    if (walletToQuery) loadSubscriptions();
-  }, [walletToQuery]);
+    if (!subscriber?.wallet_address) return;
+    setLoading(true);
+    fetch(`${API_BASE}/api/subscriber/subscriptions/${subscriber.wallet_address}`)
+      .then(r => r.json())
+      .then(d => setSubscriptions(d.subscriptions || []))
+      .catch(() => setError("Could not load subscriptions."))
+      .finally(() => setLoading(false));
+  }, [subscriber]);
 
-  const handleGoogleLogin = () => {
-    const origin   = window.location.origin;
-    const returnTo = "/my-subscriptions";
-    window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent(returnTo)}&origin=${encodeURIComponent(origin)}`;
+  const handleLogin = () => {
+    const returnTo = encodeURIComponent("/my-subscriptions");
+    window.location.href = `${API_BASE}/auth/google?returnTo=${returnTo}`;
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("subscriber_token");
+    sessionStorage.removeItem("subscriber_token");
+    setToken("");
     setSubscriber(null);
     setSubscriptions([]);
-    setMerchantNames({});
-    setAuthMode(null);
   };
 
-  const activeSubs   = subscriptions.filter(s => s.status === 0);
-  const inactiveSubs = subscriptions.filter(s => s.status !== 0);
-  const isCustodied  = authMode === "google";
+  const handleCancelled = (id) => {
+    setSubscriptions(prev => prev.map(s =>
+      s.subscription_id === id ? { ...s, status: "cancelled" } : s
+    ));
+  };
 
-  const displayName = authMode === "google"
-    ? subscriber?.name || subscriber?.email
-    : null; // wallet address shown by ConnectButton
+  const filtered = subscriptions.filter(s => {
+    if (filter === "active") return s.status === "active" || s.status === "paused";
+    if (filter === "cancelled") return s.status === "cancelled" || s.status === "expired";
+    return true;
+  });
 
   return (
-    <div style={c.page}>
+    <div style={s.page}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
+      {/* Ambient glow */}
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none",
         background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(52,211,153,0.06) 0%, transparent 70%)",
       }} />
 
-      <div style={c.container}>
-
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 40 }}>
+      {/* Nav */}
+      <nav style={s.nav}>
+        <div style={s.logo}>
+          <div style={s.logoIcon}>A</div>
+          <span style={s.logoText}>Auth<span style={{ color: "#34d399" }}>Once</span></span>
+        </div>
+        {subscriber && (
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "linear-gradient(135deg, #34d399, #3b82f6)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16, fontWeight: 800, color: "#080c14",
-            }}>A</div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9" }}>AuthOnce</div>
-              <div style={{ fontSize: 11, color: "#64748b" }}>My Subscriptions</div>
+            {subscriber.avatar_url && (
+              <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "0.5px solid rgba(255,255,255,0.1)" }} />
+            )}
+            <span style={{ fontSize: 13, color: "#94a3b8" }}>{subscriber.name || subscriber.email}</span>
+            <button style={{ ...s.btn, ...s.btnSecondary, fontSize: 12, padding: "6px 12px" }} onClick={handleLogout}>
+              Sign out
+            </button>
+          </div>
+        )}
+      </nav>
+
+      {/* Not logged in */}
+      {!token && (
+        <div style={{ padding: 24 }}>
+          <div style={s.loginCard}>
+            <div style={{ ...s.logoIcon, width: 48, height: 48, borderRadius: 14, fontSize: 22, margin: "0 auto 16px" }}>A</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9", marginBottom: 8, letterSpacing: "-0.02em" }}>
+              My Subscriptions
+            </div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 32, lineHeight: 1.6 }}>
+              Sign in with Google to view and manage your AuthOnce subscriptions.
+            </div>
+            <button style={{ ...s.btn, ...s.btnPrimary, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}
+                    onClick={handleLogin}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Continue with Google
+            </button>
+            <div style={{ fontSize: 11, color: "#334155", marginTop: 16 }}>
+              No password required · Secure OAuth login
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logged in */}
+      {token && subscriber && (
+        <div style={s.container}>
+          <div style={{ marginBottom: 28 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", margin: "0 0 4px" }}>
+              My Subscriptions
+            </h1>
+            <div style={{ fontSize: 13, color: "#475569" }}>
+              Wallet: <span style={{ fontFamily: "monospace", color: "#64748b" }}>
+                {subscriber.wallet_address?.slice(0, 6)}...{subscriber.wallet_address?.slice(-4)}
+              </span>
             </div>
           </div>
 
-          {/* Header right — show name + sign out for Google, nothing extra for wallet */}
-          {authMode === "google" && displayName && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {subscriber?.avatar_url && (
-                <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} />
-              )}
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>{displayName}</span>
-              <button
-                onClick={handleLogout}
-                style={{ background: "none", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "4px 10px", color: "#64748b", fontSize: 12, cursor: "pointer" }}
-              >
-                Sign out
+          {/* Filter tabs */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 4, width: "fit-content" }}>
+            {[["active", "Active"], ["cancelled", "Cancelled"], ["all", "All"]].map(([val, label]) => (
+              <button key={val} onClick={() => setFilter(val)} style={{
+                ...s.btn,
+                padding: "6px 16px",
+                fontSize: 12,
+                background: filter === val ? "rgba(255,255,255,0.08)" : "none",
+                color: filter === val ? "#f1f5f9" : "#475569",
+                border: "none",
+              }}>
+                {label}
               </button>
+            ))}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#f87171", marginBottom: 16 }}>
+              {error}
             </div>
           )}
+
+          {/* Loading */}
+          {loading && (
+            <div style={{ textAlign: "center", padding: 48, color: "#475569", fontSize: 13 }}>
+              Loading subscriptions...
+            </div>
+          )}
+
+          {/* Empty */}
+          {!loading && filtered.length === 0 && (
+            <div style={{ ...s.card, textAlign: "center", padding: 48 }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>
+                {filter === "active" ? "No active subscriptions" : "No subscriptions found"}
+              </div>
+              <div style={{ fontSize: 13, color: "#475569" }}>
+                Subscriptions you create via AuthOnce pay links will appear here.
+              </div>
+            </div>
+          )}
+
+          {/* Subscription cards */}
+          {!loading && filtered.map(sub => (
+            <SubscriptionCard
+              key={sub.subscription_id}
+              sub={sub}
+              token={token}
+              onCancelled={handleCancelled}
+            />
+          ))}
         </div>
+      )}
 
-        {/* Checking */}
-        {authStatus === "checking" && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "#64748b", fontSize: 13 }}>
-            Loading...
-          </div>
-        )}
-
-        {/* Login screen */}
-        {authStatus === "ready" && !authMode && (
-          <div style={{ ...c.card, maxWidth: 420, margin: "60px auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>
-                Manage your subscriptions
-              </div>
-              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
-                Sign in with the same account you used when subscribing.
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textAlign: "center" }}>
-                Subscribed with MetaMask or another wallet?
-              </div>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <ConnectButton label="Connect Wallet" />
-              </div>
-            </div>
-
-            <div style={c.divider}>
-              <div style={c.dividerLine} />
-              <span style={{ fontSize: 11, color: "#475569" }}>or</span>
-              <div style={c.dividerLine} />
-            </div>
-
-            <div>
-              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, textAlign: "center" }}>
-                Subscribed via card or fiat payment?
-              </div>
-              <button
-                onClick={handleGoogleLogin}
-                style={{ ...c.btn, background: "linear-gradient(135deg, #34d399, #3b82f6)", color: "#080c14", width: "100%", fontSize: 15 }}
-              >
-                Sign in with Google →
-              </button>
-            </div>
-
-            <div style={{ fontSize: 11, color: "#64748b", textAlign: "center", marginTop: 14 }}>
-              No password required · Secure · Private
-            </div>
-          </div>
-        )}
-
-        {/* Subscriptions */}
-        {authStatus === "ready" && authMode && (
-          <>
-            {errorMsg && <div style={c.error}>{errorMsg}</div>}
-
-            {loading && (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: 13 }}>
-                Loading your subscriptions...
-              </div>
-            )}
-
-            {!loading && subscriptions.length === 0 && (
-              <div style={{ ...c.card, textAlign: "center", padding: "48px 28px" }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>
-                  No subscriptions found
-                </div>
-                <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
-                  No subscriptions found for this {authMode === "wallet" ? "wallet" : "account"}.
-                </div>
-                {authMode === "wallet" && (
-                  <div style={{ marginTop: 12, fontSize: 12, color: "#64748b" }}>
-                    Subscribed via Google/card?{" "}
-                    <button
-                      onClick={handleGoogleLogin}
-                      style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}
-                    >
-                      Sign in with Google instead
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!loading && activeSubs.length > 0 && (
-              <>
-                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
-                  Active — {activeSubs.length}
-                </div>
-                {activeSubs.map(sub => (
-                  <SubscriptionCard
-                    key={sub.id}
-                    sub={sub}
-                    isCustodied={isCustodied}
-                    merchantName={merchantNames[sub.merchant?.toLowerCase()]}
-                    productName={productNames[`${sub.merchant?.toLowerCase()}-${Number(sub.amount)}-${["weekly","monthly","yearly"][sub.interval]}`]}
-                    onCancelled={loadSubscriptions}
-                  />
-                ))}
-              </>
-            )}
-
-            {!loading && inactiveSubs.length > 0 && (
-              <>
-                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, marginTop: activeSubs.length > 0 ? 24 : 0 }}>
-                  Past — {inactiveSubs.length}
-                </div>
-                {inactiveSubs.map(sub => (
-                  <SubscriptionCard
-                    key={sub.id}
-                    sub={sub}
-                    isCustodied={isCustodied}
-                    merchantName={merchantNames[sub.merchant?.toLowerCase()]}
-                    onCancelled={loadSubscriptions}
-                  />
-                ))}
-              </>
-            )}
-
-            {!loading && subscriptions.length > 0 && (
-              <div style={{ textAlign: "center", marginTop: 8 }}>
-                <button
-                  onClick={loadSubscriptions}
-                  style={{ background: "none", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer" }}
-                >
-                  ↻ Refresh
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        <div style={{ textAlign: "center", marginTop: 48, fontSize: 11, color: "#64748b" }}>
-          Powered by <span style={{ color: "#34d399" }}>AuthOnce</span> · Non-custodial · Base Network
-        </div>
-
+      {/* Footer */}
+      <div style={{ textAlign: "center", padding: "24px", fontSize: 11, color: "#1e293b", marginTop: 40 }}>
+        Powered by <span style={{ color: "#34d399" }}>AuthOnce</span> · Non-custodial · Base Network
       </div>
     </div>
   );

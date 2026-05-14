@@ -1502,6 +1502,52 @@ app.get("/api/subscriber/me", async (req, res) => {
   }
 });
 
+// GET /api/subscriber/subscriptions/:walletAddress
+app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
+  try {
+    const wallet = req.params.walletAddress.toLowerCase();
+    const result = await db.query(`
+      SELECT
+        s.id             AS subscription_id,
+        s.merchant_address,
+        s.amount,
+        s.interval,
+        s.status,
+        s.last_pulled_at,
+        s.created_at,
+        m.business_name  AS merchant_name,
+        p.name           AS product_name,
+        p.slug           AS product_slug
+      FROM subscriptions s
+      LEFT JOIN merchants m ON m.wallet_address = s.merchant_address
+      LEFT JOIN products p  ON p.merchant_address = s.merchant_address
+                            AND p.amount = s.amount
+                            AND p.active = TRUE
+      WHERE s.owner_address = $1
+         OR s.safe_vault    = $1
+      ORDER BY s.created_at DESC
+    `, [wallet]);
+
+    res.json({
+      wallet_address: wallet,
+      subscriptions: result.rows.map(s => ({
+        subscription_id: s.subscription_id,
+        merchant_address: s.merchant_address,
+        merchant_name:   s.merchant_name,
+        product_name:    s.product_name,
+        product_slug:    s.product_slug,
+        amount_usdc:     (parseFloat(s.amount) / 1e6).toFixed(2),
+        interval:        s.interval,
+        status:          s.status,
+        last_pulled_at:  s.last_pulled_at,
+        created_at:      s.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error("[API] Subscriber subscriptions error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
 // GET /api/subscriber/payments/:subscriptionId — payment history for a subscription
 app.get("/api/subscriber/payments/:subscriptionId", async (req, res) => {
   try {
