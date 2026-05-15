@@ -625,6 +625,10 @@ export default function MerchantDashboard({ address }) {
   const [priceChangeProduct, setPriceChangeProduct] = useState(null);
   const [stripeStatus, setStripeStatus]       = useState(null); // null=loading, object=status
   const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [handle, setHandle]           = useState(null);   // current saved handle
+  const [handleInput, setHandleInput] = useState("");
+  const [handleSaving, setHandleSaving] = useState(false);
+  const [handleMsg, setHandleMsg]     = useState(null);   // { ok, text }
 
   // Check Stripe Connect status on mount + handle ?connect= return param
   useEffect(() => {
@@ -756,6 +760,10 @@ export default function MerchantDashboard({ address }) {
     loadProducts();
     loadWebhooks();
     loadPayments();
+    fetch(`${API_BASE}/api/merchant/handle`, { headers: { "X-Merchant-Address": address } })
+      .then(r => r.json())
+      .then(d => { if (d.handle) { setHandle(d.handle); setHandleInput(d.handle); } })
+      .catch(() => {});
   }, [fetchSubscribers, loadProducts, loadWebhooks, loadPayments]);
 
   const copyLink = (text, id) => {
@@ -911,10 +919,10 @@ export default function MerchantDashboard({ address }) {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", background: "var(--bg-tag)", padding: "6px 12px", borderRadius: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                      {`https://authonce.io/pay/${address.toLowerCase()}/${p.slug}`}
+                      {handle ? `https://authonce.io/pay/${handle}/${p.slug}` : `https://authonce.io/pay/${address.toLowerCase()}/${p.slug}`}
                     </div>
                     <button
-                      onClick={() => copyLink(`${BASE_URL}/${address.toLowerCase()}/${p.slug}`, p.id)}
+                      onClick={() => copyLink(handle ? `${BASE_URL}/${handle}/${p.slug}` : `${BASE_URL}/${address.toLowerCase()}/${p.slug}`, p.id)}
                       style={{ background: copied === p.id ? "rgba(52,211,153,0.12)" : "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: copied === p.id ? "var(--green)" : "var(--text-secondary)", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
                     >
                       {copied === p.id ? "Copied!" : "Copy Link"}
@@ -1178,6 +1186,52 @@ export default function MerchantDashboard({ address }) {
               )}
             </div>
 
+            {/* ── Vanity Pay Link Handle ── */}
+<div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "18px 20px" }}>
+  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>🔗 Vanity Pay Link</div>
+  <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+    Replace your wallet address in pay links with a memorable handle.<br />
+    <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>authonce.io/pay/<strong>{handle || "yourhandle"}</strong>/product-slug</span>
+  </div>
+  <div style={{ display: "flex", gap: 8 }}>
+    <input
+      value={handleInput}
+      onChange={e => setHandleInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+      placeholder="e.g. gymportugal"
+      maxLength={30}
+      style={{ flex: 1, background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)", fontSize: 13 }}
+    />
+    <button
+      disabled={handleSaving || handleInput.length < 3}
+      onClick={async () => {
+        setHandleSaving(true);
+        setHandleMsg(null);
+        try {
+          const res = await fetch(`${API_BASE}/api/merchant/handle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Merchant-Address": address },
+            body: JSON.stringify({ handle: handleInput }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setHandle(data.handle);
+            setHandleMsg({ ok: true, text: `✓ Handle "${data.handle}" saved.` });
+          } else {
+            setHandleMsg({ ok: false, text: data.message || "Could not save handle." });
+          }
+        } catch { setHandleMsg({ ok: false, text: "Could not reach server." }); }
+        finally { setHandleSaving(false); }
+      }}
+      style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "8px 16px", cursor: handleSaving || handleInput.length < 3 ? "not-allowed" : "pointer", opacity: handleSaving || handleInput.length < 3 ? 0.6 : 1 }}
+    >
+      {handleSaving ? "Saving..." : "Save Handle"}
+    </button>
+  </div>
+  {handleMsg && (
+    <div style={{ fontSize: 12, marginTop: 8, color: handleMsg.ok ? "var(--green)" : "#f87171" }}>{handleMsg.text}</div>
+  )}
+</div>
+
             <button
               onClick={async () => {
                 localStorage.setItem("merchant_settings_" + address, JSON.stringify(settings));
@@ -1209,9 +1263,9 @@ export default function MerchantDashboard({ address }) {
           <div id="qr-modal" style={{ background: "var(--bg-card)", borderRadius: 16, padding: 32, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{qrProduct.name}</div>
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>${qrProduct.amount.toFixed(2)} USDC · {INTERVAL_NAMES[qrProduct.interval]}</div>
-            <QRCodeSVG value={`${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`} size={200} />
+            <QRCodeSVG value={handle ? `${BASE_URL}/${handle}/${qrProduct.slug}` : `${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`} size={200} />
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16, fontFamily: "monospace", wordBreak: "break-all", maxWidth: 240 }}>
-              {BASE_URL}/{address.toLowerCase()}/{qrProduct.slug}
+              {handle ? `${BASE_URL}/${handle}/${qrProduct.slug}` : `${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`}
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "center", flexWrap: "wrap" }}>
               <button onClick={() => {
@@ -1226,7 +1280,7 @@ export default function MerchantDashboard({ address }) {
               }} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>⬇ Download</button>
               <button onClick={() => window.print()} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>🖨 Print</button>
               <button onClick={() => {
-                const url = `${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`;
+                const url = handle ? `${BASE_URL}/${handle}/${qrProduct.slug}` : `${BASE_URL}/${address.toLowerCase()}/${qrProduct.slug}`;
                 const msg = encodeURIComponent(`Subscribe to ${qrProduct.name} — $${qrProduct.amount.toFixed(2)} USDC/${INTERVAL_NAMES[qrProduct.interval]}: ${url}`);
                 window.open(`https://wa.me/?text=${msg}`, "_blank");
               }} style={{ background: "rgba(37,211,102,0.12)", border: "0.5px solid rgba(37,211,102,0.3)", borderRadius: 8, color: "#25d366", fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>WhatsApp</button>

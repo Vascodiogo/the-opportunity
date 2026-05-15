@@ -322,6 +322,11 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             border: `0.5px solid ${border}`, textDecoration: "none",
             background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
           }}>{otherLabel}</a>
+          <a href="/pricing" style={{
+            fontSize: 12, fontWeight: 600, color: muted, textDecoration: "none",
+          }}>
+            {lang === "en" ? "Pricing" : "Preços"}
+          </a>
           <button onClick={onToggleTheme} style={{
             background: "none", border: `0.5px solid ${border}`,
             borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14,

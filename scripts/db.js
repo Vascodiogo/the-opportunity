@@ -86,6 +86,15 @@ function decrypt(ciphertext) {
 async function initSchema() {
   console.log("[DB] Initialising schema...");
 
+  // Merchant vanity handles
+  await query(`
+    CREATE TABLE IF NOT EXISTS merchant_handles (
+      handle          VARCHAR(30) PRIMARY KEY,
+      wallet_address  VARCHAR(42) NOT NULL UNIQUE,
+      created_at      TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   // Merchants — off-chain profiles
   await query(`
     CREATE TABLE IF NOT EXISTS merchants (

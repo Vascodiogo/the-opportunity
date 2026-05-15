@@ -186,7 +186,25 @@ function Step({ n, label, active, done }) {
 export default function PayPage() {
   const { merchantAddress, productSlug } = useParams();
 
+  // merchantAddress may be a vanity handle (e.g. "gymportugal") or a 0x address.
+  // resolvedAddress holds the canonical 0x wallet after handle lookup.
+  const [resolvedAddress, setResolvedAddress] = useState(
+    () => merchantAddress?.startsWith("0x") ? merchantAddress.toLowerCase() : null
+  );
+
   const [trialDays] = useState(() => getTrialDays());
+
+  // Resolve vanity handle → wallet address if needed
+  useEffect(() => {
+    if (!merchantAddress || merchantAddress.startsWith("0x")) return; // already an address
+    fetch(`${API_BASE}/api/handle/${merchantAddress}`)
+      .then(r => {
+        if (!r.ok) throw new Error("Handle not found");
+        return r.json();
+      })
+      .then(data => setResolvedAddress(data.wallet_address))
+      .catch(() => setProductError("Pay link not found."));
+  }, [merchantAddress]);
 
   // Handle return from Stripe Checkout
   useEffect(() => {
@@ -244,8 +262,8 @@ export default function PayPage() {
 
   // Load product (includes intro_amount, intro_pulls from API)
   useEffect(() => {
-    if (!merchantAddress || !productSlug) return;
-    fetch(`${API_BASE}/api/products/${merchantAddress}/${productSlug}`)
+    if (!resolvedAddress || !productSlug) return;
+    fetch(`${API_BASE}/api/products/${resolvedAddress}/${productSlug}`)
       .then(r => {
         if (r.status === 451) throw new Error("451");
         if (!r.ok) throw new Error("Not found");
@@ -260,21 +278,21 @@ export default function PayPage() {
       }))
       .catch(err => { setProductError(err.message); setProduct(null); })
       .finally(() => setProductLoading(false));
-  }, [merchantAddress, productSlug]);
+  }, [resolvedAddress, productSlug]);
 
   // Load merchant name
   useEffect(() => {
-    if (!merchantAddress) return;
-    fetch(`${API_BASE}/api/merchants/${merchantAddress}`)
+    if (!resolvedAddress) return;
+    fetch(`${API_BASE}/api/merchants/${resolvedAddress}`)
       .then(r => r.json())
       .then(data => setMerchant(data))
       .catch(() => setMerchant({ business_name: null }));
-  }, [merchantAddress]);
+  }, [resolvedAddress]);
 
   // Load available payment methods for subscriber's country
   useEffect(() => {
-    if (!merchantAddress || !productSlug) return;
-    fetch(`${API_BASE}/api/products/${merchantAddress}/${productSlug}/payment-methods`)
+    if (!resolvedAddress || !productSlug) return;
+    fetch(`${API_BASE}/api/products/${resolvedAddress}/${productSlug}/payment-methods`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data) {
@@ -287,7 +305,7 @@ export default function PayPage() {
         }
       })
       .catch(() => setAvailableMethods(["crypto"]));
-  }, [merchantAddress, productSlug]);
+  }, [resolvedAddress, productSlug]);
 
   useEffect(() => {
     if (isConnected && flowStatus === "idle") setFlowStatus("connected");
@@ -650,7 +668,7 @@ export default function PayPage() {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        merchant_address: merchantAddress,
+                        merchant_address: resolvedAddress,
                         product_slug:     productSlug,
                         payment_method:   paymentMethod,
                         interval:         isYearly ? "yearly" : "monthly",

@@ -1579,6 +1579,74 @@ app.get("/api/subscriber/payments/:subscriptionId", async (req, res) => {
 });
 
 // =============================================================================
+// Merchant Vanity Handles
+// =============================================================================
+
+// POST /api/merchant/handle — claim or update a handle (merchant auth required)
+app.post("/api/merchant/handle", requireMerchantAuth, async (req, res) => {
+  try {
+    const { handle } = req.body;
+    if (!handle) return res.status(400).json({ error: "missing_handle" });
+
+    const clean = handle.toLowerCase().trim();
+    const valid = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(clean);
+    if (!valid) return res.status(400).json({ error: "invalid_handle", message: "3–30 chars, lowercase letters, numbers, hyphens only. Cannot start or end with a hyphen." });
+
+    const RESERVED = new Set(["admin","pay","api","app","auth","pricing","login","register","dashboard","my-subscriptions","health","data","connect","stripe","webhook","handle"]);
+    if (RESERVED.has(clean)) return res.status(400).json({ error: "reserved_handle", message: "That handle is reserved." });
+
+    // Check if taken by another wallet
+    const existing = await db.query(
+      "SELECT wallet_address FROM merchant_handles WHERE handle = $1",
+      [clean]
+    );
+    if (existing.rows.length > 0 && existing.rows[0].wallet_address !== req.merchantAddress) {
+      return res.status(409).json({ error: "handle_taken", message: "That handle is already taken." });
+    }
+
+    // Upsert: one handle per wallet (remove old one if switching)
+    await db.query("DELETE FROM merchant_handles WHERE wallet_address = $1", [req.merchantAddress]);
+    await db.query(
+      "INSERT INTO merchant_handles (handle, wallet_address) VALUES ($1, $2)",
+      [clean, req.merchantAddress]
+    );
+
+    res.json({ success: true, handle: clean, wallet_address: req.merchantAddress });
+  } catch (err) {
+    console.error("[HANDLE] Error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// GET /api/handle/:handle — public, resolve handle → wallet address
+app.get("/api/handle/:handle", async (req, res) => {
+  try {
+    const handle = req.params.handle.toLowerCase();
+    const result = await db.query(
+      "SELECT wallet_address FROM merchant_handles WHERE handle = $1",
+      [handle]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "not_found" });
+    res.json({ handle, wallet_address: result.rows[0].wallet_address });
+  } catch (err) {
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// GET /api/merchant/handle — get current handle for authenticated merchant
+app.get("/api/merchant/handle", requireMerchantAuth, async (req, res) => {
+  try {
+    const result = await db.query(
+      "SELECT handle FROM merchant_handles WHERE wallet_address = $1",
+      [req.merchantAddress]
+    );
+    res.json({ handle: result.rows[0]?.handle || null });
+  } catch (err) {
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// =============================================================================
 // DataOnce — reserved routes
 // =============================================================================
 
