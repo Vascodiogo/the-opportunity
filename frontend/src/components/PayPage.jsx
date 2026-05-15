@@ -776,8 +776,14 @@ export default function PayPage() {
                   </div>
                 )}
 
+                {!resolvedAddress && !merchantAddress?.startsWith("0x") && (
+                  <div style={{ color: "#f87171", fontSize: 12, marginBottom: 12 }}>
+                    Resolving merchant... please wait.
+                  </div>
+                )}
+
                 {flowStatus === "connected" && (
-                  <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleApprove} disabled={isWrongNetwork}>
+                  <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleApprove} disabled={isWrongNetwork || !resolvedAddress}>
                     {hasTrial && !isYearly
                       ? `Start ${trialDays}-day free trial →`
                       : isYearly
