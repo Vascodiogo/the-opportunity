@@ -17,13 +17,6 @@ import {
 import { parseUnits } from "viem";
 import { baseSepolia } from "wagmi/chains";
 
-import {
-  VAULT_ADDRESS,
-  USDC_ADDRESS,
-  VAULT_ABI,
-  INTERVAL_NAMES,
-} from "../config.js";
-
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 const USDC_APPROVE_ABI = [
