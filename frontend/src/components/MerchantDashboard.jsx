@@ -515,6 +515,193 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   );
 }
 
+// ─── Edit Product Modal ───────────────────────────────────────────────────────
+function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
+  const intervalRevMap = { 0: "0", 1: "1", 2: "2" };
+  const intervalMap    = { "0": "weekly", "1": "monthly", "2": "yearly" };
+  const intervalLabel  = { "0": "week", "1": "month", "2": "year" };
+
+  const [name, setName]               = useState(product.name);
+  const [amount, setAmount]           = useState(product.amount.toFixed(2));
+  const [interval, setInterval]       = useState(intervalRevMap[product.interval] ?? "1");
+  const [hasIntro, setHasIntro]       = useState(product.intro_amount > 0);
+  const [introAmount, setIntroAmount] = useState(product.intro_amount > 0 ? product.intro_amount.toFixed(2) : "");
+  const [introPulls, setIntroPulls]   = useState(product.intro_pulls > 0 ? String(product.intro_pulls) : "1");
+  const [hasYearly, setHasYearly]     = useState(!!product.yearly_amount);
+  const [yearlyAmount, setYearlyAmount] = useState(product.yearly_amount ? product.yearly_amount.toFixed(2) : "");
+  const [paymentMethods, setPaymentMethods] = useState(product.payment_methods || ["crypto"]);
+  const [saving, setSaving]           = useState(false);
+
+  const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
+  const yearlyDiscount   = amount && yearlyAmount
+    ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
+    : 0;
+
+  const toggleMethod = (method) => {
+    if (method === "crypto") return;
+    setPaymentMethods(prev =>
+      prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]
+    );
+  };
+
+  const handleSave = async () => {
+    if (!name || !amount) return;
+    if (hasIntro && (!introAmount || parseFloat(introAmount) <= 0)) {
+      alert("Please enter a valid intro price."); return;
+    }
+    if (hasIntro && parseFloat(introAmount) > parseFloat(amount)) {
+      alert("Intro price cannot be higher than the full price."); return;
+    }
+    if (hasYearly && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) {
+      alert("Please enter a valid yearly price."); return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/products/${merchantAddress}/${product.slug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
+        body: JSON.stringify({
+          name,
+          amount:          parseFloat(amount),
+          interval:        intervalMap[interval],
+          intro_amount:    hasIntro  ? parseFloat(introAmount) : 0,
+          intro_pulls:     hasIntro  ? parseInt(introPulls)    : 0,
+          yearly_amount:   hasYearly ? parseFloat(yearlyAmount): null,
+          payment_methods: paymentMethods,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update product");
+      onSaved();
+      onClose();
+    } catch {
+      alert("Could not update product. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>Edit Product</h2>
+          <button onClick={onClose} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "4px 10px", color: "var(--text-secondary)", cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Plan name</label>
+            <input placeholder="e.g. Standard, Premium, Ultra" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Full price (USDC)</label>
+            <input type="number" placeholder="20.00" value={amount} onChange={e => setAmount(e.target.value)} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Billing interval</label>
+            <select value={interval} onChange={e => setInterval(e.target.value)}>
+              <option value="0">Weekly</option>
+              <option value="1">Monthly</option>
+              <option value="2">Yearly</option>
+            </select>
+          </div>
+
+          {/* Intro pricing */}
+          <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setHasIntro(v => !v)}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>🎁 Introductory pricing</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>e.g. $5 for first month, then $20/month</div>
+              </div>
+              <div style={{ width: 36, height: 20, borderRadius: 99, background: hasIntro ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                <div style={{ position: "absolute", top: 2, left: hasIntro ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s" }} />
+              </div>
+            </div>
+            {hasIntro && (
+              <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>Intro price (USDC)</label>
+                  <input type="number" placeholder="5.00" value={introAmount} onChange={e => setIntroAmount(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>Number of {intervalLabel[interval]}s at intro price</label>
+                  <input type="number" min="1" max="12" placeholder="1" value={introPulls} onChange={e => setIntroPulls(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+            )}
+            {hasIntro && introAmount && amount && (
+              <div style={{ marginTop: 10, fontSize: 11, color: "var(--amber)", background: "rgba(251,191,36,0.06)", border: "0.5px solid rgba(251,191,36,0.2)", borderRadius: 6, padding: "6px 10px" }}>
+                Subscriber pays ${parseFloat(introAmount || 0).toFixed(2)} for the first {introPulls} {intervalLabel[interval]}{parseInt(introPulls) > 1 ? "s" : ""}, then ${parseFloat(amount || 0).toFixed(2)}/{intervalLabel[interval]}
+              </div>
+            )}
+          </div>
+
+          {/* Yearly pricing */}
+          {interval === "1" && (
+            <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => { setHasYearly(v => !v); if (!yearlyAmount && yearlySuggestion) setYearlyAmount(yearlySuggestion); }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>📅 Yearly pricing option</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Offer a discounted yearly plan</div>
+                </div>
+                <div style={{ width: 36, height: 20, borderRadius: 99, background: hasYearly ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 2, left: hasYearly ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s" }} />
+                </div>
+              </div>
+              {hasYearly && (
+                <div style={{ marginTop: 14 }}>
+                  <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>Yearly price (USDC) — suggested: ${yearlySuggestion} (20% off)</label>
+                  <input type="number" placeholder={yearlySuggestion || "192.00"} value={yearlyAmount} onChange={e => setYearlyAmount(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+                  {yearlyAmount && amount && yearlyDiscount > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: "var(--green)", background: "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.2)", borderRadius: 6, padding: "6px 10px" }}>
+                      Subscriber saves {yearlyDiscount}% vs monthly · ${(parseFloat(yearlyAmount) / 12).toFixed(2)}/month equivalent
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payment methods */}
+          <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>💳 Payment methods</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                { id: "crypto",     label: "⛓ Crypto (USDC)",    always: true },
+                { id: "card",       label: "💳 Card (Visa/MC)" },
+                { id: "sepa",       label: "🏦 SEPA Transfer" },
+                { id: "mbway",      label: "📱 MB Way (PT)" },
+                { id: "multibanco", label: "🏧 Multibanco (PT)" },
+                { id: "ideal",      label: "🇳🇱 iDEAL (NL)" },
+                { id: "bancontact", label: "🇧🇪 Bancontact (BE)" },
+                { id: "eps",        label: "🇦🇹 EPS (AT)" },
+                { id: "klarna",     label: "🛍 Klarna" },
+                { id: "blik",       label: "🇵🇱 BLIK (PL)" },
+              ].map(({ id, label, always }) => {
+                const isEnabled = paymentMethods.includes(id);
+                return (
+                  <div key={id} onClick={() => toggleMethod(id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: always ? "default" : "pointer", border: `0.5px solid ${isEnabled ? "rgba(52,211,153,0.3)" : "var(--border)"}`, background: isEnabled ? "rgba(52,211,153,0.06)" : "var(--bg-tag)", opacity: always ? 0.7 : 1 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`, background: isEnabled ? "var(--green)" : "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {isEnabled && <span style={{ color: "#080c14", fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <button onClick={handleSave} disabled={saving} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginTop: 4 }}>
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Webhook Modal ────────────────────────────────────────────────────────────
 function WebhookModal({ merchantAddress, onClose }) {
   const [url, setUrl]     = useState("");
@@ -623,6 +810,7 @@ export default function MerchantDashboard({ address }) {
   const [qrProduct, setQrProduct]             = useState(null);
   const [trialProduct, setTrialProduct]       = useState(null);
   const [priceChangeProduct, setPriceChangeProduct] = useState(null);
+  const [editProduct, setEditProduct]               = useState(null);
   const [stripeStatus, setStripeStatus]       = useState(null); // null=loading, object=status
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [handle, setHandle]           = useState(null);   // current saved handle
@@ -904,6 +1092,12 @@ export default function MerchantDashboard({ address }) {
                         )}
                       </div>
                     </div>
+                    <button
+                      onClick={() => setEditProduct(p)}
+                      style={{ background: "rgba(59,130,246,0.08)", border: "0.5px solid rgba(59,130,246,0.2)", borderRadius: 8, color: "#3b82f6", fontSize: 12, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={async () => {
                         if (!window.confirm("Delete " + p.name + "?")) return;
@@ -1253,6 +1447,7 @@ export default function MerchantDashboard({ address }) {
 
       {/* Modals */}
       {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
+      {editProduct    && <EditProductModal merchantAddress={address} product={editProduct} onClose={() => setEditProduct(null)} onSaved={loadProducts} />}
       {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} />}
       {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
       {priceChangeProduct && <PriceChangeModal product={priceChangeProduct} address={address} onClose={() => setPriceChangeProduct(null)} />}
