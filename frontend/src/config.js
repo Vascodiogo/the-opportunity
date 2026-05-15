@@ -33,7 +33,7 @@ export const RPC_URLS = [
 // Updated after v4 redeploy — replace with new addresses after running deploy.js
 export const VAULT_ADDRESS = "0x12ded877546bdaF500A1FeAd66798d5877c42f1d";
 export const REGISTRY_ADDRESS = "0xaB9a719AD824CF81Ade886E7987702d62cb3df40"; // unchanged
-export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
 // ─── SubscriptionVault v4 ABI ─────────────────────────────────────────────────

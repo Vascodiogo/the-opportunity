@@ -5,6 +5,7 @@
 // Trial support:      ?trial=N in URL → N free days before first payment
 // Intro pricing:      loaded from product API (introAmount, introPulls)
 
+import { VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, INTERVAL_NAMES } from "../config.js";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
@@ -330,7 +331,10 @@ export default function PayPage() {
   };
 
   const handleApprove = async () => {
-    if (!product || !address) return;
+    if (!product || !address || !resolvedAddress) {
+      setErrorMsg("Could not resolve merchant. Please refresh.");
+      return;
+    }
     setErrorMsg("");
 
     if (currentAllowance !== undefined && currentAllowance >= amountRaw) {
@@ -367,7 +371,7 @@ export default function PayPage() {
         abi: VAULT_ABI,
         functionName: "createSubscription",
         args: [
-          merchantAddress,                          // merchant
+          resolvedAddress,                           // merchant
           address,                                  // safeVault
           amountRaw,                                // full recurring amount
           introAmountRaw,                           // intro amount (0 for yearly)

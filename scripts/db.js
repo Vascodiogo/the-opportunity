@@ -463,7 +463,7 @@ async function getProduct(merchantAddress, slug) {
 
 async function getMerchantProducts(merchantAddress) {
   const res = await query(
-    "SELECT * FROM products WHERE merchant_address = $1 AND active = TRUE ORDER BY created_at ASC",
+    "SELECT * FROM products WHERE merchant_address = $1 AND active = TRUE ORDER BY created_at DESC",
     [merchantAddress]
   );
   return res.rows;
