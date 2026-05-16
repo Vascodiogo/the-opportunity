@@ -617,7 +617,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <span style={{ fontSize: 12, color: muted }}>BUSL-1.1</span>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>
-              {lang === "en" ? "Base Sepolia testnet" : "Testnet Base Sepolia"}
+              {lang === "en" ? "Base Network" : " Base Network"}
             </span>
           </div>
         </div>

@@ -188,7 +188,7 @@ export default function Dashboard({ address, isAdmin }) {
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 24px" }}>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-        <StatCard label="Active Subscriptions" value={activeSubs.length} sub="on Base Sepolia" accent="linear-gradient(90deg,#34d399,#3b82f6)" />
+        <StatCard label="Active Subscriptions" value={activeSubs.length} sub="on Base Network" accent="linear-gradient(90deg,#34d399,#3b82f6)" />
         <StatCard label="Vault Balance" value={formatUSDC(vaultUSDC)} sub="USDC · your wallet" accent="linear-gradient(90deg,#a78bfa,#ec4899)" />
         <StatCard label="Monthly Committed" value={`$${totalMonthly.toFixed(2)}`} sub="across all active subs" accent="linear-gradient(90deg,#60a5fa,#34d399)" />
         <StatCard label="Months Covered" value={totalMonthly > 0 ? (Number(vaultUSDC) / 1e6 / totalMonthly).toFixed(1) : "∞"} sub="at current balance" accent="linear-gradient(90deg,#fbbf24,#f87171)" />

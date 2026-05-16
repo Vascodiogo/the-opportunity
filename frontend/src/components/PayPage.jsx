@@ -488,7 +488,7 @@ export default function PayPage() {
             {/* Network error */}
             {isWrongNetwork && (
               <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", textAlign: "center", marginBottom: 16 }}>
-                Wrong network. AuthOnce runs on Base Sepolia.{" "}
+                Wrong network. AuthOnce runs on Base Network (testnet).{" "}
                 <button onClick={() => switchChain({ chainId: baseSepolia.id })} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontWeight: 700, textDecoration: "underline", padding: 0 }}>
                   Switch now
                 </button>
