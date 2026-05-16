@@ -71,9 +71,13 @@ function MRRChart({ payments }) {
     );
   }
   const now    = new Date();
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-GB", { month: "short" }), total: 0 };
+  const months = Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (23 - i), 1);
+    return {
+      key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: i % 4 === 0 ? d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) : "",
+      total: 0,
+    };
   });
   payments.forEach(p => {
     const key    = p.executed_at?.slice(0, 7);
@@ -83,15 +87,20 @@ function MRRChart({ payments }) {
   const max    = Math.max(...months.map(m => m.total), 1);
   const chartH = 120;
   return (
-    <div style={{ width: "100%" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: chartH + 28, paddingBottom: 24, position: "relative" }}>
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: chartH + 28, paddingBottom: 24, position: "relative", minWidth: 480 }}>
         {months.map((m, i) => {
-          const barH = Math.max((m.total / max) * chartH, m.total > 0 ? 4 : 0);
+          const isLast = i === 23;
+          const barH   = Math.max((m.total / max) * chartH, m.total > 0 ? 4 : 0);
           return (
             <div key={m.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
-              {m.total > 0 && <div style={{ fontSize: 10, color: "var(--green)", fontFamily: "monospace", marginBottom: 2 }}>${m.total.toFixed(0)}</div>}
-              <div style={{ width: "100%", height: barH, background: i === 5 ? "linear-gradient(180deg, #34d399, #3b82f6)" : "rgba(52,211,153,0.25)", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} />
-              <div style={{ fontSize: 10, color: "var(--text-muted)", position: "absolute", bottom: 0 }}>{m.label}</div>
+              {m.total > 0 && <div style={{ fontSize: 9, color: "var(--green)", fontFamily: "monospace", marginBottom: 2 }}>${m.total.toFixed(0)}</div>}
+              <div style={{
+                width: "100%", height: barH,
+                background: isLast ? "linear-gradient(180deg, #34d399, #22c55e)" : `rgba(52,211,153,${0.12 + (i / 23) * 0.25})`,
+                borderRadius: "3px 3px 0 0", transition: "height 0.3s ease",
+              }} />
+              {m.label && <div style={{ fontSize: 8, color: "var(--text-muted)", position: "absolute", bottom: 0 }}>{m.label}</div>}
             </div>
           );
         })}
@@ -1018,49 +1027,84 @@ export default function MerchantDashboard({ address }) {
 
       {/* ── Overview ── */}
       {tab === "overview" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div style={{ ...card, gridColumn: "1 / -1" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={sectionLabel}>Monthly Revenue (USDC)</div>
-              <div style={{ display: "flex", gap: 24 }}>
-                {[
-                  { label: "Gross", value: `$${totalRevenue.toFixed(2)}`, color: "var(--text-primary)" },
-                  { label: "Fee",   value: `-$${protocolFee.toFixed(4)}`, color: "var(--red)" },
-                  { label: "Net",   value: `$${netRevenue.toFixed(2)}`,   color: "var(--green)" },
-                ].map(r => (
-                  <div key={r.label} style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{r.label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: r.color, fontFamily: "monospace" }}>{r.value}</div>
-                  </div>
-                ))}
-              </div>
+  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+    {/* MRR chart — full width */}
+    <div style={{ ...card, gridColumn: "1 / -1" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={sectionLabel}>Revenue — last 24 months (USDC)</div>
+        <div style={{ display: "flex", gap: 20 }}>
+          {[
+            { label: "Gross", value: `$${totalRevenue.toFixed(2)}`, color: "var(--text-primary)" },
+            { label: "Fee",   value: `-$${protocolFee.toFixed(4)}`, color: "var(--red)" },
+            { label: "Net",   value: `$${netRevenue.toFixed(2)}`,   color: "var(--green)" },
+          ].map(r => (
+            <div key={r.label} style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{r.label}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: r.color, fontFamily: "monospace" }}>{r.value}</div>
             </div>
-            <MRRChart payments={payments} />
+          ))}
+        </div>
+      </div>
+      <MRRChart payments={payments} />
+    </div>
+
+    {/* Subscriber status */}
+    <div style={card}>
+      <div style={sectionLabel}>Subscriber breakdown</div>
+      {[
+        { label: "Active",                count: subscribers.filter(s => s.status === 0).length, color: "var(--green)" },
+        { label: "Paused (grace period)", count: subscribers.filter(s => s.status === 1).length, color: "var(--amber)" },
+        { label: "Cancelled",             count: subscribers.filter(s => s.status === 2).length, color: "var(--red)" },
+        { label: "Expired",               count: subscribers.filter(s => s.status === 3).length, color: "var(--text-secondary)" },
+      ].map(r => (
+        <div key={r.label} style={row}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: r.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{r.label}</span>
           </div>
-          <div style={card}>
-            <div style={sectionLabel}>Subscriber status</div>
-            {[
-              { label: "Active",                count: subscribers.filter(s => s.status === 0).length, color: "var(--green)" },
-              { label: "Paused (grace period)", count: subscribers.filter(s => s.status === 1).length, color: "var(--amber)" },
-              { label: "Cancelled",             count: subscribers.filter(s => s.status === 2).length, color: "var(--red)" },
-              { label: "Expired",               count: subscribers.filter(s => s.status === 3).length, color: "var(--text-secondary)" },
-            ].map(r => (
-              <div key={r.label} style={row}>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{r.label}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: r.color }}>{r.count}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: r.color, fontFamily: "monospace" }}>{r.count}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* Recent activity */}
+    <div style={card}>
+      <div style={sectionLabel}>Recent activity</div>
+      {payments.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No payments yet</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {payments.slice(0, 6).map(p => (
+            <div key={p.payment_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "0.5px solid var(--border)" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  Payment pulled · {p.executed_at ? new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
+                </div>
               </div>
-            ))}
-          </div>
-          <div style={card}>
-            <div style={sectionLabel}>Quick actions</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={() => { setTab("products"); setShowAddProduct(true); }} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>+ Add Product</button>
-              <button onClick={() => setTab("products")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>View Pay Links</button>
-              <button onClick={() => setTab("webhooks")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>Manage Webhooks</button>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--green)", fontFamily: "monospace", flexShrink: 0 }}>+${p.merchant_received_usdc}</span>
             </div>
-          </div>
+          ))}
         </div>
       )}
+      <button onClick={() => { setTab("payments"); loadPayments(); }} style={{ marginTop: 12, background: "none", border: "none", color: "var(--green)", fontSize: 12, cursor: "pointer", padding: 0 }}>
+        View all payments →
+      </button>
+    </div>
+
+    {/* Quick actions */}
+    <div style={{ ...card, gridColumn: "1 / -1" }}>
+      <div style={sectionLabel}>Quick actions</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={() => { setTab("products"); setShowAddProduct(true); }} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>+ Add Product</button>
+        <button onClick={() => setTab("products")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>View Pay Links</button>
+        <button onClick={() => setTab("webhooks")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>Manage Webhooks</button>
+        <button onClick={() => setTab("settings")} style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", fontSize: 13, padding: "10px 20px", cursor: "pointer" }}>Settings</button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ── Products ── */}
       {tab === "products" && (
@@ -1233,37 +1277,58 @@ export default function MerchantDashboard({ address }) {
 
       {/* ── Webhooks ── */}
       {tab === "webhooks" && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{webhooks.length} webhook{webhooks.length !== 1 ? "s" : ""}</div>
-            <button onClick={() => setShowAddWebhook(true)} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "8px 18px", cursor: "pointer" }}>+ Add Webhook</button>
-          </div>
-          {webhooks.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No webhooks yet.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {webhooks.map(wh => (
-                <div key={wh.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "16px 20px", boxShadow: "var(--shadow)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <div style={{ fontSize: 13, fontFamily: "monospace", color: "var(--text-primary)" }}>{wh.url}</div>
-                    <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600 }}>Active</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {wh.events.map(e => (<span key={e} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "var(--bg-tag)", color: "var(--text-muted)", fontFamily: "monospace" }}>{e}</span>))}
-                  </div>
-                </div>
+  <div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{webhooks.length} webhook{webhooks.length !== 1 ? "s" : ""}</div>
+      <button onClick={() => setShowAddWebhook(true)} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 13, padding: "8px 18px", cursor: "pointer" }}>+ Add Webhook</button>
+    </div>
+
+    {webhooks.length === 0 ? (
+      <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)", fontSize: 13 }}>No webhooks configured.</div>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {webhooks.map(wh => (
+          <div key={wh.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, overflow: "hidden", boxShadow: "var(--shadow)" }}>
+            {/* Endpoint header */}
+            <div style={{ padding: "14px 20px", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)" }}>{wh.url}</div>
+              <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600 }}>Active</span>
+            </div>
+            {/* Event types */}
+            <div style={{ padding: "10px 20px", display: "flex", gap: 6, flexWrap: "wrap", borderBottom: "0.5px solid var(--border)" }}>
+              {wh.events.map(e => (
+                <span key={e} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "rgba(59,130,246,0.08)", color: "#3b82f6", fontFamily: "monospace", border: "0.5px solid rgba(59,130,246,0.2)" }}>{e}</span>
               ))}
             </div>
-          )}
-          <div style={{ marginTop: 20, ...card }}>
-            <div style={sectionLabel}>Webhook security</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
-              Every request includes a <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>X-AuthOnce-Signature</span> header signed with HMAC-SHA256.
-              Failed deliveries retry: 10s → 1min → 5min → 30min → 2hr.
+            {/* Terminal delivery log */}
+            <div style={{ background: "#060a12", padding: "14px 20px", fontFamily: "monospace", fontSize: 12 }}>
+              <div style={{ color: "#334155", fontSize: 10, marginBottom: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>Recent deliveries</div>
+              {(wh.recentDeliveries || []).length === 0 ? (
+                <div style={{ color: "#1e293b", fontSize: 12 }}>No deliveries yet — waiting for first event.</div>
+              ) : (
+                wh.recentDeliveries.map((d, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14, alignItems: "center", padding: "4px 0", borderBottom: i < wh.recentDeliveries.length - 1 ? "0.5px solid rgba(255,255,255,0.03)" : "none" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: d.status < 300 ? "#34d399" : d.status >= 500 ? "#f87171" : "#fbbf24", minWidth: 30 }}>{d.status}</span>
+                    <span style={{ color: d.status < 300 ? "#34d399" : "#f87171", flex: 1 }}>{d.event}</span>
+                    <span style={{ color: "#1e293b", fontSize: 11 }}>{d.time}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
+    )}
+
+    <div style={{ marginTop: 20, ...card }}>
+      <div style={sectionLabel}>Webhook security</div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
+        Every request includes a <span style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>X-AuthOnce-Signature</span> header signed with HMAC-SHA256.
+        Failed deliveries retry: 10s → 1min → 5min → 30min → 2hr.
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ── Settings ── */}
       {tab === "settings" && (

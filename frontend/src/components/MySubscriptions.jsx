@@ -1,150 +1,66 @@
 // src/components/MySubscriptions.jsx
 // Subscriber portal — authonce.io/my-subscriptions
 // Google OAuth login (no wallet required)
-// Shows active subscriptions, payment history, cancel button
 
 import { useState, useEffect } from "react";
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = {
-  page: {
-    minHeight: "100vh",
-    background: "#080c14",
-    fontFamily: "'DM Sans', system-ui, sans-serif",
-    color: "#f1f5f9",
-  },
-  nav: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 24px",
-    height: 58,
-    borderBottom: "0.5px solid rgba(255,255,255,0.07)",
-    background: "rgba(8,12,20,0.95)",
-    backdropFilter: "blur(12px)",
-    position: "sticky",
-    top: 0,
-    zIndex: 100,
-  },
-  logo: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  logoIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    background: "linear-gradient(135deg, #34d399, #3b82f6)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 13,
-    fontWeight: 800,
-    color: "#080c14",
-  },
-  logoText: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: "#f1f5f9",
-    letterSpacing: "-0.02em",
-  },
-  container: {
-    maxWidth: 720,
-    margin: "0 auto",
-    padding: "40px 24px",
-  },
-  card: {
-    background: "rgba(255,255,255,0.03)",
-    border: "0.5px solid rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    padding: 32,
-    marginBottom: 16,
-  },
-  loginCard: {
-    maxWidth: 420,
-    margin: "80px auto",
-    background: "rgba(255,255,255,0.03)",
-    border: "0.5px solid rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    padding: 40,
-    textAlign: "center",
-    boxShadow: "0 32px 80px rgba(0,0,0,0.4)",
-  },
-  btn: {
-    border: "none",
-    borderRadius: 10,
-    fontWeight: 600,
-    fontSize: 14,
-    padding: "11px 20px",
-    cursor: "pointer",
-    transition: "opacity 0.15s",
-    fontFamily: "'DM Sans', system-ui, sans-serif",
-  },
-  btnPrimary: {
-    background: "linear-gradient(135deg, #34d399, #3b82f6)",
-    color: "#080c14",
-  },
-  btnDanger: {
-    background: "rgba(248,113,113,0.1)",
-    border: "0.5px solid rgba(248,113,113,0.3)",
-    color: "#f87171",
-  },
-  btnSecondary: {
-    background: "rgba(255,255,255,0.05)",
-    border: "0.5px solid rgba(255,255,255,0.1)",
-    color: "#94a3b8",
-  },
-  badge: (color) => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "3px 9px",
-    borderRadius: 99,
-    fontSize: 11,
-    fontWeight: 600,
-    background: color.bg,
-    color: color.text,
-  }),
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: 13,
-  },
-  th: {
-    textAlign: "left",
-    padding: "8px 12px",
-    fontSize: 11,
-    color: "#475569",
-    fontWeight: 600,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    borderBottom: "0.5px solid rgba(255,255,255,0.06)",
-  },
-  td: {
-    padding: "12px 12px",
-    borderBottom: "0.5px solid rgba(255,255,255,0.04)",
-    color: "#94a3b8",
-    verticalAlign: "middle",
-  },
-};
-
 const STATUS_CONFIG = {
-  active:    { bg: "rgba(52,211,153,0.12)",  text: "#34d399" },
-  paused:    { bg: "rgba(251,191,36,0.12)",  text: "#fbbf24" },
-  cancelled: { bg: "rgba(148,163,184,0.12)", text: "#94a3b8" },
-  expired:   { bg: "rgba(148,163,184,0.12)", text: "#94a3b8" },
+  active:    { bg: "rgba(52,211,153,0.12)",  text: "#34d399",  dot: "#34d399" },
+  paused:    { bg: "rgba(251,191,36,0.12)",  text: "#fbbf24",  dot: "#fbbf24" },
+  cancelled: { bg: "rgba(148,163,184,0.1)",  text: "#64748b",  dot: "#475569" },
+  expired:   { bg: "rgba(148,163,184,0.1)",  text: "#64748b",  dot: "#475569" },
 };
 
 const INTERVAL_LABELS = { weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function nextPullDate(sub) {
+  if (sub.status !== "active") return null;
+  const last = sub.last_pulled_at ? new Date(sub.last_pulled_at) : new Date(sub.created_at);
+  if (!last) return null;
+  const next = new Date(last);
+  if (sub.interval === "weekly")       next.setDate(next.getDate() + 7);
+  else if (sub.interval === "monthly") next.setMonth(next.getMonth() + 1);
+  else if (sub.interval === "yearly")  next.setFullYear(next.getFullYear() + 1);
+  return next;
+}
+
+function formatDate(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function MerchantAvatar({ name, size = 40 }) {
+  const initials = name ? name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() : "?";
+  const palettes = [
+    ["#1e3a5f","#3b82f6"], ["#1a3a2e","#34d399"], ["#3b1a2e","#ec4899"],
+    ["#2e1a3b","#a78bfa"], ["#3b2a1a","#f59e0b"],
+  ];
+  const pick = palettes[(initials.charCodeAt(0) || 0) % palettes.length];
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 10, flexShrink: 0,
+      background: `linear-gradient(135deg, ${pick[0]}, ${pick[1]}22)`,
+      border: `1px solid ${pick[1]}33`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.38, fontWeight: 700, color: pick[1],
+    }}>
+      {initials}
+    </div>
+  );
+}
+
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.cancelled;
   return (
-    <span style={s.badge(cfg)}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.text, display: "inline-block" }} />
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600,
+      background: cfg.bg, color: cfg.text,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.dot, display: "inline-block" }} />
       {status?.charAt(0).toUpperCase() + status?.slice(1)}
     </span>
   );
@@ -167,63 +83,54 @@ function PaymentModal({ subscriptionId, token, onClose }) {
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 200, padding: 24,
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24,
     }} onClick={onClose}>
-      <div style={{ ...s.card, maxWidth: 560, width: "100%", margin: 0, maxHeight: "80vh", overflowY: "auto" }}
-           onClick={e => e.stopPropagation()}>
+      <div style={{
+        background: "#0f1623", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 16,
+        padding: 28, width: "100%", maxWidth: 520, margin: 0, maxHeight: "80vh", overflowY: "auto",
+      }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9" }}>Payment History</div>
-          <button onClick={onClose} style={{ ...s.btn, ...s.btnSecondary, padding: "6px 12px", fontSize: 12 }}>Close</button>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "5px 12px", color: "#64748b", cursor: "pointer", fontSize: 12 }}>Close</button>
         </div>
-
         {loading ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#475569" }}>Loading...</div>
+          <div style={{ textAlign: "center", padding: 32, color: "#334155" }}>Loading...</div>
         ) : payments.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#475569", fontSize: 13 }}>No payments yet.</div>
+          <div style={{ textAlign: "center", padding: 32, color: "#334155", fontSize: 13 }}>No payments yet.</div>
         ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Date</th>
-                <th style={s.th}>Amount</th>
-                <th style={s.th}>Tx</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map(p => (
-                <tr key={p.payment_id}>
-                  <td style={s.td}>{new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
-                  <td style={{ ...s.td, color: "#34d399", fontFamily: "monospace", fontWeight: 600 }}>${p.amount_usdc}</td>
-                  <td style={s.td}>
-                    <a href={`https://sepolia.basescan.org/tx/${p.tx_hash}`} target="_blank" rel="noopener noreferrer"
-                       style={{ color: "#3b82f6", fontSize: 11, fontFamily: "monospace", textDecoration: "none" }}>
-                      {p.tx_hash?.slice(0, 10)}...
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {payments.map(p => (
+              <div key={p.payment_id} style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center",
+                padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8,
+                border: "0.5px solid rgba(255,255,255,0.04)",
+              }}>
+                <span style={{ fontSize: 12, color: "#64748b" }}>{formatDate(p.executed_at)}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#34d399", fontFamily: "monospace" }}>${p.amount_usdc}</span>
+                <a href={`https://sepolia.basescan.org/tx/${p.tx_hash}`} target="_blank" rel="noopener noreferrer"
+                   style={{ fontSize: 11, color: "#3b82f6", fontFamily: "monospace", textDecoration: "none" }}>
+                  {p.tx_hash?.slice(0, 10)}... ↗
+                </a>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-// ─── Cancel Confirm Modal ─────────────────────────────────────────────────────
+// ─── Cancel Modal ─────────────────────────────────────────────────────────────
 function CancelModal({ subscription, token, onClose, onCancelled }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
   const handleCancel = async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const res = await fetch(`${API_BASE}/api/subscriber/cancel/${subscription.subscription_id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Cancel failed");
@@ -238,28 +145,28 @@ function CancelModal({ subscription, token, onClose, onCancelled }) {
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 200, padding: 24,
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24,
     }} onClick={onClose}>
-      <div style={{ ...s.card, maxWidth: 380, width: "100%", margin: 0, textAlign: "center" }}
-           onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+      <div style={{
+        background: "#0f1623", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 16,
+        padding: 32, maxWidth: 380, width: "100%", margin: 0, textAlign: "center",
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
         <div style={{ fontSize: 16, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>Cancel Subscription</div>
-        <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24, lineHeight: 1.6 }}>
-          Are you sure you want to cancel your <strong style={{ color: "#f1f5f9" }}>{subscription.product_name || "subscription"}</strong>?
-          This cannot be undone.
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24, lineHeight: 1.7 }}>
+          Cancel your <strong style={{ color: "#f1f5f9" }}>{subscription.product_name || "subscription"}</strong>? This cannot be undone.
         </div>
-
         {error && (
           <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", marginBottom: 16 }}>
             {error}
           </div>
         )}
-
         <div style={{ display: "flex", gap: 10 }}>
-          <button style={{ ...s.btn, ...s.btnSecondary, flex: 1 }} onClick={onClose} disabled={loading}>Keep it</button>
-          <button style={{ ...s.btn, ...s.btnDanger, flex: 1, opacity: loading ? 0.6 : 1 }} onClick={handleCancel} disabled={loading}>
+          <button style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#94a3b8", fontWeight: 600, fontSize: 14, padding: "11px", cursor: "pointer" }}
+                  onClick={onClose} disabled={loading}>Keep it</button>
+          <button style={{ flex: 1, background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", borderRadius: 10, color: "#f87171", fontWeight: 600, fontSize: 14, padding: "11px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
+                  onClick={handleCancel} disabled={loading}>
             {loading ? "Cancelling..." : "Yes, cancel"}
           </button>
         </div>
@@ -272,57 +179,86 @@ function CancelModal({ subscription, token, onClose, onCancelled }) {
 function SubscriptionCard({ sub, token, onCancelled }) {
   const [showPayments, setShowPayments] = useState(false);
   const [showCancel, setShowCancel]     = useState(false);
-  const canCancel = sub.status === "active" || sub.status === "paused";
+  const canCancel  = sub.status === "active" || sub.status === "paused";
+  const nextPull   = nextPullDate(sub);
+  const merchantLabel = sub.merchant_name || `${sub.merchant_address?.slice(0, 6)}...${sub.merchant_address?.slice(-4)}`;
 
   return (
     <>
-      <div style={s.card}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>
+      <div style={{
+        background: "rgba(255,255,255,0.025)", border: "0.5px solid rgba(255,255,255,0.07)",
+        borderRadius: 16, padding: "20px 22px", marginBottom: 12,
+        transition: "border-color 0.15s",
+      }}>
+        {/* Top row */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
+          <MerchantAvatar name={merchantLabel} size={42} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 2, letterSpacing: "-0.01em" }}>
               {sub.product_name || `Subscription #${sub.subscription_id}`}
             </div>
-            <div style={{ fontSize: 12, color: "#475569" }}>
-              {sub.merchant_name || `${sub.merchant_address?.slice(0, 6)}...${sub.merchant_address?.slice(-4)}`}
-            </div>
+            <div style={{ fontSize: 12, color: "#475569" }}>{merchantLabel}</div>
           </div>
           <StatusBadge status={sub.status} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-          {[
-            ["Amount", `$${parseFloat(sub.amount_usdc || 0).toFixed(2)} USDC`],
-            ["Billing", INTERVAL_LABELS[sub.interval] || sub.interval],
-            ["Since", sub.created_at ? new Date(sub.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"],
-          ].map(([label, value]) => (
-            <div key={label} style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 11, color: "#475569", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", fontFamily: "monospace" }}>{value}</div>
-            </div>
-          ))}
+        {/* Meta strip */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#34d399", fontFamily: "monospace", background: "rgba(52,211,153,0.08)", padding: "4px 10px", borderRadius: 6 }}>
+            ${parseFloat(sub.amount_usdc || 0).toFixed(2)} USDC
+          </span>
+          <span style={{ fontSize: 12, color: "#475569", background: "rgba(255,255,255,0.04)", padding: "4px 10px", borderRadius: 6 }}>
+            {INTERVAL_LABELS[sub.interval] || sub.interval}
+          </span>
+          {nextPull && (
+            <span style={{ fontSize: 12, color: "#3b82f6", background: "rgba(59,130,246,0.08)", padding: "4px 10px", borderRadius: 6 }}>
+              Next pull {formatDate(nextPull)}
+            </span>
+          )}
+          {sub.status === "paused" && (
+            <span style={{ fontSize: 12, color: "#fbbf24", background: "rgba(251,191,36,0.08)", padding: "4px 10px", borderRadius: 6 }}>
+              Grace period active
+            </span>
+          )}
+          {sub.last_pulled_at && (
+            <span style={{ fontSize: 12, color: "#334155", background: "rgba(255,255,255,0.03)", padding: "4px 10px", borderRadius: 6 }}>
+              Last: {formatDate(sub.last_pulled_at)}
+            </span>
+          )}
         </div>
 
-        {sub.last_pulled_at && (
-          <div style={{ fontSize: 11, color: "#475569", marginBottom: 16 }}>
-            Last payment: {new Date(sub.last_pulled_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-          </div>
+        {/* Notice banner */}
+        {sub.status === "active" && nextPull && (
+          (() => {
+            const daysUntil = Math.ceil((nextPull - Date.now()) / (1000 * 60 * 60 * 24));
+            return daysUntil <= 3 ? (
+              <div style={{ background: "rgba(59,130,246,0.06)", border: "0.5px solid rgba(59,130,246,0.15)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#93c5fd", marginBottom: 14 }}>
+                🔔 3-day notice: payment of ${parseFloat(sub.amount_usdc || 0).toFixed(2)} USDC on {formatDate(nextPull)}
+              </div>
+            ) : null;
+          })()
         )}
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button style={{ ...s.btn, ...s.btnSecondary, fontSize: 12, padding: "8px 16px" }}
-                  onClick={() => setShowPayments(true)}>
-            Payment History
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={() => setShowPayments(true)}
+            style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 8, color: "#64748b", fontSize: 12, fontWeight: 500, padding: "7px 14px", cursor: "pointer" }}
+          >
+            Payment history
           </button>
           {canCancel && (
-            <button style={{ ...s.btn, ...s.btnDanger, fontSize: 12, padding: "8px 16px" }}
-                    onClick={() => setShowCancel(true)}>
+            <button
+              onClick={() => setShowCancel(true)}
+              style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 500, padding: "7px 14px", cursor: "pointer" }}
+            >
               Cancel
             </button>
           )}
           {sub.status === "cancelled" && sub.merchant_address && sub.product_slug && (
             <a
               href={`https://authonce.io/pay/${sub.merchant_address}/${sub.product_slug}`}
-              style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: "8px 16px", textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+              style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontSize: 12, fontWeight: 700, padding: "7px 14px", textDecoration: "none", display: "inline-flex", alignItems: "center" }}
             >
               Re-subscribe →
             </a>
@@ -330,22 +266,8 @@ function SubscriptionCard({ sub, token, onCancelled }) {
         </div>
       </div>
 
-      {showPayments && (
-        <PaymentModal
-          subscriptionId={sub.subscription_id}
-          token={token}
-          onClose={() => setShowPayments(false)}
-        />
-      )}
-
-      {showCancel && (
-        <CancelModal
-          subscription={sub}
-          token={token}
-          onClose={() => setShowCancel(false)}
-          onCancelled={onCancelled}
-        />
-      )}
+      {showPayments && <PaymentModal subscriptionId={sub.subscription_id} token={token} onClose={() => setShowPayments(false)} />}
+      {showCancel && <CancelModal subscription={sub} token={token} onClose={() => setShowCancel(false)} onCancelled={onCancelled} />}
     </>
   );
 }
@@ -359,38 +281,26 @@ export default function MySubscriptions() {
   const [error, setError]                 = useState("");
   const [filter, setFilter]               = useState("active");
 
-  // Handle Google OAuth return — token in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get("subscriber_token");
     if (urlToken) {
       sessionStorage.setItem("subscriber_token", urlToken);
       setToken(urlToken);
-      // Clean URL
       const clean = new URL(window.location.href);
       clean.searchParams.delete("subscriber_token");
       window.history.replaceState({}, "", clean.toString());
     }
   }, []);
 
-  // Load subscriber profile
   useEffect(() => {
     if (!token) return;
-    fetch(`${API_BASE}/api/subscriber/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => {
-        if (!r.ok) throw new Error("Invalid session");
-        return r.json();
-      })
+    fetch(`${API_BASE}/api/subscriber/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => { if (!r.ok) throw new Error("Invalid session"); return r.json(); })
       .then(setSubscriber)
-      .catch(() => {
-        sessionStorage.removeItem("subscriber_token");
-        setToken("");
-      });
+      .catch(() => { sessionStorage.removeItem("subscriber_token"); setToken(""); });
   }, [token]);
 
-  // Load subscriptions
   useEffect(() => {
     if (!subscriber?.wallet_address) return;
     setLoading(true);
@@ -401,53 +311,49 @@ export default function MySubscriptions() {
       .finally(() => setLoading(false));
   }, [subscriber]);
 
-  const handleLogin = () => {
-    const returnTo = encodeURIComponent("/my-subscriptions");
-    window.location.href = `${API_BASE}/auth/google?returnTo=${returnTo}`;
-  };
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("subscriber_token");
-    setToken("");
-    setSubscriber(null);
-    setSubscriptions([]);
-  };
-
-  const handleCancelled = (id) => {
-    setSubscriptions(prev => prev.map(s =>
-      s.subscription_id === id ? { ...s, status: "cancelled" } : s
-    ));
-  };
+  const handleLogin  = () => { window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent("/my-subscriptions")}`; };
+  const handleLogout = () => { sessionStorage.removeItem("subscriber_token"); setToken(""); setSubscriber(null); setSubscriptions([]); };
+  const handleCancelled = (id) => { setSubscriptions(prev => prev.map(s => s.subscription_id === id ? { ...s, status: "cancelled" } : s)); };
 
   const filtered = subscriptions.filter(s => {
-    if (filter === "active") return s.status === "active" || s.status === "paused";
+    if (filter === "active")    return s.status === "active" || s.status === "paused";
     if (filter === "cancelled") return s.status === "cancelled" || s.status === "expired";
     return true;
   });
 
+  const activeCount = subscriptions.filter(s => s.status === "active").length;
+  const totalMRR    = subscriptions.filter(s => s.status === "active").reduce((acc, s) => {
+    const amt = parseFloat(s.amount_usdc || 0);
+    return acc + (s.interval === "weekly" ? amt * 4.33 : s.interval === "yearly" ? amt / 12 : amt);
+  }, 0);
+
   return (
-    <div style={s.page}>
+    <div style={{ minHeight: "100vh", background: "#080c14", fontFamily: "'DM Sans', system-ui, sans-serif", color: "#f1f5f9" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
-      {/* Ambient glow */}
-      <div style={{
-        position: "fixed", inset: 0, pointerEvents: "none",
-        background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(52,211,153,0.06) 0%, transparent 70%)",
-      }} />
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(52,211,153,0.05) 0%, transparent 70%)" }} />
 
       {/* Nav */}
-      <nav style={s.nav}>
-        <div style={s.logo}>
-          <div style={s.logoIcon}>A</div>
-          <span style={s.logoText}>Auth<span style={{ color: "#34d399" }}>Once</span></span>
+      <nav style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 24px", height: 58, borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+        background: "rgba(8,12,20,0.95)", backdropFilter: "blur(12px)",
+        position: "sticky", top: 0, zIndex: 100,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: "linear-gradient(135deg, #34d399, #3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#080c14" }}>A</div>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em" }}>Auth<span style={{ color: "#34d399" }}>Once</span></span>
         </div>
         {subscriber && (
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {subscriber.avatar_url && (
-              <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "0.5px solid rgba(255,255,255,0.1)" }} />
-            )}
-            <span style={{ fontSize: 13, color: "#94a3b8" }}>{subscriber.name || subscriber.email}</span>
-            <button style={{ ...s.btn, ...s.btnSecondary, fontSize: 12, padding: "6px 12px" }} onClick={handleLogout}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {subscriber.avatar_url
+                ? <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "0.5px solid rgba(255,255,255,0.1)" }} />
+                : <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(52,211,153,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#34d399" }}>{subscriber.name?.[0]?.toUpperCase() || "?"}</div>
+              }
+              <span style={{ fontSize: 13, color: "#64748b" }}>{subscriber.email || subscriber.name}</span>
+            </div>
+            <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 8, color: "#475569", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
               Sign out
             </button>
           </div>
@@ -456,17 +362,28 @@ export default function MySubscriptions() {
 
       {/* Not logged in */}
       {!token && (
-        <div style={{ padding: 24 }}>
-          <div style={s.loginCard}>
-            <div style={{ ...s.logoIcon, width: 48, height: 48, borderRadius: 14, fontSize: 22, margin: "0 auto 16px" }}>A</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9", marginBottom: 8, letterSpacing: "-0.02em" }}>
-              My Subscriptions
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 24, minHeight: "calc(100vh - 58px)" }}>
+          <div style={{
+            maxWidth: 400, width: "100%", background: "rgba(255,255,255,0.025)",
+            border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "40px 36px",
+            textAlign: "center", boxShadow: "0 40px 100px rgba(0,0,0,0.5)",
+          }}>
+            <div style={{ position: "relative" }}>
+              <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg, #34d399, #3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800, color: "#080c14", margin: "0 auto 20px" }}>A</div>
             </div>
-            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 32, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", marginBottom: 8, letterSpacing: "-0.02em" }}>My Subscriptions</div>
+            <div style={{ fontSize: 13, color: "#475569", marginBottom: 32, lineHeight: 1.7 }}>
               Sign in with Google to view and manage your AuthOnce subscriptions.
             </div>
-            <button style={{ ...s.btn, ...s.btnPrimary, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}
-                    onClick={handleLogin}>
+            <button
+              onClick={handleLogin}
+              style={{
+                width: "100%", background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none",
+                borderRadius: 12, color: "#080c14", fontWeight: 800, fontSize: 15, padding: "14px 24px",
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                letterSpacing: "-0.01em",
+              }}
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -475,41 +392,45 @@ export default function MySubscriptions() {
               </svg>
               Continue with Google
             </button>
-            <div style={{ fontSize: 11, color: "#334155", marginTop: 16 }}>
-              No password required · Secure OAuth login
-            </div>
+            <div style={{ fontSize: 11, color: "#1e293b", marginTop: 14 }}>No password required · Secure OAuth</div>
           </div>
         </div>
       )}
 
       {/* Logged in */}
       {token && subscriber && (
-        <div style={s.container}>
-          <div style={{ marginBottom: 28 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", margin: "0 0 4px" }}>
-              My Subscriptions
-            </h1>
-            <div style={{ fontSize: 13, color: "#475569" }}>
-              Wallet: <span style={{ fontFamily: "monospace", color: "#64748b" }}>
-                {subscriber.wallet_address?.slice(0, 6)}...{subscriber.wallet_address?.slice(-4)}
-              </span>
-            </div>
-          </div>
+        <div style={{ maxWidth: 680, margin: "0 auto", padding: "36px 24px" }}>
 
-          {/* Filter tabs */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 4, width: "fit-content" }}>
-            {[["active", "Active"], ["cancelled", "Cancelled"], ["all", "All"]].map(([val, label]) => (
-              <button key={val} onClick={() => setFilter(val)} style={{
-                ...s.btn,
-                padding: "6px 16px",
-                fontSize: 12,
-                background: filter === val ? "rgba(255,255,255,0.08)" : "none",
-                color: filter === val ? "#f1f5f9" : "#475569",
-                border: "none",
-              }}>
-                {label}
-              </button>
-            ))}
+          {/* Summary stats */}
+          {subscriptions.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 28 }}>
+              {[
+                { label: "Active", value: activeCount, color: "#34d399" },
+                { label: "Monthly spend", value: `$${totalMRR.toFixed(2)}`, color: "#f1f5f9" },
+                { label: "Total plans", value: subscriptions.length, color: "#64748b" },
+              ].map(s => (
+                <div key={s.label} style={{ background: "rgba(255,255,255,0.02)", border: "0.5px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 10, color: "#334155", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Header + filter */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", margin: 0 }}>My Subscriptions</h1>
+            <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 3 }}>
+              {[["active", "Active"], ["cancelled", "Cancelled"], ["all", "All"]].map(([val, label]) => (
+                <button key={val} onClick={() => setFilter(val)} style={{
+                  background: filter === val ? "rgba(255,255,255,0.07)" : "none", border: "none",
+                  borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: filter === val ? 600 : 400,
+                  color: filter === val ? "#f1f5f9" : "#334155", cursor: "pointer",
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Error */}
@@ -521,38 +442,28 @@ export default function MySubscriptions() {
 
           {/* Loading */}
           {loading && (
-            <div style={{ textAlign: "center", padding: 48, color: "#475569", fontSize: 13 }}>
-              Loading subscriptions...
-            </div>
+            <div style={{ textAlign: "center", padding: 48, color: "#334155", fontSize: 13 }}>Loading subscriptions...</div>
           )}
 
           {/* Empty */}
           {!loading && filtered.length === 0 && (
-            <div style={{ ...s.card, textAlign: "center", padding: 48 }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>
+            <div style={{ textAlign: "center", padding: 48, background: "rgba(255,255,255,0.02)", border: "0.5px solid rgba(255,255,255,0.06)", borderRadius: 16 }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 6 }}>
                 {filter === "active" ? "No active subscriptions" : "No subscriptions found"}
               </div>
-              <div style={{ fontSize: 13, color: "#475569" }}>
-                Subscriptions you create via AuthOnce pay links will appear here.
-              </div>
+              <div style={{ fontSize: 13, color: "#334155" }}>Subscriptions you create via AuthOnce pay links will appear here.</div>
             </div>
           )}
 
-          {/* Subscription cards */}
+          {/* Cards */}
           {!loading && filtered.map(sub => (
-            <SubscriptionCard
-              key={sub.subscription_id}
-              sub={sub}
-              token={token}
-              onCancelled={handleCancelled}
-            />
+            <SubscriptionCard key={sub.subscription_id} sub={sub} token={token} onCancelled={handleCancelled} />
           ))}
         </div>
       )}
 
-      {/* Footer */}
-      <div style={{ textAlign: "center", padding: "24px", fontSize: 11, color: "#1e293b", marginTop: 40 }}>
+      <div style={{ textAlign: "center", padding: "24px", fontSize: 11, color: "#1a2030", marginTop: 24 }}>
         Powered by <span style={{ color: "#34d399" }}>AuthOnce</span> · Non-custodial · Base Network
       </div>
     </div>
