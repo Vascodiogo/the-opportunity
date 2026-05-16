@@ -598,7 +598,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 32 }}>
             {[
               { icon: "🎁", text: lang === "en" ? "Lifetime Growth tier free" : "Growth gratuito para sempre" },
-              { icon: "📞", text: lang === "en" ? "Direct founder access" : "Acesso direto ao fundador" },
+              { icon: "✉️", text: lang === "en" ? "Direct founder access" : "Acesso direto ao fundador" },
               { icon: "🗺️", text: lang === "en" ? "Roadmap input" : "Participação no roadmap" },
               { icon: "🏅", text: lang === "en" ? "Founding merchant badge" : "Distintivo de fundador" },
             ].map(({ icon, text: t }) => (
