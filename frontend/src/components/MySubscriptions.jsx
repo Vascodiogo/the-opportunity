@@ -274,7 +274,7 @@ function SubscriptionCard({ sub, token, onCancelled }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function MySubscriptions() {
-  const [token, setToken]                 = useState(() => sessionStorage.getItem("subscriber_token") || "");
+  const [token, setToken]                 = useState(() => localStorage.getItem("subscriber_token") || "");
   const [subscriber, setSubscriber]       = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading]             = useState(false);
@@ -285,7 +285,7 @@ export default function MySubscriptions() {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get("subscriber_token");
     if (urlToken) {
-      sessionStorage.setItem("subscriber_token", urlToken);
+      localStorage.setItem("subscriber_token", urlToken);
       setToken(urlToken);
       const clean = new URL(window.location.href);
       clean.searchParams.delete("subscriber_token");
@@ -298,7 +298,7 @@ export default function MySubscriptions() {
     fetch(`${API_BASE}/api/subscriber/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => { if (!r.ok) throw new Error("Invalid session"); return r.json(); })
       .then(setSubscriber)
-      .catch(() => { sessionStorage.removeItem("subscriber_token"); setToken(""); });
+      .catch(() => { localStorage.removeItem("subscriber_token"); setToken(""); });
   }, [token]);
 
   useEffect(() => {
