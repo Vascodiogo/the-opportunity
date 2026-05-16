@@ -1572,8 +1572,8 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
       LEFT JOIN products p  ON p.merchant_address = s.merchant_address
                             AND p.amount::numeric = (s.amount::numeric / 1000000)
                             AND p.active = TRUE
-      WHERE s.owner_address = $1
-         OR s.safe_vault    = $1
+      WHERE LOWER(s.owner_address) = $1
+         OR LOWER(s.safe_vault)    = $1
       ORDER BY s.created_at DESC
     `, [wallet]);
 
