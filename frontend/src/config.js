@@ -24,7 +24,7 @@ export const wagmiConfig = createConfig({
 // ─── RPC URLs — used by createPublicClient in components ─────────────────────
 // Alchemy primary, public fallback, Thirdweb tertiary
 export const RPC_URLS = [
-  "https://base-sepolia.g.alchemy.com/v2/_uXoDLhLHyfV7jqbsvucT",
+  `https://base-sepolia.g.alchemy.com/v2/${import.meta.env.VITE_ALCHEMY_KEY}`,
   "https://sepolia.base.org",
   "https://84532.rpc.thirdweb.com",
 ];
