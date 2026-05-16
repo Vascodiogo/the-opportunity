@@ -1388,7 +1388,7 @@ export default function MerchantDashboard({ address }) {
             <div style={{ background: "#060a12", padding: "14px 20px", fontFamily: "monospace", fontSize: 12 }}>
               <div style={{ color: "#334155", fontSize: 10, marginBottom: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>Recent deliveries</div>
               {(wh.recentDeliveries || []).length === 0 ? (
-                <div style={{ color: "#334155", fontSize: 12 }}>No deliveries yet — waiting for first event.</div>
+                <div style={{ color: "#475569", fontSize: 12 }}>No deliveries yet — waiting for first event.</div>
               ) : (
                 wh.recentDeliveries.map((d, i) => (
                   <div key={i} style={{ display: "flex", gap: 14, alignItems: "center", padding: "4px 0", borderBottom: i < wh.recentDeliveries.length - 1 ? "0.5px solid rgba(255,255,255,0.03)" : "none" }}>
