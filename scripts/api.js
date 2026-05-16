@@ -610,6 +610,25 @@ app.post("/api/webhooks", requireMerchantAuth, async (req, res) => {
   }
 });
 
+// GET /api/merchants/:address/webhooks — list webhooks from DB
+app.get("/api/merchants/:address/webhooks", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+
+    const result = await db.query(
+      `SELECT id, url, events, active, created_at FROM webhook_endpoints 
+       WHERE LOWER(merchant_address) = $1 AND active = TRUE 
+       ORDER BY created_at DESC`,
+      [address]
+    );
+    res.json({ webhooks: result.rows });
+  } catch (err) {
+    console.error("[API] List webhooks error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 // -----------------------------------------------------------------------------
 // POST /api/webhooks/test — fire a test ping to a specific webhook
 // -----------------------------------------------------------------------------
