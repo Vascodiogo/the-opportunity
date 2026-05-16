@@ -967,9 +967,18 @@ export default function MerchantDashboard({ address }) {
     finally { setPaymentsLoading(false); }
   }, [address]);
 
-  const loadWebhooks = useCallback(() => {
-    setWebhooks(JSON.parse(localStorage.getItem(`webhooks_${address}`) || "[]"));
-  }, [address]);
+  const loadWebhooks = useCallback(async () => {
+  if (!address) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/merchants/${address}/webhooks`, {
+      headers: { "X-Merchant-Address": address },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setWebhooks(data.webhooks || []);
+    }
+  } catch (err) { console.error("[Dashboard] loadWebhooks error:", err); }
+}, [address]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!address) return;
