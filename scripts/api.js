@@ -580,25 +580,31 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
 });
 
 // -----------------------------------------------------------------------------
-// POST /api/webhooks/test
+// POST /api/webhooks/test — fire a test ping to a specific webhook
 // -----------------------------------------------------------------------------
 app.post("/api/webhooks/test", requireMerchantAuth, async (req, res) => {
   try {
-    const merchant = await db.getMerchant(req.merchantAddress);
-    if (!merchant?.webhook_url) {
-      return res.status(400).json({ error: "no_webhook", message: "No webhook URL configured" });
-    }
+    const { webhook_id } = req.body;
+    const result = await db.query(
+      "SELECT * FROM webhook_endpoints WHERE id = $1 AND merchant_address = $2",
+      [webhook_id, req.merchantAddress]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "not_found" });
 
-    const { dispatchWebhook } = require("./webhook");
-    await dispatchWebhook(req.merchantAddress, "webhook.test", {
-      message: "This is a test webhook from AuthOnce",
+    const wh = result.rows[0];
+    const payload = {
+      event: "test.ping",
+      merchant_address: req.merchantAddress,
       timestamp: new Date().toISOString(),
-    });
+      message: "This is a test delivery from AuthOnce.",
+    };
 
-    res.json({ success: true, message: "Test webhook dispatched" });
+    const { dispatchWebhook } = require("./webhook.js");
+    await dispatchWebhook(req.merchantAddress, "test.ping", payload);
+    res.json({ success: true, status: 200, url: wh.url });
   } catch (err) {
     console.error("[API] Webhook test error:", err.message);
-    res.status(500).json({ error: "server_error" });
+    res.status(500).json({ error: "server_error", message: err.message });
   }
 });
 

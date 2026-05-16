@@ -820,6 +820,8 @@ export default function MerchantDashboard({ address }) {
   const [trialProduct, setTrialProduct]       = useState(null);
   const [priceChangeProduct, setPriceChangeProduct] = useState(null);
   const [editProduct, setEditProduct]               = useState(null);
+  const [testFiring, setTestFiring]                 = useState({});
+  const [testResults, setTestResults]               = useState({});
   const [stripeStatus, setStripeStatus]       = useState(null); // null=loading, object=status
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [handle, setHandle]           = useState(null);   // current saved handle
@@ -1290,10 +1292,45 @@ export default function MerchantDashboard({ address }) {
         {webhooks.map(wh => (
           <div key={wh.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, overflow: "hidden", boxShadow: "var(--shadow)" }}>
             {/* Endpoint header */}
-            <div style={{ padding: "14px 20px", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)" }}>{wh.url}</div>
-              <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600 }}>Active</span>
+            <div style={{ padding: "14px 20px", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wh.url}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(52,211,153,0.12)", color: "var(--green)", fontWeight: 600 }}>Active</span>
+                <button
+                  disabled={testFiring[wh.id]}
+                  onClick={async () => {
+                    setTestFiring(prev => ({ ...prev, [wh.id]: true }));
+                    setTestResults(prev => ({ ...prev, [wh.id]: null }));
+                    try {
+                      const res = await fetch(`${API_BASE}/api/webhooks/test`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "X-Merchant-Address": address },
+                        body: JSON.stringify({ webhook_id: wh.id, event: "test.ping" }),
+                      });
+                      const data = await res.json();
+                      setTestResults(prev => ({ ...prev, [wh.id]: res.ok ? { ok: true, text: `✓ Delivered — ${data.status || 200}` } : { ok: false, text: data.message || "Delivery failed" } }));
+                    } catch {
+                      setTestResults(prev => ({ ...prev, [wh.id]: { ok: false, text: "Could not reach server" } }));
+                    } finally {
+                      setTestFiring(prev => ({ ...prev, [wh.id]: false }));
+                    }
+                  }}
+                  style={{
+                    background: "rgba(251,191,36,0.08)", border: "0.5px solid rgba(251,191,36,0.2)",
+                    borderRadius: 6, color: "#fbbf24", fontSize: 11, fontWeight: 600,
+                    padding: "4px 10px", cursor: testFiring[wh.id] ? "not-allowed" : "pointer",
+                    opacity: testFiring[wh.id] ? 0.6 : 1,
+                  }}
+                >
+                  {testFiring[wh.id] ? "Sending..." : "Test"}
+                </button>
+              </div>
             </div>
+            {testResults[wh.id] && (
+              <div style={{ padding: "8px 20px", background: testResults[wh.id].ok ? "rgba(52,211,153,0.06)" : "rgba(248,113,113,0.06)", fontSize: 12, color: testResults[wh.id].ok ? "var(--green)" : "#f87171", fontFamily: "monospace" }}>
+                {testResults[wh.id].text}
+              </div>
+            )}
             {/* Event types */}
             <div style={{ padding: "10px 20px", display: "flex", gap: 6, flexWrap: "wrap", borderBottom: "0.5px solid var(--border)" }}>
               {wh.events.map(e => (
