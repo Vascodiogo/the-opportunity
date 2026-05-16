@@ -154,7 +154,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img src="/logo.svg" alt="AuthOnce" style={{ width: 28, height: 28 }} />
           <span style={{ fontSize: 14, fontWeight: 700, color: textPrimary, letterSpacing: "-0.02em" }}>Auth<span style={{ color: "#34d399" }}>Once</span></span>
-          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(59,130,246,0.15)", color: "#3b82f6", fontWeight: 600 }}>Base Sepolia</span>
+          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(59,130,246,0.15)", color: "#3b82f6", fontWeight: 600 }}>Base Network</span>
           {isAdmin && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(251,191,36,0.15)", color: "#d97706", fontWeight: 600 }}>Admin</span>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, background: switcherBg, borderRadius: 8, padding: 4 }}>
