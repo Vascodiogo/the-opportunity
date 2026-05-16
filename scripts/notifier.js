@@ -31,7 +31,7 @@ const VAULT_ABI = [
   "event PaymentExecuted(uint256 indexed id, uint256 amount, uint256 merchantReceived, uint256 fee, uint256 pullCount, uint256 timestamp)",
   "event InsufficientFunds(uint256 indexed id, uint256 required, uint256 available, uint256 pausedUntil)",
   "event InsufficientAllowance(uint256 indexed id, uint256 required, uint256 allowance)",
-  "event SubscriptionPaused(uint256 indexed id, address indexed pausedBy, string reason)",
+  "event SubscriptionPaused(uint256 indexed id, address indexed pausedBy)",
   "event SubscriptionCancelled(uint256 indexed id, address indexed cancelledBy)",
   "event SubscriptionExpired(uint256 indexed id, uint256 timestamp)",
   "event SubscriptionResumed(uint256 indexed id, uint256 timestamp)",
