@@ -542,7 +542,7 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
     const subsResult = await db.query(`
       SELECT id, owner_address, safe_vault, amount, interval, status, last_pulled_at, created_at
       FROM subscriptions
-      WHERE merchant_address = $1
+      WHERE LOWER(merchant_address) = $1
       ORDER BY created_at DESC
     `, [address]);
 
@@ -552,7 +552,7 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
 
       // Look up subscriber by wallet address
       const subscriberResult = await db.query(
-        "SELECT email, name, avatar_url, created_at FROM subscribers WHERE wallet_address = $1",
+        "SELECT email, name, avatar_url, created_at FROM subscribers WHERE LOWER(wallet_address) = $1",
         [vaultAddress.toLowerCase()]
       );
       const subscriberRecord = subscriberResult.rows[0];
