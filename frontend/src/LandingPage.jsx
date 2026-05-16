@@ -581,6 +581,53 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
+      {/* ── Founding Merchants CTA ── */}
+      <section style={{ padding: "80px 40px", background: isDark ? "rgba(52,211,153,0.03)" : "rgba(52,211,153,0.04)", borderTop: `0.5px solid ${isDark ? "rgba(52,211,153,0.1)" : "rgba(52,211,153,0.15)"}` }}>
+        <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: accent, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 16 }}>
+            {lang === "en" ? "Founding Merchants" : "Comerciantes Fundadores"}
+          </div>
+          <h2 style={{ fontSize: 32, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 16, lineHeight: 1.2 }}>
+            {lang === "en" ? "Be one of the first 5 merchants on AuthOnce" : "Seja um dos primeiros 5 comerciantes no AuthOnce"}
+          </h2>
+          <p style={{ fontSize: 16, color: muted, lineHeight: 1.8, marginBottom: 32, fontWeight: 300 }}>
+            {lang === "en"
+              ? "Founding merchants get lifetime Growth tier free (€49/month value), direct access to the founder, and input on the product roadmap."
+              : "Os comerciantes fundadores recebem o plano Growth gratuito para sempre (valor €49/mês), acesso direto ao fundador e participação no roadmap do produto."}
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 32 }}>
+            {[
+              { icon: "🎁", text: lang === "en" ? "Lifetime Growth tier free" : "Growth gratuito para sempre" },
+              { icon: "📞", text: lang === "en" ? "Direct founder access" : "Acesso direto ao fundador" },
+              { icon: "🗺️", text: lang === "en" ? "Roadmap input" : "Participação no roadmap" },
+              { icon: "🏅", text: lang === "en" ? "Founding merchant badge" : "Distintivo de fundador" },
+            ].map(({ icon, text: t }) => (
+              <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 99, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", border: `0.5px solid ${border}` }}>
+                <span style={{ fontSize: 14 }}>{icon}</span>
+                <span style={{ fontSize: 13, color: muted, fontWeight: 500 }}>{t}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <a
+              href="mailto:vasco@authonce.io?subject=Founding Merchant Application&body=Hi Vasco, I'm interested in becoming a founding merchant on AuthOnce. Here's a bit about my business:"
+              style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 12, color: "#080c14", fontWeight: 800, fontSize: 15, padding: "14px 28px", textDecoration: "none", display: "inline-block", letterSpacing: "-0.01em" }}
+            >
+              {lang === "en" ? "Apply as founding merchant →" : "Candidatar-se como fundador →"}
+            </a>
+            <a
+              href="mailto:vasco@authonce.io"
+              style={{ background: "none", border: `0.5px solid ${border}`, borderRadius: 12, color: muted, fontWeight: 600, fontSize: 15, padding: "14px 28px", textDecoration: "none", display: "inline-block" }}
+            >
+              {lang === "en" ? "Ask a question" : "Fazer uma pergunta"}
+            </a>
+          </div>
+          <p style={{ fontSize: 12, color: isDark ? "#334155" : "#94a3b8", marginTop: 20 }}>
+            {lang === "en" ? "5 spots available · Mainnet launch September 2026" : "5 vagas disponíveis · Lançamento mainnet setembro 2026"}
+          </p>
+        </div>
+      </section>
+
       {/* ── Footer ── */}
       <footer style={{ borderTop: `0.5px solid ${border}`, padding: "32px 40px" }}>
         <div style={{
