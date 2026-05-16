@@ -1570,7 +1570,7 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
       FROM subscriptions s
       LEFT JOIN merchants m ON m.wallet_address = s.merchant_address
       LEFT JOIN products p  ON p.merchant_address = s.merchant_address
-                            AND p.amount = s.amount
+                            AND p.amount::numeric = (s.amount::numeric / 1000000)
                             AND p.active = TRUE
       WHERE s.owner_address = $1
          OR s.safe_vault    = $1
