@@ -579,6 +579,37 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
   }
 });
 
+// POST /api/webhooks — save a new webhook endpoint
+app.post("/api/webhooks", requireMerchantAuth, async (req, res) => {
+  try {
+    const { url, events } = req.body;
+    if (!url || !url.startsWith("https://")) {
+      return res.status(400).json({ error: "invalid_url", message: "URL must start with https://" });
+    }
+
+    // Check if already exists for this merchant
+    const existing = await db.query(
+      "SELECT id FROM webhook_endpoints WHERE merchant_address = $1 AND url = $2",
+      [req.merchantAddress, url]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: "duplicate", message: "A webhook with this URL already exists." });
+    }
+
+    const secret = require("crypto").randomBytes(32).toString("hex");
+    const result = await db.query(
+      `INSERT INTO webhook_endpoints (merchant_address, url, events, secret, active, created_at)
+       VALUES ($1, $2, $3, $4, TRUE, NOW()) RETURNING id`,
+      [req.merchantAddress, url, JSON.stringify(events || []), secret]
+    );
+
+    res.json({ success: true, id: result.rows[0].id, secret });
+  } catch (err) {
+    console.error("[API] Create webhook error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
 // -----------------------------------------------------------------------------
 // POST /api/webhooks/test — fire a test ping to a specific webhook
 // -----------------------------------------------------------------------------

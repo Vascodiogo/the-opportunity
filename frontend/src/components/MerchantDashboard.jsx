@@ -711,18 +711,43 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   );
 }
 
-// ─── Webhook Modal ────────────────────────────────────────────────────────────
-function WebhookModal({ merchantAddress, onClose }) {
-  const [url, setUrl]     = useState("");
-  const [saved, setSaved] = useState(false);
-  const handleSave = () => {
-    if (!url) return;
-    const webhooks = JSON.parse(localStorage.getItem(`webhooks_${merchantAddress}`) || "[]");
-    webhooks.push({ url, events: ["payment.success", "payment.failed", "subscription.cancelled", "subscription.expired"], id: `wh_${Date.now()}` });
-    localStorage.setItem(`webhooks_${merchantAddress}`, JSON.stringify(webhooks));
-    setSaved(true);
-    setTimeout(onClose, 1500);
+function WebhookModal({ merchantAddress, onClose, onSaved }) {
+  const [url, setUrl]         = useState("");
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState("");
+
+  const ALL_EVENTS = [
+    "subscription.created",
+    "payment.success",
+    "payment.failed",
+    "subscription.paused",
+    "subscription.resumed",
+    "subscription.cancelled",
+    "subscription.expired",
+  ];
+
+  const handleSave = async () => {
+    if (!url || !url.startsWith("https://")) {
+      setError("URL must start with https://"); return;
+    }
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/webhooks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
+        body: JSON.stringify({ url, events: ALL_EVENTS }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Could not save webhook");
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
       <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
@@ -733,18 +758,31 @@ function WebhookModal({ merchantAddress, onClose }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Endpoint URL</label>
-            <input placeholder="https://yoursite.com/webhooks/authonce" value={url} onChange={e => setUrl(e.target.value)} />
+            <input
+              placeholder="https://yoursite.com/webhooks/authonce"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box" }}
+            />
           </div>
           <div style={{ background: "var(--bg-tag)", borderRadius: 8, padding: "10px 14px" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 8 }}>Events included</div>
-            {["payment.success", "payment.failed", "subscription.cancelled", "subscription.expired"].map(e => (
-              <div key={e} style={{ fontSize: 12, color: "var(--text-muted)", padding: "2px 0" }}>✓ {e}</div>
-            ))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+              {ALL_EVENTS.map(e => (
+                <div key={e} style={{ fontSize: 11, color: "var(--text-muted)", padding: "2px 0", fontFamily: "monospace" }}>✓ {e}</div>
+              ))}
+            </div>
           </div>
-          {saved
-            ? <div style={{ textAlign: "center", color: "var(--green)", fontSize: 14 }}>✅ Webhook saved!</div>
-            : <button onClick={handleSave} style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: "pointer" }}>Save Webhook</button>
-          }
+          {error && (
+            <div style={{ fontSize: 12, color: "#f87171", background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "8px 12px" }}>{error}</div>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !url}
+            style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontWeight: 700, fontSize: 14, padding: "11px", cursor: saving || !url ? "not-allowed" : "pointer", opacity: saving || !url ? 0.6 : 1 }}
+          >
+            {saving ? "Saving..." : "Save Webhook"}
+          </button>
         </div>
       </div>
     </div>
@@ -1550,7 +1588,7 @@ export default function MerchantDashboard({ address }) {
       {/* Modals */}
       {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
       {editProduct    && <EditProductModal merchantAddress={address} product={editProduct} onClose={() => setEditProduct(null)} onSaved={loadProducts} />}
-      {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} />}
+      {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} onSaved={loadWebhooks} />}
       {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
       {priceChangeProduct && <PriceChangeModal product={priceChangeProduct} address={address} onClose={() => setPriceChangeProduct(null)} />}
 
