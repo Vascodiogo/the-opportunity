@@ -1568,8 +1568,8 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
         p.name           AS product_name,
         p.slug           AS product_slug
       FROM subscriptions s
-      LEFT JOIN merchants m ON m.wallet_address = s.merchant_address
-      LEFT JOIN products p  ON p.merchant_address = s.merchant_address
+      LEFT JOIN merchants m ON LOWER(m.wallet_address) = LOWER(s.merchant_address)
+      LEFT JOIN products p ON LOWER(p.merchant_address) = LOWER(s.merchant_address)
                             AND p.amount::numeric = (s.amount::numeric / 1000000)
                             AND p.active = TRUE
       WHERE LOWER(s.owner_address) = $1
