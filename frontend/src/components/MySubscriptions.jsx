@@ -304,12 +304,14 @@ export default function MySubscriptions() {
   useEffect(() => {
     if (!subscriber?.wallet_address) return;
     setLoading(true);
-    fetch(`${API_BASE}/api/subscriber/subscriptions/${subscriber.wallet_address}`)
+    fetch(`${API_BASE}/api/subscriber/subscriptions/${subscriber.wallet_address}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(r => r.json())
       .then(d => setSubscriptions(d.subscriptions || []))
       .catch(() => setError("Could not load subscriptions."))
       .finally(() => setLoading(false));
-  }, [subscriber]);
+  }, [subscriber, token]);
 
   const handleLogin  = () => { window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent("/my-subscriptions")}`; };
   const handleLogout = () => { sessionStorage.removeItem("subscriber_token"); setToken(""); setSubscriber(null); setSubscriptions([]); };

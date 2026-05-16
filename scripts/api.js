@@ -303,6 +303,55 @@ app.get("/api/admin/stats", requireAdminAuth, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// GET /api/admin/merchants — list all merchants with pending/approved status
+// -----------------------------------------------------------------------------
+app.get("/api/admin/merchants", requireAdminAuth, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT wallet_address, business_name, email, approved_at, created_at
+      FROM merchants
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+    res.json({ merchants: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST /api/admin/merchants/:address/approve — approve a merchant (off-chain DB flag)
+// -----------------------------------------------------------------------------
+app.post("/api/admin/merchants/:address/approve", requireAdminAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    await db.query(
+      "UPDATE merchants SET approved_at = NOW() WHERE wallet_address = $1",
+      [address]
+    );
+    res.json({ success: true, approved_at: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST /api/admin/merchants/:address/reject — remove approval
+// -----------------------------------------------------------------------------
+app.post("/api/admin/merchants/:address/reject", requireAdminAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    await db.query(
+      "UPDATE merchants SET approved_at = NULL WHERE wallet_address = $1",
+      [address]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // POST /api/merchants/register
 // -----------------------------------------------------------------------------
 app.post("/api/merchants/register", async (req, res) => {
