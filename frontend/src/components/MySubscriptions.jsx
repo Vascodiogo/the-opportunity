@@ -314,7 +314,7 @@ export default function MySubscriptions() {
   }, [subscriber, token]);
 
   const handleLogin  = () => { window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent("/my-subscriptions")}`; };
-  const handleLogout = () => { sessionStorage.removeItem("subscriber_token"); setToken(""); setSubscriber(null); setSubscriptions([]); };
+  const handleLogout = () => { localStorage.removeItem("subscriber_token"); setToken(""); setSubscriber(null); setSubscriptions([]); };
   const handleCancelled = (id) => { setSubscriptions(prev => prev.map(s => s.subscription_id === id ? { ...s, status: "cancelled" } : s)); };
 
   const filtered = subscriptions.filter(s => {
