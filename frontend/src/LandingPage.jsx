@@ -649,15 +649,15 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               support@authonce.io
             </a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
-            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+            <a href="/terms" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               {lang === "en" ? "Terms" : "Termos"}
             </a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
-            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+            <a href="/privacy" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               {lang === "en" ? "Privacy" : "Privacidade"}
             </a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
-            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
+            <a href="/legal" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               {lang === "en" ? "Refunds" : "Reembolsos"}
             </a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
