@@ -42,7 +42,11 @@
 - USDC Mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 - SubscriptionVault: `[DEPLOY AND RECORD HERE]`
 - MerchantRegistry: `[DEPLOY AND RECORD HERE]`
-- Protocol Treasury: `[RECORD HERE]`
+- Protocol Treasury: `0x737D4EeAEF67f776724482a29367615703A2DEB1`
+
+**Protocol Treasury** (Safe 2/2): 0x00df2Db...[full address]
+-Signer 1: Ledger (index 0)
+-Signer 2: MetaMask
 
 ⚠️ **Security:** Deployer wallet key + Basescan API key exposed May 3 — testnet only, replace before mainnet. Local .env RESEND_API_KEY needs updating (Railway already updated).
 

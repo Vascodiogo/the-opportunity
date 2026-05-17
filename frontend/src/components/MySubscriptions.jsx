@@ -1,73 +1,65 @@
 // src/components/MySubscriptions.jsx
-// Subscriber portal — authonce.io/my-subscriptions
-// Google OAuth login (no wallet required)
+// authonce.io/my-subscriptions — Subscriber portal
+//
+// Auth:    Google OAuth (same flow as PayPage)
+//          Token stored in sessionStorage as "subscriber_token"
+// Shows:   Active/paused/cancelled subscriptions
+//          Payment history per subscription
+//          Cancel action (calls vault contract)
+// Stack:   React, wagmi (for cancel tx), API_BASE for data
 
 import { useState, useEffect } from "react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { VAULT_ADDRESS, VAULT_ABI } from "../config.js";
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
-const STATUS_CONFIG = {
-  active:    { bg: "rgba(52,211,153,0.12)",  text: "#34d399",  dot: "#34d399" },
-  paused:    { bg: "rgba(251,191,36,0.12)",  text: "#fbbf24",  dot: "#fbbf24" },
-  cancelled: { bg: "rgba(148,163,184,0.1)",  text: "#64748b",  dot: "#475569" },
-  expired:   { bg: "rgba(148,163,184,0.1)",  text: "#64748b",  dot: "#475569" },
-};
-
-const INTERVAL_LABELS = { weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function nextPullDate(sub) {
-  if (sub.status !== "active") return null;
-  const last = sub.last_pulled_at ? new Date(sub.last_pulled_at) : new Date(sub.created_at);
-  if (!last) return null;
-  const next = new Date(last);
-  if (sub.interval === "weekly")       next.setDate(next.getDate() + 7);
-  else if (sub.interval === "monthly") next.setMonth(next.getMonth() + 1);
-  else if (sub.interval === "yearly")  next.setFullYear(next.getFullYear() + 1);
-  return next;
+
+function shortAddr(addr) {
+  if (!addr) return "";
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-function formatDate(d) {
-  if (!d) return null;
-  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+function formatDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function MerchantAvatar({ name, size = 40 }) {
-  const initials = name ? name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() : "?";
-  const palettes = [
-    ["#1e3a5f","#3b82f6"], ["#1a3a2e","#34d399"], ["#3b1a2e","#ec4899"],
-    ["#2e1a3b","#a78bfa"], ["#3b2a1a","#f59e0b"],
-  ];
-  const pick = palettes[(initials.charCodeAt(0) || 0) % palettes.length];
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 10, flexShrink: 0,
-      background: `linear-gradient(135deg, ${pick[0]}, ${pick[1]}22)`,
-      border: `1px solid ${pick[1]}33`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.38, fontWeight: 700, color: pick[1],
-    }}>
-      {initials}
-    </div>
-  );
+function formatAmount(usdc) {
+  return `$${parseFloat(usdc || 0).toFixed(2)}`;
 }
+
+function intervalLabel(interval) {
+  const map = { weekly: "week", monthly: "month", yearly: "year" };
+  return map[interval] || interval;
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.cancelled;
+  const cfg = {
+    active:    { bg: "rgba(52,211,153,0.12)", color: "#34d399", label: "Active" },
+    paused:    { bg: "rgba(251,191,36,0.12)",  color: "#fbbf24", label: "Grace period" },
+    cancelled: { bg: "rgba(239,68,68,0.12)",   color: "#f87171", label: "Cancelled" },
+    expired:   { bg: "rgba(100,116,139,0.12)", color: "#64748b", label: "Expired" },
+  }[status] || { bg: "rgba(100,116,139,0.12)", color: "#64748b", label: status };
+
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600,
-      background: cfg.bg, color: cfg.text,
+      display: "inline-block", fontSize: 11, fontWeight: 600,
+      padding: "3px 10px", borderRadius: 99,
+      background: cfg.bg, color: cfg.color,
     }}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.dot, display: "inline-block" }} />
-      {status?.charAt(0).toUpperCase() + status?.slice(1)}
+      {cfg.label}
     </span>
   );
 }
 
-// ─── Payment History Modal ────────────────────────────────────────────────────
-function PaymentModal({ subscriptionId, token, onClose }) {
+// ─── Payment history drawer ───────────────────────────────────────────────────
+
+function PaymentHistory({ subscriptionId, token, onClose }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading]   = useState(true);
 
@@ -83,223 +75,286 @@ function PaymentModal({ subscriptionId, token, onClose }) {
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24,
-    }} onClick={onClose}>
-      <div style={{
-        background: "#0f1623", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 16,
-        padding: 28, width: "100%", maxWidth: 520, margin: 0, maxHeight: "80vh", overflowY: "auto",
-      }} onClick={e => e.stopPropagation()}>
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+      zIndex: 200, padding: "0 0 0 0",
+    }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 560, background: "#0f172a",
+          border: "0.5px solid rgba(255,255,255,0.08)",
+          borderRadius: "16px 16px 0 0", padding: "24px 24px 40px",
+          maxHeight: "70vh", overflowY: "auto",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9" }}>Payment History</div>
-          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "5px 12px", color: "#64748b", cursor: "pointer", fontSize: 12 }}>Close</button>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#f1f5f9" }}>Payment history</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#334155" }}>Loading...</div>
-        ) : payments.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#334155", fontSize: 13 }}>No payments yet.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {payments.map(p => (
-              <div key={p.payment_id} style={{
-                display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center",
-                padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8,
-                border: "0.5px solid rgba(255,255,255,0.04)",
-              }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>{formatDate(p.executed_at)}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#34d399", fontFamily: "monospace" }}>${p.amount_usdc}</span>
-                <a href={`https://sepolia.basescan.org/tx/${p.tx_hash}`} target="_blank" rel="noopener noreferrer"
-                   style={{ fontSize: 11, color: "#3b82f6", fontFamily: "monospace", textDecoration: "none" }}>
-                  {p.tx_hash?.slice(0, 10)}... ↗
-                </a>
-              </div>
-            ))}
-          </div>
+
+        {loading && <p style={{ color: "#475569", fontSize: 13, textAlign: "center" }}>Loading...</p>}
+
+        {!loading && payments.length === 0 && (
+          <p style={{ color: "#475569", fontSize: 13, textAlign: "center" }}>No payments yet.</p>
         )}
+
+        {!loading && payments.map(p => (
+          <div key={p.payment_id} style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "12px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)",
+            fontSize: 13,
+          }}>
+            <div>
+              <div style={{ color: "#f1f5f9", fontWeight: 500 }}>{formatAmount(p.amount_usdc)} USDC</div>
+              <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>{formatDate(p.executed_at)}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              {p.tx_hash && (
+                <a
+                  href={`https://basescan.org/tx/${p.tx_hash}`}
+                  target="_blank" rel="noreferrer"
+                  style={{ fontSize: 11, color: "#3b82f6", textDecoration: "none" }}
+                >
+                  View on Basescan ↗
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Cancel Modal ─────────────────────────────────────────────────────────────
-function CancelModal({ subscription, token, onClose, onCancelled }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+// ─── Subscription card ────────────────────────────────────────────────────────
+
+function SubscriptionCard({ sub, token, onCancelled }) {
+  const [showHistory, setShowHistory]   = useState(false);
+  const [cancelling, setCancelling]     = useState(false);
+  const [cancelError, setCancelError]   = useState("");
+  const [cancelTxHash, setCancelTxHash] = useState(null);
+  const { writeContractAsync }          = useWriteContract();
+  const { address }                     = useAccount();
+
+  const { isSuccess: cancelConfirmed } = useWaitForTransactionReceipt({
+    hash: cancelTxHash, query: { enabled: !!cancelTxHash },
+  });
+
+  useEffect(() => {
+    if (cancelConfirmed) {
+      setCancelling(false);
+      onCancelled(sub.subscription_id);
+    }
+  }, [cancelConfirmed]);
 
   const handleCancel = async () => {
-    setLoading(true); setError("");
+    if (!window.confirm(`Cancel subscription to ${sub.merchant_name || shortAddr(sub.merchant_address)}? This cannot be undone.`)) return;
+    setCancelling(true);
+    setCancelError("");
+
+    // Try backend cancel first (works for fiat/custodied subscribers without wallet)
     try {
-      const res = await fetch(`${API_BASE}/api/subscriber/cancel/${subscription.subscription_id}`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      const res = await fetch(`${API_BASE}/api/subscriber/cancel/${sub.subscription_id}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Cancel failed");
-      onCancelled(subscription.subscription_id);
-      onClose();
+      if (data.success) {
+        onCancelled(sub.subscription_id);
+        setCancelling(false);
+        return;
+      }
+      // If not_custodied, fall through to wallet cancel
+      if (data.error !== "not_custodied") {
+        setCancelError(data.message || "Cancel failed.");
+        setCancelling(false);
+        return;
+      }
+    } catch {
+      // Network error — fall through to wallet cancel if connected
+    }
+
+    // Wallet cancel — for crypto-native subscribers
+    if (!address) {
+      setCancelError("Connect your wallet to cancel this subscription.");
+      setCancelling(false);
+      return;
+    }
+    try {
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "cancelSubscription",
+        args: [BigInt(sub.subscription_id)],
+      });
+      setCancelTxHash(hash);
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setCancelError(err.shortMessage || err.message || "Transaction failed.");
+      setCancelling(false);
     }
   };
 
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24,
-    }} onClick={onClose}>
-      <div style={{
-        background: "#0f1623", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 16,
-        padding: 32, maxWidth: 380, width: "100%", margin: 0, textAlign: "center",
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>Cancel Subscription</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24, lineHeight: 1.7 }}>
-          Cancel your <strong style={{ color: "#f1f5f9" }}>{subscription.product_name || "subscription"}</strong>? This cannot be undone.
-        </div>
-        {error && (
-          <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 10 }}>
-          <button style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#94a3b8", fontWeight: 600, fontSize: 14, padding: "11px", cursor: "pointer" }}
-                  onClick={onClose} disabled={loading}>Keep it</button>
-          <button style={{ flex: 1, background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)", borderRadius: 10, color: "#f87171", fontWeight: 600, fontSize: 14, padding: "11px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
-                  onClick={handleCancel} disabled={loading}>
-            {loading ? "Cancelling..." : "Yes, cancel"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Subscription Card ────────────────────────────────────────────────────────
-function SubscriptionCard({ sub, token, onCancelled }) {
-  const [showPayments, setShowPayments] = useState(false);
-  const [showCancel, setShowCancel]     = useState(false);
-  const canCancel  = sub.status === "active" || sub.status === "paused";
-  const nextPull   = nextPullDate(sub);
-  const merchantLabel = sub.merchant_name || `${sub.merchant_address?.slice(0, 6)}...${sub.merchant_address?.slice(-4)}`;
+  const canCancel = sub.status === "active" || sub.status === "paused";
 
   return (
     <>
       <div style={{
-        background: "rgba(255,255,255,0.025)", border: "0.5px solid rgba(255,255,255,0.07)",
-        borderRadius: 16, padding: "20px 22px", marginBottom: 12,
-        transition: "border-color 0.15s",
+        background: "rgba(255,255,255,0.03)",
+        border: "0.5px solid rgba(255,255,255,0.07)",
+        borderRadius: 14, padding: "20px 20px 16px",
+        marginBottom: 12,
       }}>
-        {/* Top row */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
-          <MerchantAvatar name={merchantLabel} size={42} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 2, letterSpacing: "-0.01em" }}>
-              {sub.product_name || `Subscription #${sub.subscription_id}`}
+        {/* Header row */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>
+              {sub.product_name || sub.merchant_name || shortAddr(sub.merchant_address)}
             </div>
-            <div style={{ fontSize: 12, color: "#475569" }}>{merchantLabel}</div>
+            <div style={{ fontSize: 12, color: "#475569" }}>
+              {sub.merchant_name && sub.product_name ? sub.merchant_name : shortAddr(sub.merchant_address)}
+            </div>
           </div>
           <StatusBadge status={sub.status} />
         </div>
 
-        {/* Meta strip */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#34d399", fontFamily: "monospace", background: "rgba(52,211,153,0.08)", padding: "4px 10px", borderRadius: 6 }}>
-            ${parseFloat(sub.amount_usdc || 0).toFixed(2)} USDC
-          </span>
-          <span style={{ fontSize: 12, color: "#475569", background: "rgba(255,255,255,0.04)", padding: "4px 10px", borderRadius: 6 }}>
-            {INTERVAL_LABELS[sub.interval] || sub.interval}
-          </span>
-          {nextPull && (
-            <span style={{ fontSize: 12, color: "#3b82f6", background: "rgba(59,130,246,0.08)", padding: "4px 10px", borderRadius: 6 }}>
-              Next pull {formatDate(nextPull)}
-            </span>
-          )}
-          {sub.status === "paused" && (
-            <span style={{ fontSize: 12, color: "#fbbf24", background: "rgba(251,191,36,0.08)", padding: "4px 10px", borderRadius: 6 }}>
-              Grace period active
-            </span>
-          )}
-          {sub.last_pulled_at && (
-            <span style={{ fontSize: 12, color: "#334155", background: "rgba(255,255,255,0.03)", padding: "4px 10px", borderRadius: 6 }}>
-              Last: {formatDate(sub.last_pulled_at)}
-            </span>
-          )}
+        {/* Amount + interval */}
+        <div style={{
+          display: "flex", gap: 20, marginBottom: 14,
+          padding: "12px 14px", background: "rgba(255,255,255,0.02)",
+          borderRadius: 10, border: "0.5px solid rgba(255,255,255,0.05)",
+        }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#475569", marginBottom: 3 }}>Amount</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#34d399" }}>{formatAmount(sub.amount_usdc)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#475569", marginBottom: 3 }}>Billing</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "#f1f5f9" }}>Per {intervalLabel(sub.interval)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#475569", marginBottom: 3 }}>Last paid</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "#f1f5f9" }}>{formatDate(sub.last_pulled_at)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#475569", marginBottom: 3 }}>Since</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "#f1f5f9" }}>{formatDate(sub.created_at)}</div>
+          </div>
         </div>
 
-        {/* Notice banner */}
-        {sub.status === "active" && nextPull && (
-          (() => {
-            const daysUntil = Math.ceil((nextPull - Date.now()) / (1000 * 60 * 60 * 24));
-            return daysUntil <= 3 ? (
-              <div style={{ background: "rgba(59,130,246,0.06)", border: "0.5px solid rgba(59,130,246,0.15)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#93c5fd", marginBottom: 14 }}>
-                🔔 3-day notice: payment of ${parseFloat(sub.amount_usdc || 0).toFixed(2)} USDC on {formatDate(nextPull)}
-              </div>
-            ) : null;
-          })()
+        {/* Grace period warning */}
+        {sub.status === "paused" && (
+          <div style={{
+            background: "rgba(251,191,36,0.08)", border: "0.5px solid rgba(251,191,36,0.2)",
+            borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#fbbf24", marginBottom: 14,
+          }}>
+            Payment failed — your subscription is in a grace period. The keeper will retry daily. Top up your vault to restore it.
+          </div>
         )}
 
-        {/* Action buttons */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {/* Cancel error */}
+        {cancelError && (
+          <div style={{
+            background: "rgba(239,68,68,0.08)", border: "0.5px solid rgba(239,68,68,0.2)",
+            borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", marginBottom: 14,
+          }}>
+            {cancelError}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 10 }}>
           <button
-            onClick={() => setShowPayments(true)}
-            style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 8, color: "#64748b", fontSize: 12, fontWeight: 500, padding: "7px 14px", cursor: "pointer" }}
+            onClick={() => setShowHistory(true)}
+            style={{
+              flex: 1, background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)",
+              borderRadius: 8, padding: "9px 0", fontSize: 12, color: "#94a3b8",
+              cursor: "pointer", fontWeight: 500,
+            }}
           >
             Payment history
           </button>
-          {canCancel && (
+
+          {canCancel && address && (
             <button
-              onClick={() => setShowCancel(true)}
-              style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 500, padding: "7px 14px", cursor: "pointer" }}
+              onClick={handleCancel}
+              disabled={cancelling}
+              style={{
+                flex: 1, background: cancelling ? "rgba(239,68,68,0.05)" : "rgba(239,68,68,0.08)",
+                border: "0.5px solid rgba(239,68,68,0.2)",
+                borderRadius: 8, padding: "9px 0", fontSize: 12,
+                color: cancelling ? "#475569" : "#f87171",
+                cursor: cancelling ? "not-allowed" : "pointer", fontWeight: 500,
+              }}
             >
-              Cancel
+              {cancelling ? "Cancelling..." : "Cancel subscription"}
             </button>
           )}
-          {sub.status === "cancelled" && sub.merchant_address && sub.product_slug && (
-            <a
-              href={`https://authonce.io/pay/${sub.merchant_address}/${sub.product_slug}`}
-              style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 8, color: "#080c14", fontSize: 12, fontWeight: 700, padding: "7px 14px", textDecoration: "none", display: "inline-flex", alignItems: "center" }}
-            >
-              Re-subscribe →
-            </a>
+
+          {canCancel && !address && (
+            <div style={{ flex: 1, fontSize: 11, color: "#475569", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              Connect wallet to cancel
+            </div>
           )}
         </div>
       </div>
 
-      {showPayments && <PaymentModal subscriptionId={sub.subscription_id} token={token} onClose={() => setShowPayments(false)} />}
-      {showCancel && <CancelModal subscription={sub} token={token} onClose={() => setShowCancel(false)} onCancelled={onCancelled} />}
+      {showHistory && (
+        <PaymentHistory
+          subscriptionId={sub.subscription_id}
+          token={token}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
     </>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function MySubscriptions() {
-  const [token, setToken]                 = useState(() => localStorage.getItem("subscriber_token") || "");
-  const [subscriber, setSubscriber]       = useState(null);
+  const [token, setToken]               = useState(() => sessionStorage.getItem("subscriber_token") || "");
+  const [subscriber, setSubscriber]     = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState("");
-  const [filter, setFilter]               = useState("active");
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState("");
+  const [filter, setFilter]             = useState("active");
+
+  const { address } = useAccount();
+
+  // ── Auth: Google OAuth redirect ────────────────────────────────────────────
 
   useEffect(() => {
+    // Handle OAuth callback — token passed as ?token= in URL
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get("subscriber_token");
     if (urlToken) {
-      localStorage.setItem("subscriber_token", urlToken);
+      sessionStorage.setItem("subscriber_token", urlToken);
       setToken(urlToken);
-      const clean = new URL(window.location.href);
-      clean.searchParams.delete("subscriber_token");
-      window.history.replaceState({}, "", clean.toString());
+      const url = new URL(window.location.href);
+      url.searchParams.delete("token");
+      window.history.replaceState({}, "", url.toString());
     }
   }, []);
 
+  // ── Fetch subscriber profile ───────────────────────────────────────────────
+
   useEffect(() => {
     if (!token) return;
-    fetch(`${API_BASE}/api/subscriber/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => { if (!r.ok) throw new Error("Invalid session"); return r.json(); })
-      .then(setSubscriber)
-      .catch(() => { localStorage.removeItem("subscriber_token"); setToken(""); });
+    fetch(`${API_BASE}/api/subscriber/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => {
+        if (r.status === 401) { handleLogout(); return null; }
+        return r.json();
+      })
+      .then(data => { if (data) setSubscriber(data); })
+      .catch(() => setError("Could not load your profile."));
   }, [token]);
+
+  // ── Fetch subscriptions ────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!subscriber?.wallet_address) return;
@@ -308,165 +363,256 @@ export default function MySubscriptions() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(d => setSubscriptions(d.subscriptions || []))
+      .then(data => setSubscriptions(data.subscriptions || []))
       .catch(() => setError("Could not load subscriptions."))
       .finally(() => setLoading(false));
-  }, [subscriber, token]);
+  }, [subscriber]);
 
-  const handleLogin  = () => { window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent("/my-subscriptions")}`; };
-  const handleLogout = () => { localStorage.removeItem("subscriber_token"); setToken(""); setSubscriber(null); setSubscriptions([]); };
-  const handleCancelled = (id) => { setSubscriptions(prev => prev.map(s => s.subscription_id === id ? { ...s, status: "cancelled" } : s)); };
+  const handleLogout = () => {
+    sessionStorage.removeItem("subscriber_token");
+    setToken("");
+    setSubscriber(null);
+    setSubscriptions([]);
+  };
+
+  const handleCancelled = (id) => {
+    setSubscriptions(prev =>
+      prev.map(s => s.subscription_id === id ? { ...s, status: "cancelled" } : s)
+    );
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = `${API_BASE}/auth/google?returnTo=/my-subscriptions`;
+  };
+
+  // ── Filtered subscriptions ─────────────────────────────────────────────────
 
   const filtered = subscriptions.filter(s => {
-    if (filter === "active")    return s.status === "active" || s.status === "paused";
-    if (filter === "cancelled") return s.status === "cancelled" || s.status === "expired";
+    if (filter === "active")   return s.status === "active" || s.status === "paused";
+    if (filter === "inactive") return s.status === "cancelled" || s.status === "expired";
     return true;
   });
 
-  const activeCount = subscriptions.filter(s => s.status === "active").length;
-  const totalMRR    = subscriptions.filter(s => s.status === "active").reduce((acc, s) => {
-    const amt = parseFloat(s.amount_usdc || 0);
-    return acc + (s.interval === "weekly" ? amt * 4.33 : s.interval === "yearly" ? amt / 12 : amt);
-  }, 0);
+  const activeCount   = subscriptions.filter(s => s.status === "active" || s.status === "paused").length;
+  const totalMonthly  = subscriptions
+    .filter(s => s.status === "active" && s.interval === "monthly")
+    .reduce((sum, s) => sum + parseFloat(s.amount_usdc || 0), 0);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Render: not logged in
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  if (!token) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        background: "#080c14", fontFamily: "'DM Sans', sans-serif",
+        padding: 24,
+      }}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", marginBottom: 8 }}>
+            Auth<span style={{ color: "#34d399" }}>Once</span>
+          </div>
+          <div style={{ fontSize: 14, color: "#475569" }}>Manage your subscriptions</div>
+        </div>
+
+        <div style={{
+          width: "100%", maxWidth: 380,
+          background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.07)",
+          borderRadius: 16, padding: 32,
+        }}>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔐</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>Sign in to continue</div>
+            <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>
+              Use the same Google account you used when subscribing.
+            </div>
+          </div>
+
+          <button
+            onClick={handleGoogleLogin}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 10, padding: "12px 20px", borderRadius: 10,
+              background: "#ffffff", border: "none", cursor: "pointer",
+              fontSize: 14, fontWeight: 600, color: "#0f172a",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18">
+              <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+              <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+              <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
+              <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <div style={{ marginTop: 20, fontSize: 11, color: "#334155", textAlign: "center", lineHeight: 1.6 }}>
+            No password. No wallet required.<br/>
+            Your data stays private — we only store your email and subscription status.
+          </div>
+        </div>
+
+        <div style={{ marginTop: 20, fontSize: 11, color: "#1e293b" }}>
+          Powered by <span style={{ color: "#34d399" }}>AuthOnce</span> · Non-custodial · Base Network
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Render: logged in
+  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080c14", fontFamily: "'DM Sans', system-ui, sans-serif", color: "#f1f5f9" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(52,211,153,0.05) 0%, transparent 70%)" }} />
+    <div style={{
+      minHeight: "100vh", background: "#080c14",
+      fontFamily: "'DM Sans', sans-serif", color: "#f1f5f9",
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 
       {/* Nav */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 24px", height: 58, borderBottom: "0.5px solid rgba(255,255,255,0.06)",
-        background: "rgba(8,12,20,0.95)", backdropFilter: "blur(12px)",
-        position: "sticky", top: 0, zIndex: 100,
+        padding: "0 24px", height: 56,
+        borderBottom: "0.5px solid rgba(255,255,255,0.07)",
+        background: "rgba(8,12,20,0.95)", position: "sticky", top: 0, zIndex: 100,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: "linear-gradient(135deg, #34d399, #3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#080c14" }}>A</div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em" }}>Auth<span style={{ color: "#34d399" }}>Once</span></span>
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            Auth<span style={{ color: "#34d399" }}>Once</span>
+          </span>
+          <span style={{ fontSize: 11, color: "#334155" }}>/ My subscriptions</span>
         </div>
-        {subscriber && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Wallet connect — for cancel functionality */}
+          <ConnectButton />
+
+          {/* Subscriber identity */}
+          {subscriber && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {subscriber.avatar_url
-                ? <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: "0.5px solid rgba(255,255,255,0.1)" }} />
-                : <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(52,211,153,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#34d399" }}>{subscriber.name?.[0]?.toUpperCase() || "?"}</div>
-              }
-              <span style={{ fontSize: 13, color: "#64748b" }}>{subscriber.email || subscriber.name}</span>
+              {subscriber.avatar_url && (
+                <img src={subscriber.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} />
+              )}
+              <span style={{ fontSize: 12, color: "#64748b" }}>{subscriber.email}</span>
+              <button
+                onClick={handleLogout}
+                style={{ background: "none", border: "none", color: "#334155", cursor: "pointer", fontSize: 11 }}
+              >
+                Sign out
+              </button>
             </div>
-            <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 8, color: "#475569", fontSize: 12, padding: "6px 12px", cursor: "pointer" }}>
-              Sign out
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </nav>
 
-      {/* Not logged in */}
-      {!token && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 24, minHeight: "calc(100vh - 58px)" }}>
+      {/* Main content */}
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 24px" }}>
+
+        {/* Summary cards */}
+        {subscriptions.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 28 }}>
+            <div style={{
+              background: "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.15)",
+              borderRadius: 12, padding: "16px 20px",
+            }}>
+              <div style={{ fontSize: 11, color: "#475569", marginBottom: 6 }}>Active subscriptions</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#34d399" }}>{activeCount}</div>
+            </div>
+            <div style={{
+              background: "rgba(59,130,246,0.06)", border: "0.5px solid rgba(59,130,246,0.15)",
+              borderRadius: 12, padding: "16px 20px",
+            }}>
+              <div style={{ fontSize: 11, color: "#475569", marginBottom: 6 }}>Monthly spend</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#3b82f6" }}>${totalMonthly.toFixed(2)}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel wallet prompt */}
+        {!address && subscriptions.some(s => s.status === "active" || s.status === "paused") && (
           <div style={{
-            maxWidth: 400, width: "100%", background: "rgba(255,255,255,0.025)",
-            border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "40px 36px",
-            textAlign: "center", boxShadow: "0 40px 100px rgba(0,0,0,0.5)",
+            background: "rgba(251,191,36,0.06)", border: "0.5px solid rgba(251,191,36,0.15)",
+            borderRadius: 10, padding: "12px 16px", marginBottom: 20,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
           }}>
-            <div style={{ position: "relative" }}>
-              <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg, #34d399, #3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800, color: "#080c14", margin: "0 auto 20px" }}>A</div>
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>
+              Connect your wallet to cancel subscriptions on-chain.
             </div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9", marginBottom: 8, letterSpacing: "-0.02em" }}>My Subscriptions</div>
-            <div style={{ fontSize: 13, color: "#475569", marginBottom: 32, lineHeight: 1.7 }}>
-              Sign in with Google to view and manage your AuthOnce subscriptions.
-            </div>
+            <ConnectButton />
+          </div>
+        )}
+
+        {/* Filter tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+          {["active", "inactive", "all"].map(f => (
             <button
-              onClick={handleLogin}
+              key={f}
+              onClick={() => setFilter(f)}
               style={{
-                width: "100%", background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none",
-                borderRadius: 12, color: "#080c14", fontWeight: 800, fontSize: 15, padding: "14px 24px",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                letterSpacing: "-0.01em",
+                background: filter === f ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                border: `0.5px solid ${filter === f ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)"}`,
+                borderRadius: 8, padding: "6px 14px", cursor: "pointer",
+                fontSize: 12, fontWeight: filter === f ? 600 : 400,
+                color: filter === f ? "#f1f5f9" : "#475569",
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              Continue with Google
+              {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
-            <div style={{ fontSize: 11, color: "#1e293b", marginTop: 14 }}>No password required · Secure OAuth</div>
-          </div>
-        </div>
-      )}
-
-      {/* Logged in */}
-      {token && subscriber && (
-        <div style={{ maxWidth: 680, margin: "0 auto", padding: "36px 24px" }}>
-
-          {/* Summary stats */}
-          {subscriptions.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 28 }}>
-              {[
-                { label: "Active", value: activeCount, color: "#34d399" },
-                { label: "Monthly spend", value: `$${totalMRR.toFixed(2)}`, color: "#f1f5f9" },
-                { label: "Total plans", value: subscriptions.length, color: "#64748b" },
-              ].map(s => (
-                <div key={s.label} style={{ background: "rgba(255,255,255,0.02)", border: "0.5px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "14px 16px" }}>
-                  <div style={{ fontSize: 10, color: "#334155", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Header + filter */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", margin: 0 }}>My Subscriptions</h1>
-            <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 3 }}>
-              {[["active", "Active"], ["cancelled", "Cancelled"], ["all", "All"]].map(([val, label]) => (
-                <button key={val} onClick={() => setFilter(val)} style={{
-                  background: filter === val ? "rgba(255,255,255,0.07)" : "none", border: "none",
-                  borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: filter === val ? 600 : 400,
-                  color: filter === val ? "#f1f5f9" : "#334155", cursor: "pointer",
-                }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#f87171", marginBottom: 16 }}>
-              {error}
-            </div>
-          )}
-
-          {/* Loading */}
-          {loading && (
-            <div style={{ textAlign: "center", padding: 48, color: "#334155", fontSize: 13 }}>Loading subscriptions...</div>
-          )}
-
-          {/* Empty */}
-          {!loading && filtered.length === 0 && (
-            <div style={{ textAlign: "center", padding: 48, background: "rgba(255,255,255,0.02)", border: "0.5px solid rgba(255,255,255,0.06)", borderRadius: 16 }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 6 }}>
-                {filter === "active" ? "No active subscriptions" : "No subscriptions found"}
-              </div>
-              <div style={{ fontSize: 13, color: "#334155" }}>Subscriptions you create via AuthOnce pay links will appear here.</div>
-            </div>
-          )}
-
-          {/* Cards */}
-          {!loading && filtered.map(sub => (
-            <SubscriptionCard key={sub.subscription_id} sub={sub} token={token} onCancelled={handleCancelled} />
           ))}
         </div>
-      )}
 
-      <div style={{ textAlign: "center", padding: "24px", fontSize: 11, color: "#1a2030", marginTop: 24 }}>
-        Powered by <span style={{ color: "#34d399" }}>AuthOnce</span> · Non-custodial · Base Network
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: "rgba(239,68,68,0.08)", border: "0.5px solid rgba(239,68,68,0.2)",
+            borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#f87171", marginBottom: 20,
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div style={{ textAlign: "center", color: "#334155", fontSize: 13, padding: 40 }}>
+            Loading your subscriptions...
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && subscriptions.length === 0 && (
+          <div style={{
+            textAlign: "center", padding: "60px 24px",
+            background: "rgba(255,255,255,0.02)", border: "0.5px solid rgba(255,255,255,0.05)",
+            borderRadius: 14,
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>📭</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#f1f5f9", marginBottom: 8 }}>No subscriptions yet</div>
+            <div style={{ fontSize: 13, color: "#475569" }}>
+              Subscriptions you create via AuthOnce pay links will appear here.
+            </div>
+          </div>
+        )}
+
+        {/* Subscription list */}
+        {!loading && filtered.map(sub => (
+          <SubscriptionCard
+            key={sub.subscription_id}
+            sub={sub}
+            token={token}
+            onCancelled={handleCancelled}
+          />
+        ))}
+
+        {!loading && subscriptions.length > 0 && filtered.length === 0 && (
+          <div style={{ textAlign: "center", color: "#334155", fontSize: 13, padding: 40 }}>
+            No {filter} subscriptions.
+          </div>
+        )}
       </div>
     </div>
   );
