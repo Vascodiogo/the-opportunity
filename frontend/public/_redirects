@@ -1,5 +1,8 @@
-/pt         /index.html    200
+$content = @'
 /privacy    /legal.html    200
 /terms      /legal.html    200
 /legal      /legal.html    200
+/pt         /index.html    200
 /*          /index.html    200
+'@
+[System.IO.File]::WriteAllText("C:\The-Opportunity\frontend\public\_redirects", $content, [System.Text.Encoding]::UTF8)
