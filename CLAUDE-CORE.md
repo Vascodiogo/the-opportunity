@@ -23,8 +23,8 @@
 | Notifier | Node.js on Railway | ✅ Running |
 | Backend API | Express.js on Railway | ✅ Built |
 | Database | PostgreSQL on Railway | ✅ Schema live |
-| Frontend | React + Vite on Netlify | ✅ Live at authonce.io |
-| Auth (subscriber) | Google OAuth via Passport.js | ✅ Tested May 5 2026 |
+| Frontend | React + Vite on Cloudflare Pages | ✅ Live at authonce.io |
+| Auth (subscriber) | Google OAuth via Passport.js | ✅ Verified + Published May 17 20262026 |
 | Auth (merchant/admin) | MetaMask / RainbowKit + JWT | ✅ Working |
 | Fiat Onramp | Stripe Checkout (card/MB Way/Multibanco/SEPA) | ⬜ Not built — next |
 | Stripe Connect | Merchant OAuth flow | ✅ Built in api.js |
@@ -158,8 +158,9 @@ frontend/src/
 - [ ] Stripe Checkout — card/MB Way/Multibanco → vault
 - [ ] Stripe webhook wiring — payment_intent events → grace period + notifier
 - [ ] SEPA bank transfer — enabled on Stripe, needs wiring
-- [ ] Geofencing — HTTP 451 OFAC, IP never logged
+- [x] Geofencing — HTTP 451 OFAC, IP never logged ✅
 - [ ] Subscriber portal — Google OAuth login, cancel/pause/history
+- [x] Subscriber portal — authonce.io/my-subscriptions ✅ Built May 17
 - [ ] 3-day pre-payment notification — not wired
 - [ ] Price change 30-day notification — not wired
 - [ ] Notification tier enforcement (Starter vs Growth+)
@@ -172,8 +173,10 @@ frontend/src/
 - [ ] Safe multisig for admin
 - [ ] Ledger hardware wallet (ordered — arriving ~May 12)
 - [ ] Smart contract audit ($15–20K)
-- [ ] Google OAuth app publishing (console.cloud.google.com → authonce-pay-safe)
+- [x] Google OAuth app publishing ✅ Verified May 17
 - [ ] Netlify _redirects for SPA routing on production
+- [x] Netlify _redirects → Cloudflare Pages ✅
+- [x] Legal pages live — authonce.io/privacy/ and authonce.io/terms/ ✅
 
 ---
 
@@ -193,6 +196,47 @@ frontend/src/
 ---
 
 ## 11. How to Update This File
+
+Frontend hosting: Cloudflare Pages (replaced Netlify — paused/blocked)
+  Project: authonce
+  Build: npm run build / dist / root: frontend
+  Domain: authonce.io (Cloudflare DNS, auto-updated)
+
+Protocol Treasury (Safe 2/2 on Base):
+  Address: 0x737D...DEB1 (copy full address from Safe)
+  Signer 1: Ledger (index 0)
+  Signer 2: MetaMask — 0x00df2...AO2C0 (Safe Signer — funded $2 ETH)
+  Threshold: 2/2 — upgrade to 2/3 when sister added
+
+Farcaster Bot:
+  Service: farcaster-bot on Railway (supportive-prosperity project)
+  URL: farcaster-bot-production.up.railway.app
+  Repo: github.com/Vascodiogo/authonce-farcaster-bot
+  Account: @authonce on Warpcast (FID: 3324301)
+  Neynar API key: EE7602A6-... (in Railway env)
+  Posts: Mon + Thu 09:00 UTC to /base and /defi channels
+  Mention monitor: every 10 min → approval email to vasco@authonce.io
+
+## 12. Next Session Priorities
+
+1. Merchant CSV payment export (api.js endpoint + dashboard button)
+2. Monthly summary email — auto-sent 1st of month to each merchant
+3. Win-back email on cancellation — configurable by merchant (discount %, delay, message)
+4. Subscriber import Option B — bulk pay link generator for merchant CSV upload
+5. New deployer wallet (key exposed May 3 — critical before mainnet)
+6. New keeper bot wallet
+7. Smart contract audit ($15-20K — Cyfrin or Hashlock)
+8. Dashboard UI review — MerchantDashboard, subscriber portal, admin — align to mock design quality before mainnet
+9. Stripe Checkout — card / MB Way / Multibanco → USDC → vault (mainnet blocker)
+10. Stripe webhook wiring — payment events → grace period + notifier (mainnet blocker)
+11. Merchant CSV payment export
+12. Monthly summary email — auto-sent 1st of month to each merchant
+13. Win-back email on cancellation
+14. Subscriber import Option B — bulk pay link generator
+15. 16. New deployer wallet (key exposed May 3 — critical before mainnet)
+17. New keeper bot wallet
+18. Smart contract audit ($15–20K — Cyfrin or Hashlock)
+
 Paste the section to change into chat → Claude produces replacement text → copy-paste into local `C:\AuthOnce-Docs\CLAUDE-CORE.md` → re-upload to Project Knowledge (replace existing file).
 
 **CLAUDE-REFERENCE.md** contains: decisions log, fee analysis, competitive landscape, legal notes, marketing strategy, DataOnce, social media. Upload only when needed.
