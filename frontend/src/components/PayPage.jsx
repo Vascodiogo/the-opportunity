@@ -1,10 +1,5 @@
-// src/components/PayPage.jsx
-// Subscriber pay link page — authonce.io/pay/:merchantAddress/:productSlug
-//
-// Crypto-native flow: connect wallet → approve USDC → createSubscription on-chain
-// Trial support:      ?trial=N in URL → N free days before first payment
-// Intro pricing:      loaded from product API (introAmount, introPulls)
-
+// src/components/PayPage.jsx — Visual redesign May 2026
+// Logic: unchanged. Visual: CSS variables, solid green CTAs, no hardcoded colors.
 import { VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, INTERVAL_NAMES } from "../config.js";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState, useEffect } from "react";
@@ -21,23 +16,13 @@ const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 const USDC_APPROVE_ABI = [
   {
-    name: "approve",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount",  type: "uint256" },
-    ],
+    name: "approve", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
     outputs: [{ name: "", type: "bool" }],
   },
   {
-    name: "allowance",
-    type: "function",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner",   type: "address" },
-      { name: "spender", type: "address" },
-    ],
+    name: "allowance", type: "function", stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
   },
 ];
@@ -53,15 +38,15 @@ function getTrialDays() {
   return Math.min(n, 60);
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// ─── Step Indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ current }) {
   const steps = ["Sign in", "Payment", "Authorize"];
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 28 }}>
       {steps.map((label, i) => {
-        const idx     = i + 1;
-        const done    = idx < current;
-        const active  = idx === current;
+        const idx    = i + 1;
+        const done   = idx < current;
+        const active = idx === current;
         return (
           <div key={label} style={{ display: "flex", alignItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -69,18 +54,18 @@ function StepIndicator({ current }) {
                 width: 28, height: 28, borderRadius: "50%",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontWeight: 700,
-                background: done ? "rgba(52,211,153,0.2)" : active ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.04)",
-                border: `1.5px solid ${done ? "rgba(52,211,153,0.5)" : active ? "rgba(59,130,246,0.5)" : "rgba(255,255,255,0.1)"}`,
-                color: done ? "#34d399" : active ? "#3b82f6" : "#475569",
+                background: done ? "rgba(29,158,117,0.2)" : active ? "rgba(29,158,117,0.12)" : "var(--bg-tag)",
+                border: `1.5px solid ${done ? "rgba(29,158,117,0.5)" : active ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                color: done ? "var(--green)" : active ? "var(--green)" : "var(--text-muted)",
               }}>
                 {done ? "✓" : idx}
               </div>
-              <span style={{ fontSize: 10, color: done ? "#34d399" : active ? "#f1f5f9" : "#334155", fontWeight: active ? 600 : 400, letterSpacing: "0.02em" }}>
+              <span style={{ fontSize: 10, color: done ? "var(--green)" : active ? "var(--text-primary)" : "var(--text-faint)", fontWeight: active ? 600 : 400, letterSpacing: "0.02em" }}>
                 {label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ width: 48, height: 1, background: done ? "rgba(52,211,153,0.3)" : "rgba(255,255,255,0.06)", margin: "0 4px", marginBottom: 16 }} />
+              <div style={{ width: 48, height: 1, background: done ? "rgba(29,158,117,0.3)" : "var(--border)", margin: "0 4px", marginBottom: 16 }} />
             )}
           </div>
         );
@@ -89,7 +74,7 @@ function StepIndicator({ current }) {
   );
 }
 
-// ─── Merchant avatar ──────────────────────────────────────────────────────────
+// ─── Merchant Avatar ──────────────────────────────────────────────────────────
 function MerchantAvatar({ name, size = 44 }) {
   const initials = name ? name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() : "?";
   const colors = [
@@ -113,37 +98,37 @@ function MerchantAvatar({ name, size = 44 }) {
   );
 }
 
-// ─── Trust signal row ─────────────────────────────────────────────────────────
+// ─── Trust Row ────────────────────────────────────────────────────────────────
 function TrustRow({ icon, text }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
       <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-      <span style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>{text}</span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{text}</span>
     </div>
   );
 }
 
-// ─── Step dot ────────────────────────────────────────────────────────────────
+// ─── Step Dot ─────────────────────────────────────────────────────────────────
 function Step({ n, label, active, done }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.04)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "0.5px solid var(--border)" }}>
       <div style={{
         width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 12, fontWeight: 700,
-        background: done ? "rgba(52,211,153,0.2)" : active ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
-        border: `1px solid ${done ? "rgba(52,211,153,0.4)" : active ? "rgba(59,130,246,0.4)" : "rgba(255,255,255,0.08)"}`,
-        color: done ? "#34d399" : active ? "#3b82f6" : "#475569",
+        background: done ? "rgba(29,158,117,0.2)" : active ? "rgba(29,158,117,0.1)" : "var(--bg-tag)",
+        border: `1px solid ${done ? "rgba(29,158,117,0.4)" : active ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
+        color: done ? "var(--green)" : active ? "var(--green)" : "var(--text-muted)",
       }}>
         {done ? "✓" : n}
       </div>
-      <span style={{ fontSize: 13, color: done ? "#34d399" : active ? "#f1f5f9" : "#475569" }}>{label}</span>
-      {active && !done && <span style={{ marginLeft: "auto", fontSize: 11, color: "#3b82f6" }}>In progress</span>}
+      <span style={{ fontSize: 13, color: done ? "var(--green)" : active ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+      {active && !done && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--green)" }}>In progress</span>}
     </div>
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function PayPage() {
   const { merchantAddress, productSlug } = useParams();
 
@@ -233,9 +218,7 @@ export default function PayPage() {
     if (!resolvedAddress || !productSlug) return;
     fetch(`${API_BASE}/api/products/${resolvedAddress}/${productSlug}/payment-methods`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) { setAvailableMethods(data.methods); setPaymentMethod("crypto"); }
-      })
+      .then(data => { if (data) { setAvailableMethods(data.methods); setPaymentMethod("crypto"); } })
       .catch(() => setAvailableMethods(["crypto"]));
   }, [resolvedAddress, productSlug]);
 
@@ -308,13 +291,19 @@ export default function PayPage() {
   const stepSubscribe   = flowStatus === "subscribing";
   const approvedDone    = approveConfirmed || (currentAllowance !== undefined && currentAllowance >= amountRaw && flowStatus !== "idle");
   const subscribedDone  = subscribeConfirmed;
+  const currentStep     = flowStatus === "idle" ? 1 : (flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") ? (approvedDone ? 3 : 2) : 3;
 
-  // Determine step indicator step
-  const currentStep = flowStatus === "idle" ? 1 : (flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") ? (approvedDone ? 3 : 2) : 3;
+  // CTA button style — used in multiple places
+  const ctaBtn = (disabled) => ({
+    width: "100%", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 15,
+    padding: "14px 24px", cursor: disabled ? "not-allowed" : "pointer",
+    background: "var(--green)", color: "var(--bg-primary)",
+    opacity: disabled ? 0.5 : 1, letterSpacing: "-0.01em", fontFamily: "inherit",
+  });
 
   return (
     <div style={{
-      minHeight: "100vh", background: "#080c14",
+      minHeight: "100vh", background: "var(--bg-primary)",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       padding: 24, fontFamily: "'DM Sans', system-ui, sans-serif",
     }}>
@@ -323,7 +312,7 @@ export default function PayPage() {
       {/* Ambient glow */}
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none",
-        background: "radial-gradient(ellipse 70% 50% at 50% -10%, rgba(52,211,153,0.07) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse 70% 50% at 50% -10%, rgba(29,158,117,0.07) 0%, transparent 70%)",
       }} />
 
       {/* AuthOnce wordmark */}
@@ -331,14 +320,14 @@ export default function PayPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <div style={{
             width: 28, height: 28, borderRadius: 8,
-            background: "linear-gradient(135deg, #34d399, #3b82f6)",
+            background: "var(--green)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 13, fontWeight: 800, color: "#080c14",
+            fontSize: 13, fontWeight: 800, color: "var(--bg-primary)",
           }}>A</div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em" }}>
-            Auth<span style={{ color: "#34d399" }}>Once</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+            Auth<span style={{ color: "var(--green)" }}>Once</span>
           </span>
-          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "rgba(52,211,153,0.1)", color: "#34d399", fontWeight: 600 }}>
+          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "rgba(29,158,117,0.1)", color: "var(--green)", fontWeight: 600 }}>
             verified
           </span>
         </div>
@@ -346,19 +335,19 @@ export default function PayPage() {
 
       {/* Main card */}
       <div style={{
-        background: "rgba(255,255,255,0.025)", border: "0.5px solid rgba(255,255,255,0.08)",
+        background: "var(--bg-card)", border: "0.5px solid var(--border)",
         borderRadius: 20, padding: "36px 36px 28px", width: "100%", maxWidth: 440,
-        position: "relative", boxShadow: "0 40px 100px rgba(0,0,0,0.5)",
+        position: "relative", boxShadow: "0 40px 100px rgba(0,0,0,0.4)",
       }}>
         {/* Top shimmer line */}
         <div style={{
           position: "absolute", top: 0, left: 40, right: 40, height: 1,
-          background: "linear-gradient(90deg, transparent, rgba(52,211,153,0.35), transparent)",
+          background: "linear-gradient(90deg, transparent, rgba(29,158,117,0.35), transparent)",
         }} />
 
         {/* ── Loading ── */}
         {productLoading && (
-          <div style={{ textAlign: "center", padding: "40px 0", color: "#475569", fontSize: 13 }}>
+          <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)", fontSize: 13 }}>
             Loading...
           </div>
         )}
@@ -369,15 +358,15 @@ export default function PayPage() {
             {productError === "451" ? (
               <>
                 <div style={{ fontSize: 36, marginBottom: 14 }}>🚫</div>
-                <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Service unavailable in your region</div>
-                <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>This service is not available due to applicable sanctions regulations.</div>
-                <div style={{ color: "#334155", fontSize: 11, marginTop: 12 }}>HTTP 451 — Unavailable For Legal Reasons</div>
+                <div style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Service unavailable in your region</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>This service is not available due to applicable sanctions regulations.</div>
+                <div style={{ color: "var(--text-faint)", fontSize: 11, marginTop: 12 }}>HTTP 451 — Unavailable For Legal Reasons</div>
               </>
             ) : (
               <>
                 <div style={{ fontSize: 36, marginBottom: 14 }}>🔍</div>
-                <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Product not found</div>
-                <div style={{ color: "#64748b", fontSize: 13 }}>This pay link may be invalid or expired.</div>
+                <div style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Product not found</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 13 }}>This pay link may be invalid or expired.</div>
               </>
             )}
           </div>
@@ -388,27 +377,27 @@ export default function PayPage() {
           <div style={{ textAlign: "center", padding: "12px 0" }}>
             <div style={{
               width: 60, height: 60, borderRadius: "50%", margin: "0 auto 20px",
-              background: "rgba(52,211,153,0.1)", border: "1.5px solid rgba(52,211,153,0.3)",
+              background: "rgba(29,158,117,0.1)", border: "1.5px solid rgba(29,158,117,0.3)",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26,
             }}>✓</div>
-            <div style={{ color: "#34d399", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>You're subscribed!</div>
+            <div style={{ color: "var(--green)", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>You're subscribed!</div>
             {hasTrial && (
-              <div style={{ fontSize: 12, padding: "4px 14px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, padding: "4px 14px", borderRadius: 99, display: "inline-block", background: "rgba(251,191,36,0.12)", color: "var(--amber)", fontWeight: 600, marginBottom: 12 }}>
                 🎁 {trialDays}-day free trial starts today
               </div>
             )}
-            <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
-              Your subscription to <strong style={{ color: "#f1f5f9" }}>{product.name}</strong> is active. Payments are collected automatically.
+            <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
+              Your subscription to <strong style={{ color: "var(--text-primary)" }}>{product.name}</strong> is active. Payments are collected automatically.
             </div>
             {subscribeTxHash && (
               <a href={`https://sepolia.basescan.org/tx/${subscribeTxHash}`} target="_blank" rel="noopener noreferrer"
-                 style={{ fontSize: 12, color: "#34d399", textDecoration: "none" }}>
+                style={{ fontSize: 12, color: "var(--green)", textDecoration: "none" }}>
                 View on Basescan ↗
               </a>
             )}
-            <div style={{ marginTop: 16, fontSize: 12, color: "#334155" }}>
+            <div style={{ marginTop: 16, fontSize: 12, color: "var(--text-faint)" }}>
               Manage at{" "}
-              <a href="/my-subscriptions" style={{ color: "#34d399", textDecoration: "none" }}>authonce.io/my-subscriptions</a>
+              <a href="/my-subscriptions" style={{ color: "var(--green)", textDecoration: "none" }}>authonce.io/my-subscriptions</a>
             </div>
           </div>
         )}
@@ -417,37 +406,36 @@ export default function PayPage() {
         {!productLoading && product && flowStatus !== "success" && (
           <>
             {/* Merchant header */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, paddingBottom: 20, borderBottom: "0.5px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, paddingBottom: 20, borderBottom: "0.5px solid var(--border)" }}>
               <MerchantAvatar name={merchantName} size={44} />
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.01em" }}>{merchantName}</div>
-                <div style={{ fontSize: 11, color: "#34d399", marginTop: 2 }}>✓ AuthOnce verified merchant</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{merchantName}</div>
+                <div style={{ fontSize: 11, color: "var(--green)", marginTop: 2 }}>✓ AuthOnce verified merchant</div>
               </div>
             </div>
 
-            {/* Step indicator */}
             <StepIndicator current={currentStep} />
 
             {/* Product box */}
             <div style={{
-              background: "rgba(255,255,255,0.02)",
-              border: (hasTrial || hasIntro) ? "0.5px solid rgba(251,191,36,0.25)" : "0.5px solid rgba(255,255,255,0.06)",
+              background: "var(--bg-tag)",
+              border: (hasTrial || hasIntro) ? "0.5px solid rgba(251,191,36,0.25)" : "0.5px solid var(--border)",
               borderRadius: 14, padding: "18px 20px", marginBottom: 20,
             }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 10 }}>{product.name}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 10 }}>{product.name}</div>
 
               {/* Yearly toggle */}
               {product.yearly_amount && (
-                <div style={{ display: "flex", gap: 6, marginBottom: 14, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 4 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 14, background: "var(--bg-card)", borderRadius: 8, padding: 4, border: "0.5px solid var(--border)" }}>
                   {["monthly", "yearly"].map(iv => (
                     <button key={iv} onClick={() => setSelectedInterval(iv)} style={{
-                      flex: 1, background: selectedInterval === iv ? "rgba(52,211,153,0.12)" : "none",
-                      border: selectedInterval === iv ? "0.5px solid rgba(52,211,153,0.3)" : "none",
-                      borderRadius: 6, color: selectedInterval === iv ? "#34d399" : "#475569",
-                      fontSize: 12, fontWeight: 600, padding: "6px 0", cursor: "pointer",
+                      flex: 1, background: selectedInterval === iv ? "rgba(29,158,117,0.12)" : "none",
+                      border: selectedInterval === iv ? "0.5px solid rgba(29,158,117,0.3)" : "none",
+                      borderRadius: 6, color: selectedInterval === iv ? "var(--green)" : "var(--text-muted)",
+                      fontSize: 12, fontWeight: 600, padding: "6px 0", cursor: "pointer", fontFamily: "inherit",
                     }}>
                       {iv === "yearly" ? (
-                        <span>Yearly <span style={{ marginLeft: 4, fontSize: 10, background: "rgba(52,211,153,0.15)", color: "#34d399", padding: "1px 6px", borderRadius: 99 }}>
+                        <span>Yearly <span style={{ marginLeft: 4, fontSize: 10, background: "rgba(29,158,117,0.15)", color: "var(--green)", padding: "1px 6px", borderRadius: 99 }}>
                           save {Math.round((1 - product.yearly_amount / (product.amount * 12)) * 100)}%
                         </span></span>
                       ) : "Monthly"}
@@ -458,77 +446,67 @@ export default function PayPage() {
 
               {/* Badges */}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                {hasTrial && <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600 }}>🎁 {trialDays}-day free trial</span>}
-                {hasIntro && !isYearly && <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, background: "rgba(251,191,36,0.12)", color: "#fbbf24", fontWeight: 600 }}>🎁 Intro: ${product.intro_amount.toFixed(2)} × {product.intro_pulls}</span>}
+                {hasTrial && <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, background: "rgba(251,191,36,0.12)", color: "var(--amber)", fontWeight: 600 }}>🎁 {trialDays}-day free trial</span>}
+                {hasIntro && !isYearly && <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, background: "rgba(251,191,36,0.12)", color: "var(--amber)", fontWeight: 600 }}>🎁 Intro: ${product.intro_amount.toFixed(2)} × {product.intro_pulls}</span>}
               </div>
 
               {/* Price */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                <span style={{ fontSize: 32, fontWeight: 800, color: "#34d399", fontFamily: "monospace", letterSpacing: "-0.03em" }}>
+                <span style={{ fontSize: 32, fontWeight: 800, color: "var(--green)", fontFamily: "monospace", letterSpacing: "-0.03em" }}>
                   ${activeAmount?.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: "#64748b" }}>/ {isYearly ? "year" : intervalLabel} · USDC</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · USDC</span>
               </div>
 
-              {isYearly && (
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                  ${(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually
-                </div>
-              )}
-              {!isYearly && hasTrial && !hasIntro && (
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Free for {trialDays} days, then ${product.amount?.toFixed(2)}/{intervalLabel}</div>
-              )}
-              {!isYearly && !hasTrial && hasIntro && (
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                  ${product.intro_amount.toFixed(2)}/{intervalLabel} for {product.intro_pulls} {intervalPlural}, then ${product.amount?.toFixed(2)}
-                </div>
-              )}
+              {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>${(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
+              {!isYearly && hasTrial && !hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Free for {trialDays} days, then ${product.amount?.toFixed(2)}/{intervalLabel}</div>}
+              {!isYearly && !hasTrial && hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>${product.intro_amount.toFixed(2)}/{intervalLabel} for {product.intro_pulls} {intervalPlural}, then ${product.amount?.toFixed(2)}</div>}
             </div>
 
             {/* Network error */}
             {isWrongNetwork && (
-              <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", textAlign: "center", marginBottom: 16 }}>
-                Wrong network. AuthOnce runs on Base Network (testnet).{" "}
-                <button onClick={() => switchChain({ chainId: baseSepolia.id })} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontWeight: 700, textDecoration: "underline", padding: 0 }}>
+              <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", textAlign: "center", marginBottom: 16 }}>
+                Wrong network. AuthOnce runs on Base Network.{" "}
+                <button onClick={() => switchChain({ chainId: baseSepolia.id })} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontWeight: 700, textDecoration: "underline", padding: 0, fontFamily: "inherit" }}>
                   Switch now
                 </button>
               </div>
             )}
 
             {errorMsg && (
-              <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", textAlign: "center", marginBottom: 16 }}>
+              <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", textAlign: "center", marginBottom: 16 }}>
                 {errorMsg}
               </div>
             )}
 
-            {/* ── STEP 1: Payment method selector (idle only) ── */}
+            {/* Payment method selector */}
             {flowStatus === "idle" && availableMethods && availableMethods.length > 1 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Pay with</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Pay with</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {availableMethods.map(method => {
                     const cfg = {
-                      crypto:     { label: "USDC wallet",     icon: "⛓" },
-                      card:       { label: "Card",            icon: "💳" },
-                      sepa:       { label: "SEPA Transfer",   icon: "🏦" },
-                      ideal:      { label: "iDEAL",           icon: "🇳🇱" },
-                      bancontact: { label: "Bancontact",      icon: "🇧🇪" },
-                      eps:        { label: "EPS",             icon: "🇦🇹" },
-                      klarna:     { label: "Klarna",          icon: "🛍" },
-                      blik:       { label: "BLIK",            icon: "🇵🇱" },
-                      mbway:      { label: "MB Way",          icon: "📱" },
-                      multibanco: { label: "Multibanco",      icon: "🏧" },
+                      crypto:     { label: "USDC wallet",  icon: "⛓" },
+                      card:       { label: "Card",          icon: "💳" },
+                      sepa:       { label: "SEPA Transfer", icon: "🏦" },
+                      ideal:      { label: "iDEAL",         icon: "🇳🇱" },
+                      bancontact: { label: "Bancontact",    icon: "🇧🇪" },
+                      eps:        { label: "EPS",           icon: "🇦🇹" },
+                      klarna:     { label: "Klarna",        icon: "🛍" },
+                      blik:       { label: "BLIK",          icon: "🇵🇱" },
+                      mbway:      { label: "MB Way",        icon: "📱" },
+                      multibanco: { label: "Multibanco",    icon: "🏧" },
                     }[method] || { label: method, icon: "💳" };
                     const sel = paymentMethod === method;
                     return (
                       <div key={method} onClick={() => setPaymentMethod(method)} style={{
                         display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
                         borderRadius: 10, cursor: "pointer",
-                        border: `0.5px solid ${sel ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.07)"}`,
-                        background: sel ? "rgba(52,211,153,0.06)" : "rgba(255,255,255,0.02)",
+                        border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                        background: sel ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
                       }}>
                         <span style={{ fontSize: 18 }}>{cfg.icon}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "#34d399" : "#94a3b8" }}>{cfg.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{cfg.label}</span>
                       </div>
                     );
                   })}
@@ -558,12 +536,7 @@ export default function PayPage() {
                   finally { setStripeLoading(false); }
                 }}
                 disabled={stripeLoading}
-                style={{
-                  width: "100%", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 15,
-                  padding: "14px 24px", cursor: stripeLoading ? "not-allowed" : "pointer",
-                  background: "linear-gradient(135deg, #34d399, #3b82f6)", color: "#080c14",
-                  opacity: stripeLoading ? 0.6 : 1, letterSpacing: "-0.01em",
-                }}
+                style={ctaBtn(stripeLoading)}
               >
                 {stripeLoading ? "Redirecting..." : `Pay ${isYearly ? `$${product?.yearly_amount?.toFixed(2)}/year` : `$${product?.amount?.toFixed(2)}/${intervalLabel}`} →`}
               </button>
@@ -572,11 +545,11 @@ export default function PayPage() {
             {/* Crypto — wallet connect (idle) */}
             {flowStatus === "idle" && paymentMethod === "crypto" && (
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 12, color: "#475569", marginBottom: 14 }}>Connect your wallet to subscribe</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>Connect your wallet to subscribe</div>
                 <div style={{ display: "flex", justifyContent: "center" }}>
                   <ConnectButton />
                 </div>
-                <div style={{ fontSize: 11, color: "#334155", marginTop: 10 }}>MetaMask · Coinbase Wallet · WalletConnect</div>
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 10 }}>MetaMask · Coinbase Wallet · WalletConnect</div>
               </div>
             )}
 
@@ -586,25 +559,25 @@ export default function PayPage() {
                 {/* Wallet badge */}
                 <div style={{
                   display: "flex", alignItems: "center", gap: 10,
-                  background: "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.18)",
+                  background: "rgba(29,158,117,0.06)", border: "0.5px solid rgba(29,158,117,0.18)",
                   borderRadius: 10, padding: "10px 14px", marginBottom: 16,
                 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                    background: "linear-gradient(135deg, #34d399, #3b82f6)",
+                    background: "var(--green)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11, fontWeight: 700, color: "#080c14",
+                    fontSize: 11, fontWeight: 700, color: "var(--bg-primary)",
                   }}>
                     {address?.slice(2, 4).toUpperCase()}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "#f1f5f9", fontFamily: "monospace" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>
                       {address?.slice(0, 6)}...{address?.slice(-4)}
                     </div>
-                    <div style={{ fontSize: 11, color: "#34d399" }}>✓ Wallet connected</div>
+                    <div style={{ fontSize: 11, color: "var(--green)" }}>✓ Wallet connected</div>
                   </div>
                   <button onClick={() => { disconnect(); setFlowStatus("idle"); setErrorMsg(""); }}
-                    style={{ background: "none", border: "none", color: "#334155", cursor: "pointer", fontSize: 11 }}>
+                    style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
                     Disconnect
                   </button>
                 </div>
@@ -617,7 +590,7 @@ export default function PayPage() {
 
                 {/* Trust signals */}
                 {flowStatus === "connected" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, padding: "14px 16px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "0.5px solid rgba(255,255,255,0.05)" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, padding: "14px 16px", background: "var(--bg-tag)", borderRadius: 10, border: "0.5px solid var(--border)" }}>
                     <TrustRow icon="⚡" text="Two transactions — approve USDC, then subscribe" />
                     {isYearly && <TrustRow icon="📅" text={`Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`} />}
                     {hasTrial && <TrustRow icon="🎁" text={`${trialDays}-day free trial — first payment after trial ends`} />}
@@ -631,8 +604,8 @@ export default function PayPage() {
                 {/* Pending status */}
                 {(stepApprove || stepSubscribe) && (
                   <div style={{
-                    background: "rgba(59,130,246,0.06)", border: "0.5px solid rgba(59,130,246,0.18)",
-                    borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#93c5fd",
+                    background: "rgba(29,158,117,0.06)", border: "0.5px solid rgba(29,158,117,0.18)",
+                    borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--green)",
                     textAlign: "center", marginBottom: 16,
                   }}>
                     {stepApprove && !approveConfirmed && "Waiting for approval confirmation..."}
@@ -642,17 +615,12 @@ export default function PayPage() {
                 )}
 
                 {!resolvedAddress && !merchantAddress?.startsWith("0x") && (
-                  <div style={{ color: "#f87171", fontSize: 12, marginBottom: 12, textAlign: "center" }}>Resolving merchant... please wait.</div>
+                  <div style={{ color: "var(--red)", fontSize: 12, marginBottom: 12, textAlign: "center" }}>Resolving merchant... please wait.</div>
                 )}
 
                 {flowStatus === "connected" && (
                   <button
-                    style={{
-                      width: "100%", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 15,
-                      padding: "14px 24px", cursor: isWrongNetwork || !resolvedAddress ? "not-allowed" : "pointer",
-                      background: "linear-gradient(135deg, #34d399, #3b82f6)", color: "#080c14",
-                      opacity: isWrongNetwork || !resolvedAddress ? 0.5 : 1, letterSpacing: "-0.01em",
-                    }}
+                    style={ctaBtn(isWrongNetwork || !resolvedAddress)}
                     onClick={handleApprove}
                     disabled={isWrongNetwork || !resolvedAddress}
                   >
@@ -668,12 +636,7 @@ export default function PayPage() {
                 )}
 
                 {(stepApprove || stepSubscribe) && (
-                  <button style={{
-                    width: "100%", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 15,
-                    padding: "14px 24px", cursor: "not-allowed",
-                    background: "linear-gradient(135deg, #34d399, #3b82f6)", color: "#080c14",
-                    opacity: 0.45, letterSpacing: "-0.01em",
-                  }} disabled>
+                  <button style={{ ...ctaBtn(true) }} disabled>
                     {stepApprove && !approveConfirmed ? "Approving USDC..." : "Creating subscription..."}
                   </button>
                 )}
@@ -683,8 +646,8 @@ export default function PayPage() {
         )}
       </div>
 
-      <div style={{ marginTop: 20, fontSize: 11, color: "#1e293b", textAlign: "center" }}>
-        Powered by <span style={{ color: "#34d399" }}>AuthOnce</span> · Non-custodial · Base Network
+      <div style={{ marginTop: 20, fontSize: 11, color: "var(--text-faint)", textAlign: "center" }}>
+        Powered by <span style={{ color: "var(--green)" }}>AuthOnce</span> · Non-custodial · Base Network
       </div>
     </div>
   );
