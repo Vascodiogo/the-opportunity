@@ -15,6 +15,7 @@
   --bg-input:        rgba(255,255,255,0.04);
   --bg-modal:        #0f172a;
   --bg-nav:          rgba(8,12,20,0.95);
+  --green-rgb:       52, 211, 153;
   --bg-tag:          rgba(255,255,255,0.05);
   --border:          rgba(255,255,255,0.07);
   --border-input:    rgba(255,255,255,0.1);
@@ -47,6 +48,7 @@
   --text-muted:      #64748b;
   --text-faint:      #94a3b8;
   --green:           #059669;
+  --green-rgb:       5, 150, 105;
   --blue:            #2563eb;
   --amber:           #d97706;
   --red:             #dc2626;
