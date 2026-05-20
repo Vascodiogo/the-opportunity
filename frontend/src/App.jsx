@@ -29,14 +29,18 @@ export default function App() {
   const [lang, setLang] = useState(() => detectLang());
 
   useEffect(() => {
-    const browser = navigator.language || navigator.userLanguage || "en";
-    const isPt = browser.toLowerCase().startsWith("pt");
-    const isOnPtPath = window.location.pathname.startsWith("/pt");
-    if (isPt && !isOnPtPath) {
-      window.history.replaceState({}, "", "/pt");
-      setLang("pt");
-    }
-  }, []);
+  const isOnPtPath = window.location.pathname.startsWith("/pt");
+  if (isOnPtPath) {
+    setLang("pt");
+    return;
+  }
+  const browser = navigator.language || navigator.userLanguage || "en";
+  const isPt = browser.toLowerCase().startsWith("pt");
+  if (isPt) {
+    window.history.replaceState({}, "", "/pt");
+    setLang("pt");
+  }
+}, []);
 
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   useEffect(() => {
