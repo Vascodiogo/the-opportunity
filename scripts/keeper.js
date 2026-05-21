@@ -1,15 +1,18 @@
 // scripts/keeper.js
-// AuthOnce Keeper Bot — v4
+// AuthOnce Keeper Bot — v4.1
 // Works with SubscriptionVault v4:
 //   - executePull(id) — no pullAmount param, contract calculates amount
 //   - Per-subscription gracePeriodDays (read from contract)
 //   - Intro pricing aware (logged, not calculated — contract handles it)
 //   - IERC20.transferFrom pull mechanism (no Gnosis Safe required)
+//
+// v4.1: removed stale fallback vault address — VAULT_ADDRESS must be set in env
 
 require("dotenv").config();
 const { ethers } = require("ethers");
 
-const VAULT_ADDRESS   = process.env.VAULT_ADDRESS || "0x724C9FF037CeF94b3d03a0F231Ca4580eAA2CECA";
+if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
+const VAULT_ADDRESS   = process.env.VAULT_ADDRESS;
 const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const KEEPER_PRIVKEY  = process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;
@@ -262,7 +265,7 @@ async function run() {
   const { wallet, vault } = setup();
 
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Keeper Bot v4");
+  console.log("  AuthOnce — Keeper Bot v4.1");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  Keeper:   ${wallet.address}`);

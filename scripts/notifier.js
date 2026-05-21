@@ -2,14 +2,20 @@
 // =============================================================================
 //  AuthOnce — Notification Backend v4
 //
-//  What changed from v3:
-//    - Updated to SubscriptionVault v4 address + ABI
-//    - v4 struct: new fields (introAmount, introPulls, pullCount, trialEndsAt etc.)
-//    - Added: 3-day pre-payment notification (runs every poll cycle)
-//    - Added: price change 30-day notice (setProductExpiry warnings)
-//    - PaymentExecuted now includes pullCount in event
+//  Fixes applied (v4.1):
+//    - BUGFIX: onInsufficientFunds — removed copy-paste block using out-of-scope
+//      variables (amount, timestamp, merchantReceivedEur) that caused a runtime
+//      crash, silencing all payment.failed notifications
+//    - BUGFIX: onInsufficientFunds — removed duplicate merchant email block
+//      (allowance copy-paste) that does not belong in the funds handler
+//    - BUGFIX: onSubscriptionExpired — added subscriber email notification
+//    - BUGFIX: onSubscriptionExpired webhook — vault_address now uses
+//      safe_vault || owner_address fallback
+//    - BUGFIX: Basescan URL now env-driven (NETWORK=mainnet uses basescan.org)
+//    - COPY: price change email — "may change" → "will change"
+//    - COPY: payment.failed merchant email — "cancelled" → "expired"
 //
-//  Listens to SubscriptionVault.sol events on Base Sepolia
+//  Listens to SubscriptionVault.sol events on Base Sepolia / Mainnet
 // =============================================================================
 
 require("dotenv").config();
@@ -22,6 +28,11 @@ const VAULT_ADDRESS  = process.env.VAULT_ADDRESS || "0x12ded877546bdaF500A1FeAd6
 const RPC_URL        = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const POLL_INTERVAL  = 30_000; // 30 seconds
 const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
+
+// Env-driven Basescan base URL — set NETWORK=mainnet in Railway for mainnet
+const BASESCAN_URL = process.env.NETWORK === "mainnet"
+  ? "https://basescan.org"
+  : "https://sepolia.basescan.org";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -222,7 +233,7 @@ async function checkPriceChangeNotices(vault) {
       if (expiresAt <= now) continue; // Already expired
       if (expiresAt > now + thirtyDays) continue; // Too far away
 
-      // Only send notice once (7 days before expiry window)
+      // Only send notice once
       const notifKey = `price_change_notice_${sub.id}_${expiresAt}`;
       const alreadySent = await db.query(
         "SELECT 1 FROM webhook_deliveries WHERE event_type = $1",
@@ -246,12 +257,12 @@ async function checkPriceChangeNotices(vault) {
           html: `
             <p>Hi ${subscriber.name || "there"},</p>
             <p>Your <strong>${merchantName}</strong> subscription will be changing on <strong>${expiryDate}</strong> (in ${daysUntil} days).</p>
-            <p>Your current price of <strong>$${amountUsdc} USDC</strong> may change after this date.</p>
+            <p>Your current price of <strong>$${amountUsdc} USDC</strong> will change after this date.</p>
             <p>If you'd like to cancel before the change, visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
             <hr/>
             <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol · <a href="https://authonce.io">authonce.io</a></p>
           `,
-          text: `Your ${merchantName} subscription is changing on ${expiryDate}. Current price: $${amountUsdc} USDC. Cancel at authonce.io/my-subscriptions if needed.`,
+          text: `Your ${merchantName} subscription price will change on ${expiryDate}. Current price: $${amountUsdc} USDC. Cancel at authonce.io/my-subscriptions if needed.`,
         });
       }
 
@@ -386,9 +397,28 @@ async function onPaymentExecuted(log, iface) {
         <p>Date: ${new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
         <p>View your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
         <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://sepolia.basescan.org/tx/${log.transactionHash}">View on Basescan</a></p>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="${BASESCAN_URL}/tx/${log.transactionHash}">View on Basescan</a></p>
       `,
       text: `Payment of $${amountUsdc} USDC to ${merchantName} processed. Tx: ${log.transactionHash}`,
+    });
+  }
+
+  // Email merchant receipt
+  const merchantEmail = await getMerchantEmail(sub.merchant_address);
+  if (merchantEmail) {
+    const amountUsdc   = (Number(amount) / 1e6).toFixed(2);
+    const eurStr       = merchantReceivedEur ? ` (≈ €${merchantReceivedEur})` : "";
+    await sendEmail({
+      to: merchantEmail,
+      subject: `Payment received — $${amountUsdc} USDC`,
+      html: `
+        <p>A subscription payment of <strong>$${amountUsdc} USDC${eurStr}</strong> was collected successfully.</p>
+        <p>Date: ${new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
+        <p><a href="${BASESCAN_URL}/tx/${log.transactionHash}">View transaction on Basescan</a></p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
+      `,
+      text: `Payment of $${amountUsdc} USDC${eurStr} received. Tx: ${log.transactionHash}`,
     });
   }
 
@@ -409,6 +439,12 @@ async function onPaymentExecuted(log, iface) {
 }
 
 async function onInsufficientFunds(log, iface) {
+  // FIX: removed copy-paste block from onPaymentExecuted that referenced
+  // out-of-scope variables (amount, timestamp, merchantReceivedEur),
+  // causing a runtime crash that silenced all payment.failed notifications.
+  // FIX: removed duplicate merchant allowance email block that does not
+  // belong in the InsufficientFunds handler.
+
   const parsed = iface.parseLog(log);
   const { id, required, available, pausedUntil } = parsed.args;
   const gracePeriodEndsAt = new Date(Number(pausedUntil) * 1000).toISOString();
@@ -422,25 +458,6 @@ async function onInsufficientFunds(log, iface) {
 
   await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
 
-  // Email merchant
-    const merchantEmailSuccess = await getMerchantEmail(sub.merchant_address);
-  if (merchantEmailSuccess) {
-    const merchantName = await getMerchantName(sub.merchant_address);
-    const amountUsdc   = (Number(amount) / 1e6).toFixed(2);
-    const eurStr       = merchantReceivedEur ? ` (≈ €${merchantReceivedEur})` : "";
-    await sendEmail({
-      to: merchantEmailSuccess,
-      subject: `Payment received — $${amountUsdc} USDC`,
-      html: `
-        <p>A subscription payment of <strong>$${amountUsdc} USDC${eurStr}</strong> was collected successfully.</p>
-        <p>Date: ${new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
-        <p><a href="https://sepolia.basescan.org/tx/${log.transactionHash}">View transaction on Basescan</a></p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
-      `,
-      text: `Payment of $${amountUsdc} USDC${eurStr} received. Tx: ${log.transactionHash}`,
-    });
-  }
   // Email subscriber
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
   if (subscriber?.email) {
@@ -464,7 +481,7 @@ async function onInsufficientFunds(log, iface) {
   }
 
   // Email merchant
-    const merchantEmail = await getMerchantEmail(sub.merchant_address);
+  const merchantEmail = await getMerchantEmail(sub.merchant_address);
   if (merchantEmail) {
     const requiredUsdc = (Number(required) / 1e6).toFixed(2);
     const graceDate    = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -473,7 +490,7 @@ async function onInsufficientFunds(log, iface) {
       subject: `Payment failed — subscriber needs to top up`,
       html: `
         <p>A subscriber's payment of <strong>$${requiredUsdc} USDC</strong> failed due to insufficient funds.</p>
-        <p>Their subscription has entered a grace period and will retry automatically. If the subscriber does not top up before <strong>${graceDate}</strong>, the subscription will be cancelled.</p>
+        <p>Their subscription has entered a grace period and will retry automatically. If the subscriber does not top up before <strong>${graceDate}</strong>, the subscription will expire.</p>
         <p>The subscriber has been notified.</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
@@ -481,26 +498,12 @@ async function onInsufficientFunds(log, iface) {
       text: `A subscriber payment of $${requiredUsdc} USDC failed. Grace period ends ${graceDate}. Subscriber has been notified.`,
     });
   }
-  // Email merchant
-    const merchantEmailAllowance = await getMerchantEmail(sub.merchant_address);
-  if (merchantEmailAllowance) {
-    const merchantName = await getMerchantName(sub.merchant_address);
-    await sendEmail({
-      to: merchantEmailAllowance,
-      subject: `Payment failed — subscriber approval expired`,
-      html: `
-        <p>A subscriber's USDC approval has expired or was insufficient.</p>
-        <p>Their subscription has been paused. The subscriber has been notified and asked to re-approve.</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
-      `,
-      text: `A subscriber's USDC approval expired. Subscription paused. Subscriber has been notified.`,
-    });
-  }
+
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
-    vault_address: sub.safe_vault,
+    vault_address: sub.safe_vault || sub.owner_address,
     merchant_address: sub.merchant_address,
+    reason: "insufficient_funds",
     required_usdc: formatUsdc(required),
     available_usdc: formatUsdc(available),
     grace_period_ends_at: gracePeriodEndsAt,
@@ -521,6 +524,7 @@ async function onInsufficientAllowance(log, iface) {
 
   await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
 
+  // Email subscriber
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
   if (subscriber?.email) {
     const merchantName = await getMerchantName(sub.merchant_address);
@@ -538,8 +542,26 @@ async function onInsufficientAllowance(log, iface) {
     });
   }
 
+  // Email merchant
+  const merchantEmail = await getMerchantEmail(sub.merchant_address);
+  if (merchantEmail) {
+    await sendEmail({
+      to: merchantEmail,
+      subject: `Payment failed — subscriber approval expired`,
+      html: `
+        <p>A subscriber's USDC approval has expired or was insufficient.</p>
+        <p>Their subscription has been paused. The subscriber has been notified and asked to re-approve.</p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
+      `,
+      text: `A subscriber's USDC approval expired. Subscription paused. Subscriber has been notified.`,
+    });
+  }
+
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
+    vault_address: sub.safe_vault || sub.owner_address,
+    merchant_address: sub.merchant_address,
     reason: "insufficient_allowance",
     required_usdc: formatUsdc(required),
     current_allowance_usdc: formatUsdc(allowance),
@@ -557,7 +579,7 @@ async function onSubscriptionPaused(log, iface) {
   await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
   await dispatchWebhook(sub.merchant_address, "subscription.paused", {
     subscription_id: id.toString(),
-    vault_address: sub.safe_vault,
+    vault_address: sub.safe_vault || sub.owner_address,
     paused_by: pausedBy,
     status: "paused",
   });
@@ -591,13 +613,16 @@ async function onSubscriptionCancelled(log, iface) {
 
   await dispatchWebhook(sub.merchant_address, "subscription.cancelled", {
     subscription_id: id.toString(),
-    vault_address: sub.safe_vault,
+    vault_address: sub.safe_vault || sub.owner_address,
     cancelled_by: cancelledBy,
     status: "cancelled",
   });
 }
 
 async function onSubscriptionExpired(log, iface) {
+  // FIX: added subscriber email notification (was missing entirely).
+  // FIX: vault_address now uses safe_vault || owner_address fallback.
+
   const parsed = iface.parseLog(log);
   const { id, timestamp } = parsed.args;
   const date = new Date(Number(timestamp) * 1000).toISOString();
@@ -606,9 +631,46 @@ async function onSubscriptionExpired(log, iface) {
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
   await db.updateSubscriptionStatus(id.toString(), "expired");
+
+  // Email subscriber
+  const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
+  if (subscriber?.email) {
+    const merchantName = await getMerchantName(sub.merchant_address);
+    const expiredDate  = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    await sendEmail({
+      to: subscriber.email,
+      subject: `Subscription expired — ${merchantName}`,
+      html: `
+        <p>Hi ${subscriber.name || "there"},</p>
+        <p>Your subscription to <strong>${merchantName}</strong> expired on <strong>${expiredDate}</strong> because the grace period ended without a successful payment.</p>
+        <p>If you'd like to resubscribe, visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
+      `,
+      text: `Your ${merchantName} subscription expired on ${expiredDate}. Resubscribe at authonce.io/my-subscriptions.`,
+    });
+  }
+
+  // Email merchant
+  const merchantEmail = await getMerchantEmail(sub.merchant_address);
+  if (merchantEmail) {
+    const expiredDate = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    await sendEmail({
+      to: merchantEmail,
+      subject: `Subscription expired — grace period ended`,
+      html: `
+        <p>A subscriber's subscription expired on <strong>${expiredDate}</strong> after the grace period ended without a successful payment.</p>
+        <p>No further payments will be collected for this subscription.</p>
+        <hr/>
+        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
+      `,
+      text: `A subscription expired on ${expiredDate} after the grace period ended. No further payments will be collected.`,
+    });
+  }
+
   await dispatchWebhook(sub.merchant_address, "subscription.expired", {
     subscription_id: id.toString(),
-    vault_address: sub.safe_vault,
+    vault_address: sub.safe_vault || sub.owner_address,
     expired_at: date,
     status: "expired",
   });
@@ -625,7 +687,7 @@ async function onSubscriptionResumed(log, iface) {
   await db.updateSubscriptionStatus(id.toString(), "active", { pausedAt: null });
   await dispatchWebhook(sub.merchant_address, "subscription.resumed", {
     subscription_id: id.toString(),
-    vault_address: sub.safe_vault,
+    vault_address: sub.safe_vault || sub.owner_address,
     resumed_at: date,
     status: "active",
   });
@@ -696,10 +758,12 @@ async function main() {
   await db.initSchema();
 
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Notification Backend v4");
+  console.log("  AuthOnce — Notification Backend v4.1");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  RPC:      ${RPC_URL}`);
+  console.log(`  Network:  ${process.env.NETWORK === "mainnet" ? "Base Mainnet" : "Base Sepolia"}`);
+  console.log(`  Basescan: ${BASESCAN_URL}`);
   console.log(`  Mode:     Polling every ${POLL_INTERVAL / 1000}s`);
   console.log(`  Email:    ${resend ? "Resend configured" : "NO RESEND_API_KEY"}`);
   console.log(`  DB:       ${process.env.DATABASE_URL ? "PostgreSQL connected" : "NO DATABASE_URL"}`);
