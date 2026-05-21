@@ -1,29 +1,28 @@
 // scripts/keeper.js
-// AuthOnce Keeper Bot — v4.1
-// Works with SubscriptionVault v4:
-//   - executePull(id) — no pullAmount param, contract calculates amount
+// AuthOnce Keeper Bot — v5
+// Works with SubscriptionVault v5:
+//   - executePull(id, deadline, signature) — updated v5 signature
+//   - EOA subscribers: deadline=0, signature="0x" (ERC-1271 check skipped by contract)
+//   - Contract wallet subscribers: keeper must call pullAuthorisationDigest(id, deadline)
+//     off-chain, request EIP-712 signature, then pass to executePull
 //   - Per-subscription gracePeriodDays (read from contract)
 //   - Intro pricing aware (logged, not calculated — contract handles it)
-//   - IERC20.transferFrom pull mechanism (no Gnosis Safe required)
-//
-// v4.1: removed stale fallback vault address — VAULT_ADDRESS must be set in env
+//   - Multi-token: token address read from subscription struct
 
 require("dotenv").config();
 const { ethers } = require("ethers");
 
-if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
-const VAULT_ADDRESS   = process.env.VAULT_ADDRESS;
+const VAULT_ADDRESS   = process.env.VAULT_ADDRESS || "0x724C9FF037CeF94b3d03a0F231Ca4580eAA2CECA";
 const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const KEEPER_PRIVKEY  = process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;
 
-// ─── ABI — v4 ───────────────────────────────────────────────────────────────
-// Key changes from v3:
-//   - subscriptions() returns introAmount, introPulls, pullCount
-//   - executePull(id) — no pullAmount argument
-//   - nextPullAmount(id) — view: what will be pulled next
-//   - vaultAllowance(id) — view: USDC allowance granted to vault contract
-//   - gracePeriodDays is per-subscription (read from struct)
+// ─── ABI — v5 ───────────────────────────────────────────────────────────────
+// Key changes from v4:
+//   - executePull(id, deadline, signature) — EIP-712 + ERC-1271 support
+//   - subscriptions() now returns token (multi-token) and dataVaultId (DataOnce)
+//   - pullAuthorisationDigest(id, deadline) — EIP-712 hash for contract wallets
+//   - EOA subscribers: pass deadline=0, signature="0x" to executePull
 
 const VAULT_ABI = [
   {
@@ -36,6 +35,7 @@ const VAULT_ABI = [
       { name: "guardian",        type: "address" },
       { name: "merchant",        type: "address" },
       { name: "safeVault",       type: "address" },
+      { name: "token",           type: "address" },
       { name: "amount",          type: "uint256" },
       { name: "introAmount",     type: "uint256" },
       { name: "introPulls",      type: "uint256" },
@@ -46,6 +46,7 @@ const VAULT_ABI = [
       { name: "expiresAt",       type: "uint256" },
       { name: "trialEndsAt",     type: "uint256" },
       { name: "gracePeriodDays", type: "uint256" },
+      { name: "dataVaultId",     type: "bytes32" },
       { name: "status",          type: "uint8"   },
     ],
   },
@@ -78,10 +79,16 @@ const VAULT_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    // v5: EOA subscribers pass deadline=0 and signature="0x"
+    // Contract wallet subscribers pass EIP-712 deadline + signature bytes
     name: "executePull",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "id", type: "uint256" }],
+    inputs: [
+      { name: "id",        type: "uint256" },
+      { name: "deadline",  type: "uint256" },
+      { name: "signature", type: "bytes"   },
+    ],
     outputs: [],
   },
   {
@@ -111,6 +118,17 @@ const VAULT_ABI = [
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    // Used by keeper to build EIP-712 digest for contract wallet subscribers
+    name: "pullAuthorisationDigest",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "id",       type: "uint256" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bytes32" }],
   },
 ];
 
@@ -169,8 +187,8 @@ async function processDueSubscriptions(vault, ids) {
       console.log(`     Interval: ${INTERVAL_NAME[Number(sub.interval)]}`);
 
       try {
-        // v4: executePull(id) — no amount param, contract decides
-        const tx      = await vault.executePull(id);
+        // v5: EOA subscribers — deadline=0, signature="0x" (ERC-1271 skipped by contract)
+        const tx      = await vault.executePull(id, 0, "0x");
         console.log(`     TX sent:  ${tx.hash}`);
         const receipt = await tx.wait();
         console.log(`     Confirmed in block ${receipt.blockNumber}`);
@@ -201,7 +219,7 @@ async function processDueSubscriptions(vault, ids) {
           await tx1.wait();
           console.log(`     Resumed`);
 
-          const tx2     = await vault.executePull(id);
+          const tx2     = await vault.executePull(id, 0, "0x");
           console.log(`     TX sent:  ${tx2.hash}`);
           const receipt = await tx2.wait();
           console.log(`     Payment confirmed in block ${receipt.blockNumber}`);
@@ -265,7 +283,7 @@ async function run() {
   const { wallet, vault } = setup();
 
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Keeper Bot v4.1");
+  console.log("  AuthOnce — Keeper Bot v5");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  Keeper:   ${wallet.address}`);

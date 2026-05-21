@@ -54,7 +54,10 @@
 
 ## 3. Locked Business Rules — Do Not Change
 
-- **USDC only** — hardcoded, no other token ever
+- Multi-token — USDC, USDT, DAI, EURC, WETH, cbBTC
+- Admin whitelist controls approved tokens
+- Per-product accepted token list — merchant sets, subscriber chooses
+- Protocol fee collected in subscription token
 - **Vault funded at exactly 1× subscription amount** — no over-funding, no balance, no refund UX
 - **Keeper bot is the only caller of `executePull()`**
 - **Protocol never holds funds** — non-custodial is non-negotiable, eliminates FINMA licence
@@ -114,9 +117,11 @@ frontend/src/
 
 | Phase | Description | Status |
 |---|---|---|
+| v5 contract rewrite | Multi-token, ERC-1271, AI agents, DataOnce field | ⬜ Next |
 | 0–4 | Contracts, Keeper, Backend, Webhooks, Frontend | ✅ Complete |
 | 5a | Google OAuth subscriber auth | ✅ Complete May 5 2026 |
 | 5b | Stripe Checkout — card/MB Way/Multibanco/SEPA → vault | ⬜ **Next — mainnet blocker** |
+| v5 contract rewrite | Multi-token, ERC-1271, AI agents, DataOnce field | ⬜ Next |
 | 5c | Stripe webhook wiring | ⬜ Not started — **mainnet blocker** |
 | 6 | Geofencing middleware (HTTP 451 OFAC) | ⬜ Not started — **mainnet blocker** |
 | 7 | Legal docs | 🔄 In review (Fio Legal contacted) |
@@ -219,23 +224,20 @@ Farcaster Bot:
 
 ## 12. Next Session Priorities
 
-1. Merchant CSV payment export (api.js endpoint + dashboard button)
-2. Monthly summary email — auto-sent 1st of month to each merchant
-3. Win-back email on cancellation — configurable by merchant (discount %, delay, message)
-4. Subscriber import Option B — bulk pay link generator for merchant CSV upload
-5. New deployer wallet (key exposed May 3 — critical before mainnet)
-6. New keeper bot wallet
-7. Smart contract audit ($15-20K — Cyfrin or Hashlock)
-8. Dashboard UI review — MerchantDashboard, subscriber portal, admin — align to mock design quality before mainnet
-9. Stripe Checkout — card / MB Way / Multibanco → USDC → vault (mainnet blocker)
-10. Stripe webhook wiring — payment events → grace period + notifier (mainnet blocker)
-11. Merchant CSV payment export
-12. Monthly summary email — auto-sent 1st of month to each merchant
-13. Win-back email on cancellation
-14. Subscriber import Option B — bulk pay link generator
-15. 16. New deployer wallet (key exposed May 3 — critical before mainnet)
-17. New keeper bot wallet
-18. Smart contract audit ($15–20K — Cyfrin or Hashlock)
+1. SubscriptionVault v5 contract rewrite
+2. Deploy v5 to Base Sepolia
+3. Update keeper.js for multi-token executePull()
+4. Update notifier.js for multi-token events
+5. Update api.js for multi-token product creation
+6. Update PayPage.jsx — token selector at checkout
+7. Update MerchantDashboard.jsx — per-product token list
+8. New deployer wallet — key exposed May 3
+9. New keeper bot wallet
+10. Smart contract audit — Cyfrin or Hashlock
+11. GitHub README rewrite — after v5 Sepolia deployment
+12. GitHub repo metadata — topics, description, bio updates
+13. Advanced accounting dashboard — churn, LTV, forecasting, token breakdown
+14. Developer SDK — npm install @authonce/sdk
 
 Paste the section to change into chat → Claude produces replacement text → copy-paste into local `C:\AuthOnce-Docs\CLAUDE-CORE.md` → re-upload to Project Knowledge (replace existing file).
 
