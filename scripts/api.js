@@ -30,7 +30,8 @@ const express = require("express");
 const crypto  = require("crypto");
 const bcrypt  = require("bcryptjs");
 const jwt     = require("jsonwebtoken");
-const db      = require("./db");
+const db             = require("./db");
+const resendDomains   = require("./resend-domains");
 
 const app  = express();
 const PORT = process.env.API_PORT || 3001;
@@ -1761,6 +1762,127 @@ app.get("/api/data/categories", (req, res) => {
 
 app.get("/api/data/consents/:address", (req, res) => {
   res.json({ consents: [], status: "coming_soon", message: "DataOnce data marketplace — launching after AuthOnce mainnet." });
+});
+
+// =============================================================================
+// Merchant Custom Sender Domains (Business+ tier)
+// =============================================================================
+
+// POST /api/merchant/email-domain — register a custom sender domain
+app.post("/api/merchant/email-domain", requireMerchantAuth, async (req, res) => {
+  try {
+    const { domain, sender_local_part } = req.body;
+    if (!domain) return res.status(400).json({ error: "missing_domain" });
+
+    // Check merchant tier — Business+ only
+    const merchant = await db.getMerchant(req.merchantAddress);
+    const tier = merchant?.tier || "starter";
+    const allowedTiers = ["business", "enterprise"];
+    if (!allowedTiers.includes(tier.toLowerCase())) {
+      return res.status(403).json({
+        error: "tier_required",
+        message: "Custom sender domains require Business tier or above.",
+        current_tier: tier,
+        required_tier: "business",
+      });
+    }
+
+    const result = await resendDomains.registerMerchantDomain(
+      db, req.merchantAddress, domain, sender_local_part || "noreply"
+    );
+    res.json(result);
+  } catch (err) {
+    console.error("[API] Domain registration error:", err.message);
+    res.status(400).json({ error: "domain_error", message: err.message });
+  }
+});
+
+// POST /api/merchant/email-domain/verify — verify DNS records
+app.post("/api/merchant/email-domain/verify", requireMerchantAuth, async (req, res) => {
+  try {
+    const result = await resendDomains.verifyMerchantDomain(db, req.merchantAddress);
+    res.json(result);
+  } catch (err) {
+    console.error("[API] Domain verification error:", err.message);
+    res.status(400).json({ error: "verification_error", message: err.message });
+  }
+});
+
+// GET /api/merchant/email-domain — get domain status + DNS records
+app.get("/api/merchant/email-domain", requireMerchantAuth, async (req, res) => {
+  try {
+    const result = await resendDomains.getMerchantDomainStatus(db, req.merchantAddress);
+    if (!result) return res.json({ status: "none", message: "No custom domain registered." });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// DELETE /api/merchant/email-domain — remove custom domain
+app.delete("/api/merchant/email-domain", requireMerchantAuth, async (req, res) => {
+  try {
+    const result = await resendDomains.deleteMerchantDomain(db, req.merchantAddress);
+    res.json(result);
+  } catch (err) {
+    console.error("[API] Domain deletion error:", err.message);
+    res.status(400).json({ error: "deletion_error", message: err.message });
+  }
+});
+
+// =============================================================================
+// Merchant Branding (Growth+ tier)
+// =============================================================================
+
+// POST /api/merchant/branding — set brand name and color for whitelabel emails
+app.post("/api/merchant/branding", requireMerchantAuth, async (req, res) => {
+  try {
+    const { brand_name, brand_color } = req.body;
+
+    // Check tier
+    const merchant = await db.getMerchant(req.merchantAddress);
+    const tier = merchant?.tier || "starter";
+    const allowedTiers = ["growth", "business", "enterprise"];
+    if (!allowedTiers.includes(tier.toLowerCase())) {
+      return res.status(403).json({
+        error: "tier_required",
+        message: "Branded emails require Growth tier or above.",
+        current_tier: tier,
+        required_tier: "growth",
+      });
+    }
+
+    // Validate color format
+    if (brand_color && !/^#[0-9a-fA-F]{6}$/.test(brand_color)) {
+      return res.status(400).json({ error: "invalid_color", message: "Color must be a valid hex code e.g. #34d399" });
+    }
+
+    await db.query(`
+      UPDATE merchants
+      SET brand_name  = $1,
+          brand_color = $2,
+          updated_at  = NOW()
+      WHERE LOWER(wallet_address) = $3
+    `, [brand_name || null, brand_color || null, req.merchantAddress]);
+
+    res.json({ success: true, brand_name, brand_color });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// GET /api/merchant/branding — get current branding settings
+app.get("/api/merchant/branding", requireMerchantAuth, async (req, res) => {
+  try {
+    const merchant = await db.getMerchant(req.merchantAddress);
+    res.json({
+      brand_name:  merchant?.brand_name  || null,
+      brand_color: merchant?.brand_color || null,
+      tier:        merchant?.tier        || "starter",
+    });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
 });
 
 // 404 handler
