@@ -193,7 +193,7 @@ function ApplyForm({ lang, isDark }) {
   return (
     <form onSubmit={handleSubmit}>
       {/* Row 1 — Business name + Email */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div className="ao-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div>
           <label style={labelStyle}>{lang === "en" ? "Business name" : "Nome da empresa"}</label>
           <input type="text" required value={form.business_name}
@@ -211,7 +211,7 @@ function ApplyForm({ lang, isDark }) {
       </div>
 
       {/* Row 2 — Wallet + Website */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 8 }}>
+      <div className="ao-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 8 }}>
         <div>
           <label style={labelStyle}>
             {lang === "en" ? "Wallet address (optional)" : "Endereço de carteira (opcional)"}
@@ -245,8 +245,8 @@ function ApplyForm({ lang, isDark }) {
         <textarea required rows={3} value={form.use_case}
           onChange={e => setForm(p => ({ ...p, use_case: e.target.value }))}
           placeholder={lang === "en"
-            ? "Tell us about your business and how you plan to use recurring USDC payments..."
-            : "Conte-nos sobre o seu negócio e como planeia usar pagamentos recorrentes em USDC..."}
+            ? "Tell us about your business and how you plan to use recurring crypto payments..."
+            : "Conte-nos sobre o seu negócio e como planeia usar pagamentos recorrentes em cripto..."}
           style={{ ...inputStyle, resize: "vertical" }} />
       </div>
 
@@ -299,11 +299,32 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+      {/* ── Mobile Responsive Styles ── */}
+      <style>{`
+        @media (max-width: 640px) {
+          .ao-nav-links { display: none !important; }
+          .ao-nav-mobile { display: flex !important; }
+          .ao-hero { padding: 64px 24px 48px !important; }
+          .ao-section { padding: 48px 24px !important; }
+          .ao-section-sm { padding: 32px 24px !important; }
+          .ao-grid-2 { grid-template-columns: 1fr !important; }
+          .ao-h1 { font-size: clamp(32px, 8vw, 52px) !important; }
+          .ao-apply-grid { grid-template-columns: 1fr !important; }
+          .ao-form-row { grid-template-columns: 1fr !important; }
+          .ao-footer { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+          .ao-founding-cta { flex-direction: column !important; }
+        }
+        @media (max-width: 480px) {
+          .ao-nav { padding: 0 16px !important; }
+          .ao-stat-row { flex-direction: column !important; gap: 16px !important; }
+        }
+      `}</style>
+
 
       {/* ── Nav ── */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 40px", height: 64,
+        padding: "0 40px", height: 64, className: "ao-nav",
         borderBottom: `0.5px solid ${border}`,
         background: isDark ? "rgba(8,12,20,0.9)" : "rgba(248,250,252,0.9)",
         backdropFilter: "blur(16px)",
@@ -315,8 +336,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             Auth<span style={{ color: accent }}>Once</span>
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a href={`/${otherLang === "en" ? "" : otherLang}`} style={{
+        <div className="ao-nav-links" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <a href={lang === "en" ? "/pt" : "/"} style={{
             fontSize: 12, fontWeight: 600, color: muted,
             padding: "4px 10px", borderRadius: 6,
             border: `0.5px solid ${border}`, textDecoration: "none",
@@ -349,7 +370,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </nav>
       {/* ── Hero ── */}
-      <section style={{ maxWidth: 960, margin: "0 auto", padding: "96px 40px 72px", textAlign: "center" }}>
+      <section className="ao-hero" style={{ maxWidth: 960, margin: "0 auto", padding: "96px 40px 72px", textAlign: "center" }}>
         {/* Founding badge */}
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 8,
@@ -383,8 +404,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
 
         <p style={{ fontSize: 18, color: muted, maxWidth: 580, margin: "0 auto 48px", lineHeight: 1.7, fontWeight: 300 }}>
           {lang === "en"
-            ? "AuthOnce gives merchants a pay link, an embeddable widget, and a full API to collect recurring USDC subscriptions on Base Network. 99.5% of every payment goes directly to you."
-            : "O AuthOnce dá aos comerciantes um link de pagamento, um widget e uma API completa para cobrar subscrições recorrentes em USDC na Base Network. 99,5% de cada pagamento vai diretamente para si."}
+            ? "AuthOnce gives merchants a pay link, an embeddable widget, and a full API to collect recurring crypto subscriptions on Base Network. 99.5% of every payment goes directly to you."
+            : "O AuthOnce dá aos comerciantes um link de pagamento, um widget e uma API completa para cobrar subscrições recorrentes em cripto na Base Network. 99,5% de cada pagamento vai diretamente para si."}
         </p>
 
         <button onClick={scrollToApply} style={{
@@ -409,8 +430,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </p>
           <p style={{ fontSize: 17, color: text, lineHeight: 1.8, margin: 0, fontWeight: 300 }}>
             {lang === "en"
-              ? "AuthOnce is a non-custodial subscription protocol built on Base Network. Subscribers authorise a one-time payment intent — their USDC is held in their own wallet and pulled automatically on schedule. Merchants receive funds directly, with no intermediary. Everything is on-chain, auditable, and unstoppable."
-              : "O AuthOnce é um protocolo de subscrição não custodial construído na Base Network. Os subscritores autorizam uma intenção de pagamento única — o seu USDC fica guardado na sua própria carteira e é cobrado automaticamente. Os comerciantes recebem os fundos diretamente, sem intermediários. Tudo é on-chain, auditável e imparável."}
+              ? "AuthOnce is a non-custodial subscription protocol built on Base Network. Subscribers authorise a one-time payment intent — their tokens are held in their own wallet and pulled automatically on schedule. Merchants receive funds directly, with no intermediary. Everything is on-chain, auditable, and unstoppable."
+              : "O AuthOnce é um protocolo de subscrição não custodial construído na Base Network. Os subscritores autorizam uma intenção de pagamento única — os seus tokens ficam guardados na sua própria carteira e são cobrados automaticamente. Os comerciantes recebem os fundos diretamente, sem intermediários. Tudo é on-chain, auditável e imparável."}
           </p>
         </div>
       </section>
@@ -441,7 +462,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           background: isDark ? "rgba(251,191,36,0.06)" : "rgba(251,191,36,0.04)",
           border: "0.5px solid rgba(251,191,36,0.25)",
           borderRadius: 20, padding: "48px",
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, alignItems: "center",
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, alignItems: "center", className: "ao-apply-grid",
         }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: "#fbbf24", letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
@@ -588,7 +609,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             {lang === "en" ? "Founding Merchants" : "Comerciantes Fundadores"}
           </div>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 16, lineHeight: 1.2 }}>
-            {lang === "en" ? "Be one of the first 5 merchants on AuthOnce" : "Seja um dos primeiros 5 comerciantes no AuthOnce"}
+            {lang === "en" ? "Be one of the first 10 merchants on AuthOnce" : "Seja um dos primeiros 10 comerciantes no AuthOnce"}
           </h2>
           <p style={{ fontSize: 16, color: muted, lineHeight: 1.8, marginBottom: 32, fontWeight: 300 }}>
             {lang === "en"
@@ -608,7 +629,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <div className="ao-founding-cta" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a
               href="mailto:vasco@authonce.io?subject=Founding Merchant Application&body=Hi Vasco, I'm interested in becoming a founding merchant on AuthOnce. Here's a bit about my business:"
               style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", border: "none", borderRadius: 12, color: "#080c14", fontWeight: 800, fontSize: 15, padding: "14px 28px", textDecoration: "none", display: "inline-block", letterSpacing: "-0.01em" }}
@@ -623,7 +644,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             </a>
           </div>
           <p style={{ fontSize: 12, color: isDark ? "#334155" : "#94a3b8", marginTop: 20 }}>
-            {lang === "en" ? "5 spots available · Mainnet launch September 2026" : "5 vagas disponíveis · Lançamento mainnet setembro 2026"}
+            {lang === "en" ? "10 spots available · Mainnet launch September 2026" : "10 vagas disponíveis · Lançamento mainnet setembro 2026"}
           </p>
         </div>
       </section>
@@ -633,7 +654,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{
           maxWidth: 960, margin: "0 auto",
           display: "flex", justifyContent: "space-between", alignItems: "center",
-          flexWrap: "wrap", gap: 16,
+          flexWrap: "wrap", gap: 16, className: "ao-footer",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img src="/logo.svg" alt="AuthOnce" style={{ width: 20, height: 20 }} />
