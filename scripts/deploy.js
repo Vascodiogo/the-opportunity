@@ -105,8 +105,8 @@ async function main() {
   console.log(`  Tokens:    ${Object.keys(tokenMap).join(", ")}`);
   console.log(`  Test merchant approval: ${APPROVE_TEST}`);
 
-  if (balance < ethers.parseEther("0.01")) {
-    throw new Error("Deployer balance too low — need at least 0.01 ETH");
+  if (balance < ethers.parseEther("0.007")) {
+    throw new Error("Deployer balance too low — need at least 0.007 ETH");
   }
 
   // ── 1. Deploy MerchantRegistry ─────────────────────────────────────────────

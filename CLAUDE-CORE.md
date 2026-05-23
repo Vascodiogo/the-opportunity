@@ -34,9 +34,9 @@
 | Railway plan | Hobby ($5/month) | ✅ Upgraded |
 
 **Contract addresses — Base Sepolia testnet:**
-- SubscriptionVault v3: `0xED9a4322030b2523cBB4eD5479539a3afEe30afA`
-- MerchantRegistry v3: `0x3124a01D023FA6F0AFDE1e89c6727FE3D0fAa3d5`
-- USDC Sepolia: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+- SubscriptionVault v5: `0x9ce26F5d8C4cc7942022FFCa9D4D574D8c497662`
+- MerchantRegistry v2:  `0xBa8071912Ce59cD9D3D153120C59516fBae10A5C`
+- USDC Sepolia:         `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 
 **Contract addresses — Base Mainnet (not yet deployed):**
 - USDC Mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`

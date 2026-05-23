@@ -474,8 +474,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             </p>
             <h2 style={{ fontSize: 26, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
               {lang === "en"
-                ? "First 10 merchants pay zero fees for 3 months."
-                : "Os primeiros 10 comerciantes pagam zero taxas durante 3 meses."}
+                ? "First 5 merchants pay zero fees for 3 months."
+                : "Os primeiros 5 comerciantes pagam zero taxas durante 3 meses."}
             </h2>
             <p style={{ color: muted, fontSize: 14, lineHeight: 1.7, margin: "0 0 24px", fontWeight: 300 }}>
               {lang === "en"
@@ -485,7 +485,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <div style={{ display: "flex", gap: 28 }}>
               {[
                 { v: "0%",  l: lang === "en" ? "Fees · 3 months" : "Taxas · 3 meses" },
-                { v: "10",  l: lang === "en" ? "Spots total"     : "Vagas totais" },
+                { v: "5",  l: lang === "en" ? "Spots total"     : "Vagas totais" },
                 { v: "48h", l: lang === "en" ? "Review time"     : "Tempo de resposta" },
               ].map((s, i) => (
                 <div key={i}>
