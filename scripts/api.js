@@ -32,6 +32,9 @@ const bcrypt  = require("bcryptjs");
 const jwt     = require("jsonwebtoken");
 const db             = require("./db");
 const resendDomains   = require("./resend-domains");
+const { templates }    = require("./email-templates");
+const { Resend }       = require("resend");
+const resend           = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const app  = express();
 const PORT = process.env.API_PORT || 3001;
@@ -995,10 +998,39 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
 
     // Determine amount and currency
     const isYearly    = interval === "yearly" && product.yearly_amount;
-    const amountUsdc  = isYearly ? parseFloat(product.yearly_amount) : parseFloat(product.amount);
-    // Convert USDC to EUR (approximate — use live rate in production)
-    // For now use 1:1 (USDC ≈ EUR for simplicity, merchant can adjust)
-    const amountEur   = Math.round(amountUsdc * 100); // in cents
+    const priceType   = product.price_type   || "crypto";    // "crypto" | "fiat"
+    const fiatCurrency = (product.fiat_currency || "eur").toLowerCase();
+
+    let amountUsdc, stripeAmount, stripeCurrency;
+
+    if (priceType === "fiat" && product.fiat_price > 0) {
+      // Fixed fiat price — subscriber always pays same fiat amount
+      // USDC amount varies slightly with exchange rate
+      stripeCurrency = fiatCurrency;
+      const fiatPrice  = isYearly && product.fiat_yearly_price
+        ? parseFloat(product.fiat_yearly_price)
+        : parseFloat(product.fiat_price);
+      stripeAmount = ZERO_DECIMAL_CURRENCIES.has(fiatCurrency)
+        ? Math.round(fiatPrice)
+        : Math.round(fiatPrice * 100);
+      amountUsdc = fiatToUsdc(fiatPrice, fiatCurrency);
+      console.log(`[CHECKOUT] Fixed fiat: ${fiatPrice} ${fiatCurrency.toUpperCase()} → ${amountUsdc} USDC`);
+    } else {
+      // Fixed crypto price — subscriber pays fiat equivalent of USDC amount
+      // Fiat amount varies with exchange rate
+      stripeCurrency = fiatCurrency;
+      amountUsdc   = isYearly && product.yearly_amount
+        ? parseFloat(product.yearly_amount)
+        : parseFloat(product.amount);
+      await getFiatToUsdcRate(fiatCurrency); // warm cache
+      stripeAmount = usdcToStripeAmount(amountUsdc, fiatCurrency);
+      const displayFiat = ZERO_DECIMAL_CURRENCIES.has(fiatCurrency)
+        ? stripeAmount
+        : (stripeAmount / 100).toFixed(2);
+      console.log(`[CHECKOUT] Fixed crypto: ${amountUsdc} USDC → ${displayFiat} ${fiatCurrency.toUpperCase()}`);
+    }
+
+    const amountEur = stripeAmount; // alias for downstream code
 
     // Map payment method to Stripe payment method types
     const stripeMethodMap = {
@@ -1019,8 +1051,8 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
       payment_method_types: stripePaymentMethods,
       line_items: [{
         price_data: {
-          currency: "eur",
-          unit_amount: amountEur,
+          currency: stripeCurrency,
+          unit_amount: stripeAmount,
           product_data: {
             name: product.name,
             description: `${product.name} — ${isYearly ? "yearly" : product.interval} subscription via AuthOnce`,
@@ -1036,7 +1068,7 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
         product_slug:     product_slug,
         payment_method:   payment_method,
         interval:         interval || product.interval,
-        authonce_protocol: "v4",
+        authonce_protocol: "v5",
       },
     }, {
       stripeAccount: merchant.stripe_account_id,
@@ -1047,10 +1079,10 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
       sessionId:        session.id,
       merchantAddress:  address,
       productSlug:      product_slug,
-      subscriberEmail:  "pending", // Will be filled when subscriber completes checkout
+      subscriberEmail:  "pending",
       subscriberWallet: "pending",
-      amountEur:        amountUsdc,
-      currency:         "eur",
+      amountEur:        amountUsdc, // stored as USDC equivalent for vault funding
+      currency:         stripeCurrency,
     });
 
     console.log(`[CHECKOUT] Created session ${session.id} for ${address}/${product_slug} via ${payment_method}`);
@@ -1066,6 +1098,83 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
 // =============================================================================
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+// ── Multi-currency fiat/USDC rates via CoinGecko ─────────────────────────────
+// Fetches all supported currencies in one call, cached 5 minutes.
+// Zero-decimal currencies (JPY, KRW) are flagged for Stripe integer handling.
+
+const SUPPORTED_CURRENCIES = [
+  "eur", "usd", "gbp", "chf", "brl", "cad", "aud",
+  "sek", "nok", "dkk", "sgd", "hkd", "inr", "jpy", "krw",
+];
+
+// Currencies with no decimal places — Stripe requires integer amounts
+const ZERO_DECIMAL_CURRENCIES = new Set(["jpy", "krw"]);
+
+// Fallback rates (approximate) if CoinGecko is unavailable
+const FALLBACK_RATES = {
+  eur: 0.92, usd: 1.00, gbp: 0.79, chf: 0.90, brl: 5.05,
+  cad: 1.37, aud: 1.54, sek: 10.4, nok: 10.7, dkk: 6.89,
+  sgd: 1.35, hkd: 7.82, inr: 83.5, jpy: 150.0, krw: 1330.0,
+};
+
+let _rateCache = { rates: null, ts: 0 };
+
+async function getFiatToUsdcRate(currency = "eur") {
+  const cur = currency.toLowerCase();
+  const now = Date.now();
+
+  // Refresh cache if stale (5 minutes)
+  if (!_rateCache.rates || now - _rateCache.ts > 300_000) {
+    try {
+      const vs = SUPPORTED_CURRENCIES.join(",");
+      const res  = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=${vs}`);
+      const data = await res.json();
+      const rates = data?.["usd-coin"];
+      if (rates && Object.keys(rates).length > 0) {
+        _rateCache = { rates, ts: now };
+        console.log(`[RATE] Refreshed ${Object.keys(rates).length} currency rates`);
+      }
+    } catch (err) {
+      console.warn("[RATE] CoinGecko fetch failed:", err.message);
+    }
+  }
+
+  const rate = _rateCache.rates?.[cur] || FALLBACK_RATES[cur] || 1.0;
+  return rate; // how many {currency} units = 1 USDC
+}
+
+// Convert USDC amount to Stripe integer (cents or base units)
+// Zero-decimal currencies use whole numbers, others use cents
+function usdcToStripeAmount(amountUsdc, currency) {
+  const cur = currency.toLowerCase();
+  const rate = _rateCache.rates?.[cur] || FALLBACK_RATES[cur] || 1.0;
+  const fiatAmount = amountUsdc * rate;
+  if (ZERO_DECIMAL_CURRENCIES.has(cur)) {
+    return Math.round(fiatAmount); // JPY/KRW: no decimals
+  }
+  return Math.round(fiatAmount * 100); // all others: cents
+}
+
+// Convert fiat amount (fixed price) to USDC
+function fiatToUsdc(fiatAmount, currency) {
+  const cur = currency.toLowerCase();
+  const rate = _rateCache.rates?.[cur] || FALLBACK_RATES[cur] || 1.0;
+  return (fiatAmount / rate).toFixed(6);
+}
+
+// Keep backward compat
+async function getEurToUsdcRate() { return getFiatToUsdcRate("eur"); }
+
+// Helper: send branded email via Resend
+async function sendBrandedEmail({ to, subject, html, text, from = "AuthOnce <notifications@authonce.io>" }) {
+  if (!resend) return;
+  try {
+    await resend.emails.send({ from, to, subject, html, text });
+  } catch (err) {
+    console.error("[EMAIL] Send error:", err.message);
+  }
+}
 
 app.get("/api/connect/authorize", requireMerchantAuth, async (req, res) => {
   try {
@@ -1189,46 +1298,162 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   try {
     switch (event.type) {
 
-      // ── Checkout completed — fiat subscriber paid via card ──────────────────
-      // Marks the checkout session complete in DB.
-      // TODO: Once Circle/Transak fiat onramp is wired, this is where we:
-      //   1. Convert EUR payment to USDC
-      //   2. Fund subscriber custodied wallet
-      //   3. Call createSubscription on-chain using subscriber's custodied key
+      // ── Checkout completed — fiat subscriber paid ────────────────────────────
+      // Phase A (manual USDC bridge):
+      //   1. Mark session complete in DB
+      //   2. Calculate USDC amount from EUR paid using live rate
+      //   3. Create/upsert subscriber record
+      //   4. Send subscriber a "payment received" confirmation email
+      //   5. Send admin (Vasco) a "fund this vault" email with exact USDC amount
+      //   6. Send merchant a "new subscriber" notification
+      //
+      // Phase B (post-audit): replace step 5 with automated treasury transfer
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log(`[WEBHOOK] Checkout completed: ${session.id}`);
 
-        if (session.payment_intent) {
-          await db.completeCheckoutSession(session.id, session.payment_intent);
-          console.log(`[WEBHOOK] Session ${session.id} marked complete`);
+        if (!session.payment_intent) break;
 
-          // Look up the checkout session to get subscriber + merchant details
-          const checkoutSession = await db.getCheckoutSession(session.id);
-          if (checkoutSession) {
-            console.log(`[WEBHOOK] Subscriber: ${checkoutSession.subscriber_email}`);
-            console.log(`[WEBHOOK] Merchant:   ${checkoutSession.merchant_address}`);
-            console.log(`[WEBHOOK] Product:    ${checkoutSession.product_slug}`);
-            console.log(`[WEBHOOK] Amount:     €${checkoutSession.amount_eur}`);
+        await db.completeCheckoutSession(session.id, session.payment_intent);
+        console.log(`[WEBHOOK] Session ${session.id} marked complete`);
 
-            // Notify merchant of new fiat subscriber
-            const merchant = await db.getMerchant(checkoutSession.merchant_address);
-            if (merchant?.email) {
-              const { Resend } = require("resend");
-              const resend = new Resend(process.env.RESEND_API_KEY);
-              await resend.emails.send({
-                from: "AuthOnce <notifications@authonce.io>",
-                to: merchant.email,
-                subject: `New subscriber — ${checkoutSession.subscriber_email}`,
-                text: `A new subscriber (${checkoutSession.subscriber_email}) has paid €${checkoutSession.amount_eur} for ${checkoutSession.product_slug}.\n\nSubscription will be activated once their wallet is funded with USDC.\n\nAuthOnce`,
-              }).catch(e => console.error("[WEBHOOK] Email error:", e.message));
+        const cs = await db.getCheckoutSession(session.id);
+        if (!cs) { console.log(`[WEBHOOK] No checkout session found for ${session.id}`); break; }
+
+        console.log(`[WEBHOOK] Subscriber: ${cs.subscriber_email}`);
+        console.log(`[WEBHOOK] Merchant:   ${cs.merchant_address}`);
+        console.log(`[WEBHOOK] Product:    ${cs.product_slug}`);
+        console.log(`[WEBHOOK] Amount EUR: €${cs.amount_eur}`);
+
+        // Calculate exact USDC to send to vault
+        // cs.amount_eur stores the USDC-equivalent amount set at checkout creation
+        // For fiat-priced products: convert fiat back to USDC using live rate
+        // For crypto-priced products: cs.amount_eur already IS the USDC amount
+        const sessionCurrency = cs.currency || "eur";
+        const amountUsdc = cs.amount_eur; // already stored as USDC equivalent
+        const eurRate = await getFiatToUsdcRate(sessionCurrency);
+        const product      = await db.getProduct(cs.merchant_address, cs.product_slug);
+        const merchant     = await db.getMerchant(cs.merchant_address);
+        const merchantName = merchant?.business_name || cs.merchant_address.slice(0, 8);
+
+        // Upsert subscriber record (email from Stripe session)
+        const subscriberEmail = session.customer_details?.email || cs.subscriber_email;
+        const subscriberName  = session.customer_details?.name  || "";
+        let subscriberVault   = cs.subscriber_wallet;
+
+        if (subscriberEmail && subscriberEmail !== "pending") {
+          try {
+            // Create subscriber if not exists (Google OAuth may have already created them)
+            const existing = await db.query(
+              "SELECT wallet_address FROM subscribers WHERE email = $1",
+              [subscriberEmail.toLowerCase()]
+            );
+            if (existing.rows[0]) {
+              subscriberVault = existing.rows[0].wallet_address;
+            } else {
+              // Generate deterministic wallet for fiat subscriber
+              const { ethers } = require("ethers");
+              const seed       = `authonce:${subscriberEmail.toLowerCase()}`;
+              const privateKey = ethers.keccak256(ethers.toUtf8Bytes(seed));
+              const wallet     = new ethers.Wallet(privateKey);
+              subscriberVault  = wallet.address;
+
+              // Encrypt private key for DB storage
+              const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "dev-key-32-chars-minimum-length!";
+              const iv             = crypto.randomBytes(16);
+              const cipher         = crypto.createCipheriv("aes-256-gcm", Buffer.from(ENCRYPTION_KEY.slice(0, 32)), iv);
+              const encrypted      = Buffer.concat([cipher.update(privateKey, "utf8"), cipher.final()]);
+              const authTag        = cipher.getAuthTag();
+              const encryptedKey   = iv.toString("hex") + ":" + authTag.toString("hex") + ":" + encrypted.toString("hex");
+
+              await db.query(
+                `INSERT INTO subscribers (email, name, wallet_address, wallet_private_key, created_at)
+                 VALUES ($1, $2, $3, $4, NOW())
+                 ON CONFLICT (email) DO NOTHING`,
+                [subscriberEmail.toLowerCase(), subscriberName, wallet.address, encryptedKey]
+              );
+              console.log(`[WEBHOOK] Created subscriber wallet: ${wallet.address} for ${subscriberEmail}`);
             }
 
-            // TODO: Trigger fiat → USDC → vault funding here
-            // await fundSubscriberVault(checkoutSession);
-            // await createOnChainSubscription(checkoutSession);
+            // Update checkout session with real subscriber data
+            await db.query(
+              "UPDATE stripe_checkout_sessions SET subscriber_email = $1, subscriber_wallet = $2 WHERE session_id = $3",
+              [subscriberEmail.toLowerCase(), subscriberVault, session.id]
+            );
+          } catch (err) {
+            console.error("[WEBHOOK] Subscriber creation error:", err.message);
           }
         }
+
+        // ── Email subscriber: payment received ────────────────────────────────
+        if (subscriberEmail && subscriberEmail !== "pending") {
+          const dateStr = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+          const tpl = templates.paymentReceipt({
+            name:        subscriberName || undefined,
+            merchantName,
+            amountUsdc:  parseFloat(amountUsdc).toFixed(2),
+            date:        dateStr,
+            txHash:      null,
+            basescanUrl: null,
+          });
+          await sendBrandedEmail({
+            to:      subscriberEmail,
+            subject: templates.subjects.paymentReceipt(parseFloat(amountUsdc).toFixed(2), merchantName),
+            ...tpl,
+          });
+          console.log(`[WEBHOOK] Subscriber receipt sent to ${subscriberEmail}`);
+        }
+
+        // ── Email admin (Vasco): fund this vault ──────────────────────────────
+        // Phase A: manual USDC transfer. Vasco sends USDC from treasury to vault.
+        // Phase B (post-audit): automate this via treasury wallet.
+        const adminEmail = process.env.ADMIN_EMAIL || "vasco@authonce.io";
+        const vaultAddress = subscriberVault && subscriberVault !== "pending" ? subscriberVault : "PENDING — subscriber wallet not yet created";
+        const treasuryAddress = process.env.PROTOCOL_TREASURY_ADDRESS || "0x737D4EeAEF67f776724482a29367615703A2DEB1";
+
+        await sendBrandedEmail({
+          to:      adminEmail,
+          subject: `⚡ Fund vault — ${amountUsdc} USDC → ${vaultAddress?.slice(0, 10)}...`,
+          html: `
+            <!DOCTYPE html><html><body style="font-family:monospace;background:#0f172a;color:#f1f5f9;padding:24px;">
+            <h2 style="color:#34d399;">⚡ New Fiat Subscriber — Fund Vault Now</h2>
+            <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+              <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Subscriber</td><td style="padding:8px;border-bottom:1px solid #1e293b;">${subscriberEmail}</td></tr>
+              <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Merchant</td><td style="padding:8px;border-bottom:1px solid #1e293b;">${merchantName}</td></tr>
+              <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Product</td><td style="padding:8px;border-bottom:1px solid #1e293b;">${cs.product_slug}</td></tr>
+              <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">EUR paid</td><td style="padding:8px;border-bottom:1px solid #1e293b;">€${parseFloat(cs.amount_eur).toFixed(2)}</td></tr>
+              <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">EUR/USDC rate</td><td style="padding:8px;border-bottom:1px solid #1e293b;">${eurRate}</td></tr>
+              <tr><td style="padding:8px;color:#34d399;font-weight:bold;border-bottom:1px solid #1e293b;">USDC to send</td><td style="padding:8px;color:#34d399;font-weight:bold;font-size:18px;border-bottom:1px solid #1e293b;">${amountUsdc} USDC</td></tr>
+              <tr><td style="padding:8px;color:#34d399;font-weight:bold;border-bottom:1px solid #1e293b;">Send TO (vault)</td><td style="padding:8px;color:#34d399;font-weight:bold;font-family:monospace;border-bottom:1px solid #1e293b;">${vaultAddress}</td></tr>
+              <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Send FROM (treasury)</td><td style="padding:8px;font-family:monospace;border-bottom:1px solid #1e293b;">${treasuryAddress}</td></tr>
+              <tr><td style="padding:8px;color:#94a3b8;">Stripe session</td><td style="padding:8px;font-family:monospace;font-size:11px;">${session.id}</td></tr>
+            </table>
+            <p style="color:#f59e0b;font-weight:bold;">Send exactly ${amountUsdc} USDC from the Protocol Treasury to the vault address above. The keeper will execute the first pull automatically once the vault is funded.</p>
+            <p style="color:#475569;font-size:12px;margin-top:24px;">AuthOnce Protocol · Phase A manual bridge · phase-b-todo: automate this</p>
+            </body></html>
+          `,
+          text: `NEW FIAT SUBSCRIBER\n\nSend ${amountUsdc} USDC to vault: ${vaultAddress}\nFrom treasury: ${treasuryAddress}\n\nSubscriber: ${subscriberEmail}\nMerchant: ${merchantName}\nProduct: ${cs.product_slug}\nEUR paid: €${cs.amount_eur}\nRate: ${eurRate}`,
+        });
+        console.log(`[WEBHOOK] Admin vault funding email sent to ${adminEmail}`);
+
+        // ── Email merchant: new subscriber ────────────────────────────────────
+        if (merchant?.email) {
+          const tpl = templates.merchantNewSubscriber({
+            amountUsdc:     parseFloat(amountUsdc).toFixed(2),
+            interval:       product?.interval || cs.metadata?.interval || "monthly",
+            subscriptionId: "pending",
+            vaultAddress:   subscriberVault,
+            txHash:         null,
+            basescanUrl:    null,
+          });
+          await sendBrandedEmail({
+            to:      merchant.email,
+            subject: templates.subjects.merchantNewSubscriber(parseFloat(amountUsdc).toFixed(2), product?.interval || "monthly"),
+            ...tpl,
+          });
+          console.log(`[WEBHOOK] Merchant new subscriber email sent to ${merchant.email}`);
+        }
+
         break;
       }
 
@@ -1268,26 +1493,21 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
           await db.updateSubscriptionStatus(sub.id, "paused", { pausedAt: new Date() });
           console.log(`[WEBHOOK] Subscription #${sub.id} paused due to payment failure`);
 
-          // Notify subscriber
+          // Notify subscriber using branded template
           const subscriber = await db.getSubscriberByEmail(session.subscriber_email);
           if (subscriber?.email) {
-            const { Resend } = require("resend");
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const merchant = await db.getMerchant(session.merchant_address);
-            const merchantName = merchant?.business_name || session.merchant_address.slice(0, 8);
-            await resend.emails.send({
-              from: "AuthOnce <notifications@authonce.io>",
-              to: subscriber.email,
-              subject: `Payment failed — ${merchantName}`,
-              html: `
-                <p>Hi ${subscriber.name || "there"},</p>
-                <p>Your payment for <strong>${merchantName}</strong> failed: <em>${pi.last_payment_error?.message || "card declined"}</em>.</p>
-                <p>Your subscription is in a grace period. Please update your payment method to avoid cancellation.</p>
-                <p><a href="https://authonce.io/my-subscriptions">Manage your subscription</a></p>
-                <hr/>
-                <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
-              `,
-              text: `Your payment for ${merchantName} failed. Please update your payment method at authonce.io/my-subscriptions.`,
+            const failedMerchant = await db.getMerchant(session.merchant_address);
+            const failedMerchantName = failedMerchant?.business_name || session.merchant_address.slice(0, 8);
+            const graceDays = 7;
+            const graceDate = new Date(Date.now() + graceDays * 86400000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+            const tpl = templates.paymentFailedAllowance({
+              name: subscriber.name,
+              merchantName: failedMerchantName,
+            });
+            await sendBrandedEmail({
+              to:      subscriber.email,
+              subject: `Payment failed — ${failedMerchantName}`,
+              ...tpl,
             }).catch(e => console.error("[WEBHOOK] Email error:", e.message));
           }
 

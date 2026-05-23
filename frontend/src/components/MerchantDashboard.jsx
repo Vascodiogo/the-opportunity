@@ -17,6 +17,29 @@ const client = createPublicClient({
 });
 
 const BASE_URL = "https://authonce.io/pay";
+
+// Supported fiat currencies for product pricing
+const FIAT_CURRENCIES = [
+  { code: "eur", symbol: "€",  label: "EUR — Euro" },
+  { code: "usd", symbol: "$",  label: "USD — US Dollar" },
+  { code: "gbp", symbol: "£",  label: "GBP — British Pound" },
+  { code: "chf", symbol: "Fr", label: "CHF — Swiss Franc" },
+  { code: "brl", symbol: "R$", label: "BRL — Brazilian Real" },
+  { code: "cad", symbol: "C$", label: "CAD — Canadian Dollar" },
+  { code: "aud", symbol: "A$", label: "AUD — Australian Dollar" },
+  { code: "sek", symbol: "kr", label: "SEK — Swedish Krona" },
+  { code: "nok", symbol: "kr", label: "NOK — Norwegian Krone" },
+  { code: "dkk", symbol: "kr", label: "DKK — Danish Krone" },
+  { code: "sgd", symbol: "S$", label: "SGD — Singapore Dollar" },
+  { code: "hkd", symbol: "HK$", label: "HKD — Hong Kong Dollar" },
+  { code: "inr", symbol: "₹",  label: "INR — Indian Rupee" },
+  { code: "jpy", symbol: "¥",  label: "JPY — Japanese Yen" },
+  { code: "krw", symbol: "₩",  label: "KRW — South Korean Won" },
+];
+
+function getCurrencySymbol(code) {
+  return FIAT_CURRENCIES.find(c => c.code === code)?.symbol || code.toUpperCase();
+}
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 // ─── Design tokens (supplement CSS vars) ─────────────────────────────────────
@@ -380,9 +403,14 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [hasYearly, setHasYearly]     = useState(false);
   const [yearlyAmount, setYearlyAmount] = useState("");
   const [paymentMethods, setPaymentMethods] = useState(["crypto"]);
-  const [saving, setSaving]           = useState(false);
+  const [priceType, setPriceType]       = useState("crypto");   // "crypto" | "fiat"
+  const [fiatCurrency, setFiatCurrency] = useState("eur");
+  const [fiatPrice, setFiatPrice]       = useState("");
+  const [fiatYearlyPrice, setFiatYearlyPrice] = useState("");
+  const [saving, setSaving]             = useState(false);
 
   const intervalLabel  = { "0": "week", "1": "month", "2": "year" };
+  const currencySymbol = getCurrencySymbol(fiatCurrency);
   const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
   const yearlyDiscount   = amount && yearlyAmount
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
@@ -408,12 +436,16 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
         body: JSON.stringify({
           name,
-          amount:          parseFloat(amount),
-          interval:        intervalMap[interval],
-          intro_amount:    hasIntro  ? parseFloat(introAmount) : 0,
-          intro_pulls:     hasIntro  ? parseInt(introPulls)    : 0,
-          yearly_amount:   hasYearly ? parseFloat(yearlyAmount): null,
-          payment_methods: paymentMethods,
+          amount:            priceType === "crypto" ? parseFloat(amount) : 0,
+          interval:          intervalMap[interval],
+          intro_amount:      hasIntro  ? parseFloat(introAmount)  : 0,
+          intro_pulls:       hasIntro  ? parseInt(introPulls)     : 0,
+          yearly_amount:     hasYearly && priceType === "crypto" ? parseFloat(yearlyAmount) : null,
+          payment_methods:   paymentMethods,
+          price_type:        priceType,
+          fiat_currency:     fiatCurrency,
+          fiat_price:        priceType === "fiat" ? parseFloat(fiatPrice) : null,
+          fiat_yearly_price: priceType === "fiat" && hasYearly ? parseFloat(fiatYearlyPrice) : null,
         }),
       });
       if (!res.ok) throw new Error("Failed to create product");
@@ -435,20 +467,77 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             <label style={S.label}>Product name</label>
             <input placeholder="Pro Plan" value={name} onChange={e => setName(e.target.value)} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={S.label}>Price (USDC)</label>
-              <input type="number" placeholder="29.00" value={amount} onChange={e => setAmount(e.target.value)} />
-            </div>
-            <div>
-              <label style={S.label}>Billing interval</label>
-              <select value={interval} onChange={e => setInterval(e.target.value)}>
-                <option value="0">Weekly</option>
-                <option value="1">Monthly</option>
-                <option value="2">Yearly</option>
-              </select>
+          {/* Price type toggle */}
+          <div>
+            <label style={S.label}>Price type</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                { id: "crypto", label: "⬡ Fixed in USDC", sub: "Fiat equivalent varies" },
+                { id: "fiat",   label: "💱 Fixed in fiat", sub: "USDC equivalent varies" },
+              ].map(({ id, label, sub }) => (
+                <div key={id} onClick={() => setPriceType(id)} style={{
+                  padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                  border: `0.5px solid ${priceType === id ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                  background: priceType === id ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: priceType === id ? "var(--green)" : "var(--text-secondary)" }}>{label}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{sub}</div>
+                </div>
+              ))}
             </div>
           </div>
+
+          {/* Crypto price fields */}
+          {priceType === "crypto" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={S.label}>Price (USDC)</label>
+                <input type="number" placeholder="29.00" value={amount} onChange={e => setAmount(e.target.value)} />
+              </div>
+              <div>
+                <label style={S.label}>Billing interval</label>
+                <select value={interval} onChange={e => setInterval(e.target.value)}>
+                  <option value="0">Weekly</option>
+                  <option value="1">Monthly</option>
+                  <option value="2">Yearly</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Fiat price fields */}
+          {priceType === "fiat" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={S.label}>Currency</label>
+                  <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
+                    {FIAT_CURRENCIES.map(c => (
+                      <option key={c.code} value={c.code}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Billing interval</label>
+                  <select value={interval} onChange={e => setInterval(e.target.value)}>
+                    <option value="0">Weekly</option>
+                    <option value="1">Monthly</option>
+                    <option value="2">Yearly</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={S.label}>Price ({fiatCurrency.toUpperCase()})</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)" }}>{currencySymbol}</span>
+                  <input type="number" placeholder="29.00" value={fiatPrice} onChange={e => setFiatPrice(e.target.value)} style={{ paddingLeft: 26 }} />
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                  Subscriber always pays this exact {fiatCurrency.toUpperCase()} amount. USDC equivalent calculated at checkout.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Intro pricing toggle */}
           <div>
@@ -480,12 +569,22 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               </div>
               <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer yearly billing option</span>
             </div>
-            {hasYearly && (
+            {hasYearly && priceType === "crypto" && (
               <div>
                 <label style={S.label}>Yearly price (USDC)</label>
                 {yearlySuggestion && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Suggested: ${yearlySuggestion} (20% off)</div>}
                 <input type="number" placeholder={yearlySuggestion || "290.00"} value={yearlyAmount} onChange={e => setYearlyAmount(e.target.value)} />
                 {yearlyDiscount > 0 && <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>{yearlyDiscount}% discount vs monthly</div>}
+              </div>
+            )}
+            {hasYearly && priceType === "fiat" && (
+              <div>
+                <label style={S.label}>Yearly price ({fiatCurrency.toUpperCase()})</label>
+                {fiatPrice && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Suggested: {currencySymbol}{(parseFloat(fiatPrice || 0) * 12 * 0.8).toFixed(2)} (20% off)</div>}
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)" }}>{currencySymbol}</span>
+                  <input type="number" placeholder={(parseFloat(fiatPrice || 0) * 12 * 0.8).toFixed(2)} value={fiatYearlyPrice} onChange={e => setFiatYearlyPrice(e.target.value)} style={{ paddingLeft: 26 }} />
+                </div>
               </div>
             )}
           </div>
