@@ -337,12 +337,16 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </span>
         </div>
         <div className="ao-nav-links" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a href={lang === "en" ? "/pt" : "/"} style={{
+          <button onClick={() => {
+            const target = lang === "en" ? "pt" : "en";
+            localStorage.setItem("ao_lang", target);
+            window.location.href = target === "pt" ? "/pt" : "/";
+          }} style={{
             fontSize: 12, fontWeight: 600, color: muted,
             padding: "4px 10px", borderRadius: 6,
-            border: `0.5px solid ${border}`, textDecoration: "none",
+            border: `0.5px solid ${border}`, cursor: "pointer",
             background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-          }}>{otherLabel}</a>
+          }}>{otherLabel}</button>
           <a href="/pricing" style={{
             fontSize: 12, fontWeight: 600, color: muted, textDecoration: "none",
           }}>

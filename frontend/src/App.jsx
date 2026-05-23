@@ -30,15 +30,32 @@ export default function App() {
 
   useEffect(() => {
   const isOnPtPath = window.location.pathname.startsWith("/pt");
+
+  // Explicit path always wins — user clicked a language button
   if (isOnPtPath) {
     setLang("pt");
+    localStorage.setItem("ao_lang", "pt");
     return;
   }
+
+  // "/" path — check if user explicitly chose EN before (lang button click)
+  const savedLang = localStorage.getItem("ao_lang");
+  if (savedLang) {
+    setLang(savedLang);
+    // If they saved "en" but are on "/", stay in EN — do not redirect
+    if (savedLang === "pt") {
+      window.history.replaceState({}, "", "/pt");
+    }
+    return;
+  }
+
+  // First visit — auto-detect from browser language
   const browser = navigator.language || navigator.userLanguage || "en";
   const isPt = browser.toLowerCase().startsWith("pt");
   if (isPt) {
     window.history.replaceState({}, "", "/pt");
     setLang("pt");
+    localStorage.setItem("ao_lang", "pt");
   }
 }, []);
 
@@ -145,7 +162,7 @@ export default function App() {
         <div style={{ display: "flex", gap: 24, fontSize: 12, color: isDark ? "#334155" : "#94a3b8" }}>
           <span>{t(lang, "vault_verified")} ✅</span>
           <span>{t(lang, "registry_verified")} ✅</span>
-          <span>Base Sepolia</span>
+          <span>Base Network</span>
         </div>
       </div>
     );
