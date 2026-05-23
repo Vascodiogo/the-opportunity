@@ -907,6 +907,48 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
   }
 });
 
+// PUT /api/products/:merchantAddress/:productSlug — update a product (merchant auth)
+app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, async (req, res) => {
+  const address = req.params.merchantAddress.toLowerCase();
+  if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+
+  const {
+    name, amount, interval, trial_days = 0,
+    intro_amount = 0, intro_pulls = 0,
+    yearly_amount = null, payment_methods = ["crypto"],
+    price_type = "crypto", fiat_currency = "eur",
+    fiat_price = null, fiat_yearly_price = null,
+  } = req.body;
+
+  if (!name || !amount || !interval) {
+    return res.status(400).json({ error: "missing_fields", required: ["name", "amount", "interval"] });
+  }
+
+  if (Array.isArray(payment_methods)) {
+    const invalid = payment_methods.filter(m => VOLATILE_TOKENS.has(m.toLowerCase()));
+    if (invalid.length > 0) return res.status(400).json({ error: "volatile_token", invalid_tokens: invalid });
+  }
+
+  try {
+    const product = await db.upsertProduct(address, {
+      slug:              req.params.productSlug,
+      name, amount: parseFloat(amount), interval,
+      trialDays:         parseInt(trial_days),
+      introAmount:       parseFloat(intro_amount),
+      introPulls:        parseInt(intro_pulls),
+      yearlyAmount:      yearly_amount ? parseFloat(yearly_amount) : null,
+      payment_methods,
+      price_type, fiat_currency,
+      fiat_price:        fiat_price ? parseFloat(fiat_price) : null,
+      fiat_yearly_price: fiat_yearly_price ? parseFloat(fiat_yearly_price) : null,
+    });
+    res.json({ success: true, product });
+  } catch (err) {
+    console.error("[API] PUT product error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
 // DELETE /api/products/:merchantAddress/:productSlug — deactivate a product (merchant auth)
 app.delete("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, async (req, res) => {
   try {
