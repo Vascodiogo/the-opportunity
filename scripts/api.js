@@ -2112,8 +2112,7 @@ app.get("/api/admin/tax/protocol-fees", requireAdminAuth, async (req, res) => {
     `;
     const result = await db.query(query, year ? [parseInt(year)] : []);
 
-    const header = "Date,Merchant,Subscription ID,Token,Fee (token),Fee (USDC),Fee (EUR),Fee (CHF),EUR rate,CHF rate,TX Hash
-";
+    const header = "Date,Merchant,Subscription ID,Token,Fee (token),Fee (USDC),Fee (EUR),Fee (CHF),EUR rate,CHF rate,TX Hash\n";
     const rows = result.rows.map(r => [
       r.executed_at ? new Date(r.executed_at).toISOString().split("T")[0] : "",
       r.merchant_address || "",
@@ -2163,8 +2162,7 @@ app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
 
     const result = await db.query(query, params);
 
-    const header = `Date,Merchant,Subscription ID,Token,Amount (token),Fee (token),${currency.toUpperCase()} equivalent,${currency.toUpperCase()} rate,EUR equivalent,EUR rate,TX Hash,Interval
-`;
+    const header = `Date,Merchant,Subscription ID,Token,Amount (token),Fee (token),${currency.toUpperCase()} equivalent,${currency.toUpperCase()} rate,EUR equivalent,EUR rate,TX Hash,Interval\n`;
     const rows = result.rows.map(r => {
       const fiatAmt  = currency === "eur" ? r.merchant_received_eur  : r.fiat_amount;
       const fiatRate = currency === "eur" ? r.eur_rate               : r.fiat_rate;
