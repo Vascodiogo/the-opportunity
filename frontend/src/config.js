@@ -31,12 +31,12 @@ export const RPC_URLS = [
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
 // Updated after v4 redeploy — replace with new addresses after running deploy.js
-export const VAULT_ADDRESS = "0x12ded877546bdaF500A1FeAd66798d5877c42f1d";
-export const REGISTRY_ADDRESS = "0xaB9a719AD824CF81Ade886E7987702d62cb3df40"; // unchanged
+export const VAULT_ADDRESS    = "0x9ce26F5d8C4cc7942022FFCa9D4D574D8c497662"; // v5
+export const REGISTRY_ADDRESS = "0xBa8071912Ce59cD9D3D153120C59516fBae10A5C"; // v2
 export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
-// ─── SubscriptionVault v4 ABI ─────────────────────────────────────────────────
+// ─── SubscriptionVault v5 ABI ─────────────────────────────────────────────────
 export const VAULT_ABI = [
   {
     name: "subscriptions",
@@ -48,6 +48,7 @@ export const VAULT_ABI = [
       { name: "guardian",        type: "address" },
       { name: "merchant",        type: "address" },
       { name: "safeVault",       type: "address" },
+      { name: "token",           type: "address" },
       { name: "amount",          type: "uint256" },
       { name: "introAmount",     type: "uint256" },
       { name: "introPulls",      type: "uint256" },
@@ -58,6 +59,7 @@ export const VAULT_ABI = [
       { name: "expiresAt",       type: "uint256" },
       { name: "trialEndsAt",     type: "uint256" },
       { name: "gracePeriodDays", type: "uint256" },
+      { name: "dataVaultId",     type: "bytes32" },
       { name: "status",          type: "uint8"   },
     ],
   },
@@ -68,6 +70,7 @@ export const VAULT_ABI = [
     inputs: [
       { name: "merchant",         type: "address" },
       { name: "safeVault",        type: "address" },
+      { name: "token",            type: "address" },
       { name: "amount",           type: "uint256" },
       { name: "introAmount",      type: "uint256" },
       { name: "introPulls",       type: "uint256" },
@@ -75,6 +78,7 @@ export const VAULT_ABI = [
       { name: "guardian",         type: "address" },
       { name: "trialDays",        type: "uint256" },
       { name: "gracePeriodDays_", type: "uint256" },
+      { name: "dataVaultId_",     type: "bytes32" },
     ],
     outputs: [{ name: "id", type: "uint256" }],
   },
@@ -135,6 +139,58 @@ export const VAULT_ABI = [
     outputs: [{ name: "", type: "bool" }],
   },
   {
+    name: "nextPullDue",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "daysUntilTrialEnds",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "daysUntilExpiry",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "approvedTokens",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "approvedTokenList",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    name: "subscriptionToken",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "pullAuthorisationDigest",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "id",       type: "uint256" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
     name: "inIntroPricing",
     type: "function",
     stateMutability: "view",
@@ -148,20 +204,8 @@ export const VAULT_ABI = [
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "", type: "uint256" }],
   },
-  {
-    name: "approvedMerchants",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "", type: "address" }],
-    outputs: [{ name: "", type: "bool" }],
-  },
-  {
-    name: "approveMerchant",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "merchant", type: "address" }],
-    outputs: [],
-  },
+  // approvedMerchants and approveMerchant moved to MerchantRegistry v2 in v5
+  // Use REGISTRY_ABI.isApproved() to check merchant approval status
   {
     name: "setProductExpiry",
     type: "function",
@@ -191,6 +235,7 @@ export const VAULT_ABI = [
       { name: "owner",       type: "address", indexed: true  },
       { name: "merchant",    type: "address", indexed: true  },
       { name: "safeVault",   type: "address", indexed: false },
+      { name: "token",       type: "address", indexed: false },
       { name: "amount",      type: "uint256", indexed: false },
       { name: "introAmount", type: "uint256", indexed: false },
       { name: "introPulls",  type: "uint256", indexed: false },
@@ -203,6 +248,7 @@ export const VAULT_ABI = [
     type: "event",
     inputs: [
       { name: "id",               type: "uint256", indexed: true  },
+      { name: "token",            type: "address", indexed: true  },
       { name: "amount",           type: "uint256", indexed: false },
       { name: "merchantReceived", type: "uint256", indexed: false },
       { name: "fee",              type: "uint256", indexed: false },
@@ -215,6 +261,7 @@ export const VAULT_ABI = [
     type: "event",
     inputs: [
       { name: "id",          type: "uint256", indexed: true  },
+      { name: "token",       type: "address", indexed: true  },
       { name: "required",    type: "uint256", indexed: false },
       { name: "available",   type: "uint256", indexed: false },
       { name: "pausedUntil", type: "uint256", indexed: false },
@@ -225,6 +272,7 @@ export const VAULT_ABI = [
     type: "event",
     inputs: [
       { name: "id",        type: "uint256", indexed: true  },
+      { name: "token",     type: "address", indexed: true  },
       { name: "required",  type: "uint256", indexed: false },
       { name: "allowance", type: "uint256", indexed: false },
     ],
@@ -255,7 +303,7 @@ export const VAULT_ABI = [
   },
 ];
 
-// ─── MerchantRegistry ABI ────────────────────────────────────────────────────
+// ─── MerchantRegistry v2 ABI ─────────────────────────────────────────────────
 export const REGISTRY_ABI = [
   {
     name: "isApproved",
@@ -293,7 +341,49 @@ export const REGISTRY_ABI = [
     outputs: [],
   },
   {
+    name: "selfRegister",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "setSelfServe",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "enabled", type: "bool" }],
+    outputs: [],
+  },
+  {
+    name: "selfServeEnabled",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "proposeAdminTransfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newAdmin", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "acceptAdminTransfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
     name: "admin",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "pendingAdmin",
     type: "function",
     stateMutability: "view",
     inputs: [],
@@ -301,7 +391,8 @@ export const REGISTRY_ABI = [
   },
 ];
 
-// ─── USDC ABI ────────────────────────────────────────────────────────────────
+// ─── ERC-20 ABI — generic token (USDC, USDT, DAI, EURC) ─────────────────────
+// Used for all subscription tokens — not just USDC
 export const USDC_ABI = [
   {
     name: "balanceOf",
@@ -328,6 +419,9 @@ export const USDC_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
 ];
+
+// TOKEN_ABI is the same as USDC_ABI — generic ERC-20 for any subscription token
+export const TOKEN_ABI = USDC_ABI;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export const INTERVAL_NAMES = ["Weekly", "Monthly", "Yearly"];
