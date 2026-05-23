@@ -2175,10 +2175,12 @@ app.get("/api/admin/tax/protocol-fees", requireAdminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/admin/tax/merchant — merchant payment export (CSV)
+// GET /api/admin/tax/merchant — merchant payment export (XLSX with guide tab)
 app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
   try {
     const { year, currency = "eur", merchant } = req.query;
+    const cur = currency.toLowerCase();
+
     let query = `
       SELECT
         p.executed_at, p.merchant_address, p.subscription_id,
@@ -2187,7 +2189,6 @@ app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
         ROUND((p.fee::numeric / 1000000), 6)               AS fee_token,
         p.fiat_currency, p.fiat_amount, p.fiat_rate,
         p.merchant_received_eur, p.eur_rate,
-        p.chf_amount, p.chf_rate,
         p.tx_hash, s.interval
       FROM payments p
       LEFT JOIN subscriptions s ON s.id::text = p.subscription_id
@@ -2200,33 +2201,178 @@ app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
     const params = [];
     if (merchant) params.push(merchant.toLowerCase());
     if (year) params.push(parseInt(year));
-
     const result = await db.query(query, params);
 
-    const header = `Date,Merchant,Subscription ID,Token,Amount (token),Fee (token),${currency.toUpperCase()} equivalent,${currency.toUpperCase()} rate,EUR equivalent,EUR rate,TX Hash,Interval\n`;
-    const rows = result.rows.map(r => {
-      const fiatAmt  = currency === "eur" ? r.merchant_received_eur  : r.fiat_amount;
-      const fiatRate = currency === "eur" ? r.eur_rate               : r.fiat_rate;
-      return [
-        r.executed_at ? new Date(r.executed_at).toISOString().split("T")[0] : "",
-        r.merchant_address || "",
-        r.subscription_id || "",
-        r.token_symbol || "USDC",
-        r.merchant_received_token || "",
-        r.fee_token || "",
-        fiatAmt || "",
-        fiatRate || "",
-        r.merchant_received_eur || "",
-        r.eur_rate || "",
-        r.tx_hash || "",
-        r.interval || "",
-      ].join(",");
-    }).join("\n");
+    // Build XLSX with two tabs
+    const ExcelJS = require("exceljs");
+    const workbook = new ExcelJS.Workbook();
 
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename="payments-${year || "all"}-${currency}.csv"`);
-    res.send(header + rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    // ── Tab 1: Payments ──────────────────────────────────────────────────────
+    const ws = workbook.addWorksheet("Payments");
+    const GREEN = "1D9E75";
+    const LIGHT = "F0FAF6";
+
+    ws.columns = [
+      { header: "Date",                         key: "date",       width: 14 },
+      { header: "Merchant",                     key: "merchant",   width: 20 },
+      { header: "Subscription ID",              key: "sub_id",     width: 18 },
+      { header: "Token",                        key: "token",      width: 10 },
+      { header: "Amount (token)",               key: "amount",     width: 16 },
+      { header: "Fee (token)",                  key: "fee",        width: 12 },
+      { header: `${cur.toUpperCase()} equivalent`, key: "fiat",   width: 22 },
+      { header: "Rate",                         key: "rate",       width: 12 },
+      { header: "EUR equivalent",               key: "eur",        width: 18 },
+      { header: "EUR rate",                     key: "eur_rate",   width: 12 },
+      { header: "TX Hash",                      key: "tx",         width: 48 },
+      { header: "Interval",                     key: "interval",   width: 12 },
+    ];
+
+    // Style header row
+    ws.getRow(1).eachCell(cell => {
+      cell.font      = { name: "Arial", bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+      cell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${GREEN}` } };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      cell.border    = { top: {style:"thin"}, bottom: {style:"thin"}, left: {style:"thin"}, right: {style:"thin"} };
+    });
+    ws.getRow(1).height = 28;
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Add data rows
+    result.rows.forEach((r, i) => {
+      const fiatAmt  = cur === "eur" ? r.merchant_received_eur : r.fiat_amount;
+      const fiatRate = cur === "eur" ? r.eur_rate              : r.fiat_rate;
+      const row = ws.addRow({
+        date:     r.executed_at ? new Date(r.executed_at).toISOString().split("T")[0] : "",
+        merchant: r.merchant_address || "",
+        sub_id:   r.subscription_id  || "",
+        token:    r.token_symbol     || "USDC",
+        amount:   parseFloat(r.merchant_received_token) || "",
+        fee:      parseFloat(r.fee_token)               || "",
+        fiat:     fiatAmt  ? parseFloat(fiatAmt)  : "",
+        rate:     fiatRate ? parseFloat(fiatRate) : "",
+        eur:      r.merchant_received_eur ? parseFloat(r.merchant_received_eur) : "",
+        eur_rate: r.eur_rate ? parseFloat(r.eur_rate) : "",
+        tx:       r.tx_hash   || "",
+        interval: r.interval  || "",
+      });
+      if (i % 2 === 1) {
+        row.eachCell(cell => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FFF0FAF6` } };
+        });
+      }
+      row.getCell("amount").numFmt = "#,##0.000000";
+      row.getCell("fee").numFmt    = "#,##0.000000";
+      row.getCell("fiat").numFmt   = "#,##0.00";
+      row.getCell("eur").numFmt    = "#,##0.00";
+      row.getCell("rate").numFmt   = "#,##0.0000";
+    });
+
+    // ── Tab 2: Guide ─────────────────────────────────────────────────────────
+    const wg = workbook.addWorksheet("Guide — How to use");
+    wg.getColumn(1).width = 28;
+    wg.getColumn(2).width = 22;
+    wg.getColumn(3).width = 60;
+
+    const addGuideRow = (col1, col2, col3, opts = {}) => {
+      const row = wg.addRow([col1, col2, col3]);
+      row.getCell(1).font = { name: "Arial", bold: opts.bold1, size: opts.size || 9, color: { argb: `FF${opts.color1 || "0F172A"}` } };
+      row.getCell(2).font = { name: "Arial", size: opts.size || 9, color: { argb: "FF475569" } };
+      row.getCell(3).font = { name: "Arial", size: opts.size || 9, color: { argb: "FF475569" } };
+      row.getCell(3).alignment = { wrapText: true, vertical: "top" };
+      if (opts.height) row.height = opts.height;
+      if (opts.sectionFill) {
+        [1,2,3].forEach(c => {
+          row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${GREEN}` } };
+          row.getCell(c).font = { name: "Arial", bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+        });
+        wg.mergeCells(row.number, 1, row.number, 3);
+        row.getCell(1).alignment = { indent: 1, vertical: "middle" };
+        row.height = 22;
+      }
+      return row;
+    };
+
+    addGuideRow("AuthOnce — Merchant Tax Export Guide", "", "", { size: 15, bold1: true, color1: GREEN, height: 28 });
+    addGuideRow("This file contains your subscription payment history with fiat equivalents for tax and accounting purposes.", "", "", { size: 9, color1: "475569", height: 20 });
+    wg.addRow([]);
+
+    addGuideRow("  1.  Payments Tab — Column Reference", "", "", { sectionFill: true });
+    addGuideRow("Column name", "Example value", "Description", { bold1: true, size: 9 });
+    [
+      ["Date",                    "2026-05-23",    "Date of the payment in UTC. Use to sort by quarter or year for VAT returns."],
+      ["Merchant",                "0x1234...abcd", "Your wallet address. Confirms this payment belongs to your account."],
+      ["Subscription ID",         "42",            "Internal reference number. Use for cross-referencing with subscribers."],
+      ["Token",                   "USDC",          "Payment token. USDC, USDT, DAI and EURC are all stablecoins worth ~$1."],
+      ["Amount (token)",          "9.950000",      "Amount you received after the 0.5% AuthOnce protocol fee."],
+      ["Fee (token)",             "0.050000",      "Protocol fee deducted by AuthOnce (0.5%). Deductible platform cost."],
+      [`${cur.toUpperCase()} equivalent`, "9.15", "Your received amount in your chosen currency at the payment date exchange rate. Use this column for your tax return."],
+      ["Rate",                    "0.9200",        "Exchange rate used: 1 USDC = X [your currency] on the payment date. From CoinGecko live data."],
+      ["EUR equivalent",          "9.15",          "Your received amount in EUR — always included. Required for EU VAT filings."],
+      ["EUR rate",                "0.9200",        "EUR exchange rate on the payment date."],
+      ["TX Hash",                 "0xabc123...",   "Blockchain transaction hash. Paste into basescan.org to verify independently. This is your receipt."],
+      ["Interval",                "monthly",       "Billing frequency: weekly, monthly, or yearly."],
+    ].forEach((r, i) => {
+      const row = wg.addRow(r);
+      row.height = 28;
+      if (i % 2 === 1) {
+        [1,2,3].forEach(c => row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FAF6" } });
+      }
+      row.getCell(1).font = { name: "Arial", bold: true, size: 9 };
+      row.getCell(2).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
+      row.getCell(3).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
+      row.getCell(3).alignment = { wrapText: true, vertical: "top" };
+      [1,2,3].forEach(c => row.getCell(c).border = {
+        top:{style:"thin",color:{argb:"FFE2E8F0"}}, bottom:{style:"thin",color:{argb:"FFE2E8F0"}},
+        left:{style:"thin",color:{argb:"FFE2E8F0"}}, right:{style:"thin",color:{argb:"FFE2E8F0"}},
+      });
+    });
+
+    wg.addRow([]);
+    addGuideRow("  2.  VAT Returns", "", "", { sectionFill: true });
+    const vatRow = wg.addRow(["Sum the '" + cur.toUpperCase() + " equivalent' column for each VAT quarter. This is your taxable turnover for that period. The fee column (AuthOnce 0.5%) is a deductible input cost."]);
+    vatRow.height = 36;
+    vatRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    vatRow.getCell(1).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
+    wg.mergeCells(vatRow.number, 1, vatRow.number, 3);
+
+    wg.addRow([]);
+    addGuideRow("  3.  Income Tax", "", "", { sectionFill: true });
+    const itRow = wg.addRow(["For annual income tax: sum the '" + cur.toUpperCase() + " equivalent' column for the full year. Gross income = Amount (token) column. Net = Amount minus Fee. Exchange rates are recorded at payment time — no year-end conversion needed."]);
+    itRow.height = 48;
+    itRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    itRow.getCell(1).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
+    wg.mergeCells(itRow.number, 1, itRow.number, 3);
+
+    wg.addRow([]);
+    addGuideRow("  4.  Note on Stablecoins", "", "", { sectionFill: true });
+    const scRow = wg.addRow(["USDC, USDT and DAI are stablecoins pegged to the US Dollar (1 token ≈ $1.00 USD). EURC is pegged to the Euro. For tax purposes treat each token as equivalent to its USD/EUR peg value at time of receipt, then converted using the Rate column. The fiat equivalent columns do this automatically."]);
+    scRow.height = 56;
+    scRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    scRow.getCell(1).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
+    wg.mergeCells(scRow.number, 1, scRow.number, 3);
+
+    wg.addRow([]);
+    addGuideRow("  5.  Verifying Transactions", "", "", { sectionFill: true });
+    const vRow = wg.addRow(["Each row has a TX Hash. Go to https://basescan.org and paste it to independently verify the payment. The blockchain record is immutable and publicly auditable — your complete tamper-proof audit trail."]);
+    vRow.height = 40;
+    vRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    vRow.getCell(1).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
+    wg.mergeCells(vRow.number, 1, vRow.number, 3);
+
+    wg.addRow([]);
+    const ctRow = wg.addRow(["Questions: support@authonce.io  |  https://authonce.io  |  AuthOnce Protocol · BUSL-1.1 · Base Network"]);
+    ctRow.getCell(1).font = { name: "Arial", size: 8, color: { argb: "FF94A3B8" } };
+    wg.mergeCells(ctRow.number, 1, ctRow.number, 3);
+
+    // Stream XLSX to response
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="payments-${year || "all"}-${cur}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("[API] Tax merchant export error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =============================================================================
