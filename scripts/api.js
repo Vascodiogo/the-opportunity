@@ -2125,8 +2125,7 @@ app.get("/api/admin/tax/protocol-fees", requireAdminAuth, async (req, res) => {
       r.eur_rate || "",
       r.chf_rate || "",
       r.tx_hash || "",
-    ].join(",")).join("
-");
+    ].join(",")).join("\n");
 
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="authonce-protocol-fees-${year || "all"}-${currency}.csv"`);
@@ -2180,8 +2179,7 @@ app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
         r.tx_hash || "",
         r.interval || "",
       ].join(",");
-    }).join("
-");
+    }).join("\n");
 
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="payments-${year || "all"}-${currency}.csv"`);
