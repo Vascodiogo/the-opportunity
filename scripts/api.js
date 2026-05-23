@@ -839,13 +839,33 @@ app.get("/api/products/:merchantAddress", async (req, res) => {
   }
 });
 
+const VOLATILE_TOKENS = new Set(["weth", "cbbtc", "wbtc"]);
+
 // POST /api/products/:merchantAddress — create or update a product (merchant auth)
 app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res) => {
   try {
     const address = req.params.merchantAddress.toLowerCase();
     if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
 
-    const { name, amount, interval, trial_days = 0, intro_amount = 0, intro_pulls = 0, yearly_amount = null, payment_methods = ["crypto"] } = req.body;
+    const {
+      name, amount, interval, trial_days = 0,
+      intro_amount = 0, intro_pulls = 0,
+      yearly_amount = null, payment_methods = ["crypto"],
+      price_type = "crypto", fiat_currency = "eur",
+      fiat_price = null, fiat_yearly_price = null,
+    } = req.body;
+
+    // Validate — reject volatile tokens (WETH, cbBTC require v6 oracle pricing)
+    if (Array.isArray(payment_methods)) {
+      const invalidTokens = payment_methods.filter(m => VOLATILE_TOKENS.has(m.toLowerCase()));
+      if (invalidTokens.length > 0) {
+        return res.status(400).json({
+          error: "volatile_token",
+          message: `Volatile tokens (${invalidTokens.join(", ")}) require USD-denominated oracle pricing. Available in v6. Use USDC, USDT, DAI or EURC.`,
+          invalid_tokens: invalidTokens,
+        });
+      }
+    }
     if (!name || !amount || !interval) {
       return res.status(400).json({ error: "missing_fields", message: "name, amount, interval required." });
     }
@@ -876,6 +896,10 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       intro_pulls:      parseInt(product.intro_pulls    || 0),
       yearly_amount:    product.yearly_amount ? parseFloat(product.yearly_amount) : null,
       payment_methods:  product.payment_methods || ["crypto"],
+      price_type:       product.price_type       || "crypto",
+      fiat_currency:    product.fiat_currency    || "eur",
+      fiat_price:       product.fiat_price       || null,
+      fiat_yearly_price: product.fiat_yearly_price || null,
     });
   } catch (err) {
     console.error("[API] Create product error:", err.message);

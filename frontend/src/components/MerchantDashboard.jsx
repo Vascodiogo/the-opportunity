@@ -40,6 +40,16 @@ const FIAT_CURRENCIES = [
 function getCurrencySymbol(code) {
   return FIAT_CURRENCIES.find(c => c.code === code)?.symbol || code.toUpperCase();
 }
+
+// Tokens allowed for subscriptions — stablecoins only until Chainlink oracle (v6)
+// WETH and cbBTC excluded: volatile pricing requires USD-denominated oracle conversion
+const SUBSCRIPTION_TOKENS = [
+  { id: "usdc",  label: "⬡ USDC",  note: "" },
+  { id: "usdt",  label: "₮ USDT",  note: "" },
+  { id: "dai",   label: "◈ DAI",   note: "" },
+  { id: "eurc",  label: "€ EURC",  note: "" },
+];
+const VOLATILE_TOKENS = ["weth", "cbbtc", "wbtc"];
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 // ─── Design tokens (supplement CSS vars) ─────────────────────────────────────
@@ -589,12 +599,45 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             )}
           </div>
 
-          {/* Payment methods */}
+          {/* Accepted crypto tokens */}
           <div>
-            <label style={S.label}>Accept payments via</label>
+            <label style={S.label}>Accepted crypto tokens</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
+              {SUBSCRIPTION_TOKENS.map(({ id, label }) => {
+                const isEnabled = paymentMethods.includes(id) || id === "usdc";
+                const always    = id === "usdc";
+                return (
+                  <div key={id} onClick={() => !always && toggleMethod(id)} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 10px", borderRadius: 8,
+                    cursor: always ? "default" : "pointer",
+                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
+                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
+                    opacity: always ? 0.75 : 1,
+                  }}>
+                    <div style={{
+                      width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                      border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`,
+                      background: isEnabled ? "var(--green)" : "none",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text-muted)", padding: "6px 10px", background: "var(--bg-tag)", borderRadius: 6, border: "0.5px solid var(--border)" }}>
+              ⓘ Volatile tokens (WETH, cbBTC) require USD-denominated oracle pricing — available in v6.
+            </div>
+          </div>
+
+          {/* Fiat payment methods */}
+          <div>
+            <label style={S.label}>Accept fiat payments via</label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
               {[
-                { id: "crypto",     label: "⬡ USDC (Base)", always: true },
                 { id: "card",       label: "💳 Card (Stripe)" },
                 { id: "mbway",      label: "📱 MB Way (PT)" },
                 { id: "multibanco", label: "🏧 Multibanco (PT)" },
@@ -603,15 +646,14 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                 { id: "eps",        label: "🇦🇹 EPS (AT)" },
                 { id: "klarna",     label: "🛍 Klarna" },
                 { id: "blik",       label: "🇵🇱 BLIK (PL)" },
-              ].map(({ id, label, always }) => {
+              ].map(({ id, label }) => {
                 const isEnabled = paymentMethods.includes(id);
                 return (
                   <div key={id} onClick={() => toggleMethod(id)} style={{
                     display: "flex", alignItems: "center", gap: 8,
-                    padding: "8px 10px", borderRadius: 8, cursor: always ? "default" : "pointer",
+                    padding: "8px 10px", borderRadius: 8, cursor: "pointer",
                     border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
-                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                    opacity: always ? 0.7 : 1,
+                    background: isEnabled ? "rgba(29,158,101,0.06)" : "var(--bg-tag)",
                   }}>
                     <div style={{
                       width: 14, height: 14, borderRadius: 3, flexShrink: 0,
