@@ -907,67 +907,6 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
   }
 });
 
-// PUT /api/products/:merchantAddress/:productSlug — update a product (merchant auth)
-// Alias for POST — MerchantDashboard uses PUT for edits, POST for creates
-app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, async (req, res) => {
-  // Merge slug from URL into body so the POST handler can find the existing product
-  req.body.slug = req.params.productSlug;
-  // Delegate to POST handler logic by re-using same db upsert
-  const address = req.params.merchantAddress.toLowerCase();
-  if (address !== req.merchantAddress) {
-    return res.status(403).json({ error: "forbidden" });
-  }
-
-  const {
-    name, amount, interval, trial_days = 0,
-    intro_amount = 0, intro_pulls = 0,
-    yearly_amount = null, payment_methods = ["crypto"],
-    price_type = "crypto", fiat_currency = "eur",
-    fiat_price = null, fiat_yearly_price = null,
-    description, image_url,
-  } = req.body;
-
-  if (!name || !amount || !interval) {
-    return res.status(400).json({ error: "missing_fields", required: ["name", "amount", "interval"] });
-  }
-
-  // Validate — reject volatile tokens
-  if (Array.isArray(payment_methods)) {
-    const invalidTokens = payment_methods.filter(m => VOLATILE_TOKENS.has(m.toLowerCase()));
-    if (invalidTokens.length > 0) {
-      return res.status(400).json({
-        error: "volatile_token",
-        message: `Volatile tokens (${invalidTokens.join(", ")}) require USD-denominated oracle pricing. Available in v6.`,
-        invalid_tokens: invalidTokens,
-      });
-    }
-  }
-
-  try {
-    const product = await db.upsertProduct(address, {
-      slug:              req.params.productSlug,
-      name,
-      amount:            parseFloat(amount),
-      interval,
-      trialDays:         parseInt(trial_days),
-      introAmount:       parseFloat(intro_amount),
-      introPulls:        parseInt(intro_pulls),
-      yearlyAmount:      yearly_amount ? parseFloat(yearly_amount) : null,
-      payment_methods,
-      price_type,
-      fiat_currency,
-      fiat_price:        fiat_price ? parseFloat(fiat_price) : null,
-      fiat_yearly_price: fiat_yearly_price ? parseFloat(fiat_yearly_price) : null,
-      description:       description || null,
-      image_url:         image_url   || null,
-    });
-    res.json({ success: true, product });
-  } catch (err) {
-    console.error("[API] PUT product error:", err.message);
-    res.status(500).json({ error: "server_error", message: err.message });
-  }
-});
-
 // DELETE /api/products/:merchantAddress/:productSlug — deactivate a product (merchant auth)
 app.delete("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, async (req, res) => {
   try {
@@ -2067,6 +2006,189 @@ app.get("/api/data/categories", (req, res) => {
 
 app.get("/api/data/consents/:address", (req, res) => {
   res.json({ consents: [], status: "coming_soon", message: "DataOnce data marketplace — launching after AuthOnce mainnet." });
+});
+
+// =============================================================================
+// Admin — Subscriptions, Subscribers, Payments, Webhooks, Audit, Tax
+// =============================================================================
+
+// GET /api/admin/subscriptions
+app.get("/api/admin/subscriptions", requireAdminAuth, async (req, res) => {
+  try {
+    const { merchant, status, limit = 200, offset = 0 } = req.query;
+    let query = "SELECT s.*, sub.email as subscriber_email FROM subscriptions s LEFT JOIN subscribers sub ON LOWER(sub.wallet_address) = LOWER(s.owner_address) WHERE 1=1";
+    const params = [];
+    if (merchant) { params.push(merchant.toLowerCase()); query += ` AND LOWER(s.merchant_address) = $${params.length}`; }
+    if (status)   { params.push(status);                  query += ` AND s.status = $${params.length}`; }
+    params.push(parseInt(limit), parseInt(offset));
+    query += ` ORDER BY s.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const result = await db.query(query, params);
+    res.json({ subscriptions: result.rows, total: result.rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/subscribers
+app.get("/api/admin/subscribers", requireAdminAuth, async (req, res) => {
+  try {
+    const { limit = 200, offset = 0 } = req.query;
+    const result = await db.query(
+      "SELECT id, email, name, google_id, wallet_address, avatar_url, created_at FROM subscribers ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+      [parseInt(limit), parseInt(offset)]
+    );
+    res.json({ subscribers: result.rows, total: result.rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/payments
+app.get("/api/admin/payments", requireAdminAuth, async (req, res) => {
+  try {
+    const { merchant, limit = 200, offset = 0 } = req.query;
+    let query = "SELECT * FROM payments WHERE 1=1";
+    const params = [];
+    if (merchant) { params.push(merchant.toLowerCase()); query += ` AND LOWER(merchant_address) = $${params.length}`; }
+    params.push(parseInt(limit), parseInt(offset));
+    query += ` ORDER BY executed_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const result = await db.query(query, params);
+    res.json({ payments: result.rows, total: result.rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/webhooks
+app.get("/api/admin/webhooks", requireAdminAuth, async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const result = await db.query(
+      "SELECT * FROM webhook_deliveries ORDER BY created_at DESC LIMIT $1",
+      [parseInt(limit)]
+    );
+    res.json({ deliveries: result.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/audit-log
+app.get("/api/admin/audit-log", requireAdminAuth, async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const result = await db.query(
+      "SELECT * FROM admin_audit_log ORDER BY created_at DESC LIMIT $1",
+      [parseInt(limit)]
+    );
+    res.json({ entries: result.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/admin/subscriptions/:id/cancel — force cancel a subscription
+app.post("/api/admin/subscriptions/:id/cancel", requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query("UPDATE subscriptions SET status = 'cancelled' WHERE id = $1", [id]);
+    // Log admin action
+    await db.query(
+      "INSERT INTO admin_audit_log (admin_email, action, target_type, target_id, created_at) VALUES ($1, $2, $3, $4, NOW())",
+      [req.adminEmail || "admin", "force_cancel_subscription", "subscription", id]
+    );
+    res.json({ success: true, id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/tax/protocol-fees — AuthOnce protocol fee export (CSV)
+app.get("/api/admin/tax/protocol-fees", requireAdminAuth, async (req, res) => {
+  try {
+    const { year, currency = "eur" } = req.query;
+    let query = `
+      SELECT
+        executed_at, merchant_address, subscription_id,
+        token_symbol,
+        ROUND((fee::numeric / 1000000), 6)           AS fee_token,
+        protocol_fee_usdc,
+        protocol_fee_eur,
+        protocol_fee_chf,
+        eur_rate, chf_rate, tx_hash
+      FROM payments
+      WHERE fee::numeric > 0
+      ${year ? "AND EXTRACT(YEAR FROM executed_at) = $1" : ""}
+      ORDER BY executed_at DESC
+      LIMIT 100000
+    `;
+    const result = await db.query(query, year ? [parseInt(year)] : []);
+
+    const header = "Date,Merchant,Subscription ID,Token,Fee (token),Fee (USDC),Fee (EUR),Fee (CHF),EUR rate,CHF rate,TX Hash
+";
+    const rows = result.rows.map(r => [
+      r.executed_at ? new Date(r.executed_at).toISOString().split("T")[0] : "",
+      r.merchant_address || "",
+      r.subscription_id || "",
+      r.token_symbol || "USDC",
+      r.fee_token || "",
+      r.protocol_fee_usdc || "",
+      r.protocol_fee_eur || "",
+      r.protocol_fee_chf || "",
+      r.eur_rate || "",
+      r.chf_rate || "",
+      r.tx_hash || "",
+    ].join(",")).join("
+");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="authonce-protocol-fees-${year || "all"}-${currency}.csv"`);
+    res.send(header + rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/tax/merchant — merchant payment export (CSV)
+app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
+  try {
+    const { year, currency = "eur", merchant } = req.query;
+    let query = `
+      SELECT
+        p.executed_at, p.merchant_address, p.subscription_id,
+        p.token_symbol,
+        ROUND((p.merchant_received::numeric / 1000000), 6) AS merchant_received_token,
+        ROUND((p.fee::numeric / 1000000), 6)               AS fee_token,
+        p.fiat_currency, p.fiat_amount, p.fiat_rate,
+        p.merchant_received_eur, p.eur_rate,
+        p.chf_amount, p.chf_rate,
+        p.tx_hash, s.interval
+      FROM payments p
+      LEFT JOIN subscriptions s ON s.id::text = p.subscription_id
+      WHERE 1=1
+      ${merchant ? "AND LOWER(p.merchant_address) = $1" : ""}
+      ${year ? `AND EXTRACT(YEAR FROM p.executed_at) = $${merchant ? 2 : 1}` : ""}
+      ORDER BY p.executed_at DESC
+      LIMIT 100000
+    `;
+    const params = [];
+    if (merchant) params.push(merchant.toLowerCase());
+    if (year) params.push(parseInt(year));
+
+    const result = await db.query(query, params);
+
+    const header = `Date,Merchant,Subscription ID,Token,Amount (token),Fee (token),${currency.toUpperCase()} equivalent,${currency.toUpperCase()} rate,EUR equivalent,EUR rate,TX Hash,Interval
+`;
+    const rows = result.rows.map(r => {
+      const fiatAmt  = currency === "eur" ? r.merchant_received_eur  : r.fiat_amount;
+      const fiatRate = currency === "eur" ? r.eur_rate               : r.fiat_rate;
+      return [
+        r.executed_at ? new Date(r.executed_at).toISOString().split("T")[0] : "",
+        r.merchant_address || "",
+        r.subscription_id || "",
+        r.token_symbol || "USDC",
+        r.merchant_received_token || "",
+        r.fee_token || "",
+        fiatAmt || "",
+        fiatRate || "",
+        r.merchant_received_eur || "",
+        r.eur_rate || "",
+        r.tx_hash || "",
+        r.interval || "",
+      ].join(",");
+    }).join("
+");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="payments-${year || "all"}-${currency}.csv"`);
+    res.send(header + rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // =============================================================================

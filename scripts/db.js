@@ -280,6 +280,26 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_merchant ON stripe_checkout_sessions(merchant_address)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_subscriber ON stripe_checkout_sessions(subscriber_email)`);
 
+  // v5 migrations — add new columns if upgrading from v4
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS token_address      TEXT`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS token_symbol       TEXT DEFAULT 'USDC'`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS chf_rate           NUMERIC(18,8)`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS chf_amount         NUMERIC(18,2)`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS fiat_currency      TEXT DEFAULT 'eur'`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS fiat_rate          NUMERIC(18,8)`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS fiat_amount        NUMERIC(18,2)`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS protocol_fee_usdc  NUMERIC(18,6)`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS protocol_fee_eur   NUMERIC(18,2)`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS protocol_fee_chf   NUMERIC(18,2)`);
+  await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS price_type        TEXT DEFAULT 'crypto'`);
+  await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS fiat_currency     TEXT DEFAULT 'eur'`);
+  await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS fiat_price        NUMERIC(18,6)`);
+  await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS fiat_yearly_price NUMERIC(18,6)`);
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tier              TEXT DEFAULT 'starter'`);
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS brand_name        TEXT`);
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS brand_color       TEXT`);
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiat_currency     TEXT DEFAULT 'eur'`);
+
   console.log("[DB] Schema ready ✓");
 }
 
@@ -346,19 +366,42 @@ async function insertPayment(data) {
   const {
     subscriptionId, merchantAddress, ownerAddress,
     amount, merchantReceived, fee, txHash, blockNumber,
-    eurRate, merchantReceivedEur
+    // v5 multi-token + multi-currency fiat
+    tokenAddress    = null,
+    tokenSymbol     = "USDC",
+    eurRate         = null,
+    merchantReceivedEur = null,
+    chfRate         = null,
+    chfAmount       = null,
+    fiatCurrency    = "eur",
+    fiatRate        = null,
+    fiatAmount      = null,
+    protocolFeeUsdc = null,
+    protocolFeeEur  = null,
+    protocolFeeChf  = null,
   } = data;
 
   await query(`
     INSERT INTO payments
       (subscription_id, merchant_address, owner_address, amount,
        merchant_received, fee, tx_hash, block_number,
-       eur_rate, merchant_received_eur, executed_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+       token_address, token_symbol,
+       eur_rate, merchant_received_eur,
+       chf_rate, chf_amount,
+       fiat_currency, fiat_rate, fiat_amount,
+       protocol_fee_usdc, protocol_fee_eur, protocol_fee_chf,
+       executed_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW())
     ON CONFLICT (tx_hash) DO NOTHING
-  `, [subscriptionId, merchantAddress, ownerAddress,
-      amount, merchantReceived, fee, txHash, blockNumber,
-      eurRate || null, merchantReceivedEur || null]);
+  `, [
+    subscriptionId, merchantAddress?.toLowerCase(), ownerAddress?.toLowerCase(),
+    amount, merchantReceived, fee, txHash, blockNumber,
+    tokenAddress?.toLowerCase(), tokenSymbol,
+    eurRate || null, merchantReceivedEur || null,
+    chfRate || null, chfAmount || null,
+    fiatCurrency || "eur", fiatRate || null, fiatAmount || null,
+    protocolFeeUsdc || null, protocolFeeEur || null, protocolFeeChf || null,
+  ]);
 }
 
 async function getPaymentsByMerchant(merchantAddress, limit = 50) {
@@ -433,23 +476,44 @@ async function getMerchantWebhook(merchantAddress) {
 // -----------------------------------------------------------------------------
 
 async function upsertProduct(merchantAddress, data) {
-  const { slug, name, amount, interval, trialDays = 0, introAmount = 0, introPulls = 0, yearlyAmount = null, paymentMethods = ["crypto"] } = data;
+  const {
+    slug, name, amount, interval,
+    trialDays = 0, introAmount = 0, introPulls = 0,
+    yearlyAmount = null, paymentMethods = ["crypto"],
+    price_type = "crypto", fiat_currency = "eur",
+    fiat_price = null, fiat_yearly_price = null,
+    description = null, image_url = null,
+  } = data;
+
   const res = await query(`
-    INSERT INTO products (merchant_address, slug, name, amount, interval, trial_days, intro_amount, intro_pulls, yearly_amount, payment_methods, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+    INSERT INTO products (
+      merchant_address, slug, name, amount, interval,
+      trial_days, intro_amount, intro_pulls, yearly_amount, payment_methods,
+      price_type, fiat_currency, fiat_price, fiat_yearly_price,
+      created_at, updated_at
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW())
     ON CONFLICT (merchant_address, slug) DO UPDATE SET
-      name            = EXCLUDED.name,
-      amount          = EXCLUDED.amount,
-      interval        = EXCLUDED.interval,
-      trial_days      = EXCLUDED.trial_days,
-      intro_amount    = EXCLUDED.intro_amount,
-      intro_pulls     = EXCLUDED.intro_pulls,
-      yearly_amount   = EXCLUDED.yearly_amount,
-      payment_methods = EXCLUDED.payment_methods,
-      active          = TRUE,
-      updated_at      = NOW()
+      name              = EXCLUDED.name,
+      amount            = EXCLUDED.amount,
+      interval          = EXCLUDED.interval,
+      trial_days        = EXCLUDED.trial_days,
+      intro_amount      = EXCLUDED.intro_amount,
+      intro_pulls       = EXCLUDED.intro_pulls,
+      yearly_amount     = EXCLUDED.yearly_amount,
+      payment_methods   = EXCLUDED.payment_methods,
+      price_type        = EXCLUDED.price_type,
+      fiat_currency     = EXCLUDED.fiat_currency,
+      fiat_price        = EXCLUDED.fiat_price,
+      fiat_yearly_price = EXCLUDED.fiat_yearly_price,
+      active            = TRUE,
+      updated_at        = NOW()
     RETURNING *
-  `, [merchantAddress, slug, name, amount, interval, trialDays, introAmount, introPulls, yearlyAmount, paymentMethods]);
+  `, [
+    merchantAddress, slug, name, amount, interval,
+    trialDays, introAmount, introPulls, yearlyAmount, paymentMethods,
+    price_type, fiat_currency, fiat_price, fiat_yearly_price,
+  ]);
   return res.rows[0];
 }
 
@@ -573,6 +637,58 @@ async function healthCheck() {
 }
 
 // -----------------------------------------------------------------------------
+// Subscriber import helpers
+// -----------------------------------------------------------------------------
+
+async function createSubscriberImport({ merchantAddress, importType = "fiat", email = null, walletAddress = null, productSlug, amountUsdc, interval = "monthly" }) {
+  const res = await query(`
+    INSERT INTO subscriber_imports
+      (merchant_address, import_type, email, wallet_address, product_slug, amount_usdc, interval, status, created_at, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',NOW(),NOW())
+    RETURNING *
+  `, [merchantAddress?.toLowerCase(), importType, email?.toLowerCase(), walletAddress?.toLowerCase(), productSlug, amountUsdc, interval]);
+  return res.rows[0];
+}
+
+async function updateSubscriberImport(id, { status, walletAddress, errorMessage, onboardingEmailSentAt, subscribedAt } = {}) {
+  const res = await query(`
+    UPDATE subscriber_imports SET
+      status                   = COALESCE($2, status),
+      wallet_address           = COALESCE($3, wallet_address),
+      error_message            = COALESCE($4, error_message),
+      onboarding_email_sent_at = COALESCE($5, onboarding_email_sent_at),
+      subscribed_at            = COALESCE($6, subscribed_at),
+      updated_at               = NOW()
+    WHERE id = $1 RETURNING *
+  `, [id, status, walletAddress?.toLowerCase(), errorMessage, onboardingEmailSentAt, subscribedAt]);
+  return res.rows[0];
+}
+
+async function getSubscriberImports(merchantAddress, { status = null, limit = 100, offset = 0 } = {}) {
+  const params = [merchantAddress?.toLowerCase(), limit, offset];
+  let where = "WHERE merchant_address = $1";
+  if (status) { params.push(status); where += ` AND status = $${params.length}`; }
+  const res = await query(`SELECT * FROM subscriber_imports ${where} ORDER BY created_at DESC LIMIT $2 OFFSET $3`, params);
+  return res.rows;
+}
+
+// -----------------------------------------------------------------------------
+// Admin audit log
+// -----------------------------------------------------------------------------
+
+async function logAdminAction({ adminEmail, action, targetType = null, targetId = null, details = null, ipAddress = null }) {
+  await query(`
+    INSERT INTO admin_audit_log (admin_email, action, target_type, target_id, details, ip_address, created_at)
+    VALUES ($1,$2,$3,$4,$5,$6,NOW())
+  `, [adminEmail, action, targetType, targetId, details ? JSON.stringify(details) : null, ipAddress]);
+}
+
+async function getAdminAuditLog({ limit = 50, offset = 0 } = {}) {
+  const res = await query("SELECT * FROM admin_audit_log ORDER BY created_at DESC LIMIT $1 OFFSET $2", [limit, offset]);
+  return res.rows;
+}
+
+// -----------------------------------------------------------------------------
 // Exports
 // -----------------------------------------------------------------------------
 
@@ -611,4 +727,11 @@ module.exports = {
   logWebhookDelivery,
   // Health
   healthCheck,
+  // Subscriber imports
+  createSubscriberImport,
+  updateSubscriberImport,
+  getSubscriberImports,
+  // Admin audit log
+  logAdminAction,
+  getAdminAuditLog,
 };
