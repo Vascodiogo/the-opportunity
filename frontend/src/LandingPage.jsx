@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://the-opportunity-produc
 function HowItWorks({ lang, isDark }) {
   const border  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
   const text    = isDark ? "#f1f5f9" : "#0f172a";
-  const muted   = isDark ? "#64748b" : "#94a3b8";
+  const muted   = isDark ? "#94a3b8" : "#64748b";
   const subtle  = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
   const accent  = "#34d399";
   const tealBg  = isDark ? "rgba(29,158,117,0.12)" : "rgba(29,158,117,0.08)";
@@ -120,7 +120,7 @@ function ApplyForm({ lang, isDark }) {
 
   const border  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";
   const text    = isDark ? "#f1f5f9"                : "#0f172a";
-  const muted   = isDark ? "#64748b"                : "#94a3b8";
+  const muted   = isDark ? "#94a3b8"                : "#64748b";
   const inputBg = isDark ? "rgba(255,255,255,0.04)" : "#f8fafc";
   const accent  = "#34d399";
 
@@ -282,11 +282,11 @@ function ApplyForm({ lang, isDark }) {
 
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }) {
-  const bg     = isDark ? "#080c14"                : "#f8fafc";
+  const bg     = isDark ? "#0d1117"                : "#ffffff";
   const cardBg = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
   const border = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";
   const text   = isDark ? "#f1f5f9"                : "#0f172a";
-  const muted  = isDark ? "#64748b"                : "#94a3b8";
+  const muted  = isDark ? "#94a3b8"                : "#64748b";
   const accent = "#34d399";
   const blue   = "#3b82f6";
   const otherLang  = lang === "en" ? "pt" : "en";
@@ -326,7 +326,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 40px", height: 64, className: "ao-nav",
         borderBottom: `0.5px solid ${border}`,
-        background: isDark ? "rgba(8,12,20,0.9)" : "rgba(248,250,252,0.9)",
+        background: isDark ? "rgba(13,17,23,0.95)" : "rgba(255,255,255,0.95)",
         backdropFilter: "blur(16px)",
         position: "sticky", top: 0, zIndex: 100,
       }}>
@@ -426,7 +426,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       <section style={{
         borderTop: `0.5px solid ${border}`, borderBottom: `0.5px solid ${border}`,
         padding: "48px 40px",
-        background: isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.015)",
+        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
       }}>
         <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 16, textTransform: "uppercase" }}>
@@ -584,7 +584,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       {/* ── Apply Form ── */}
       <section id="apply" style={{
         borderTop: `0.5px solid ${border}`, padding: "80px 40px",
-        background: isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.015)",
+        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
       }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
@@ -647,7 +647,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               {lang === "en" ? "Ask a question" : "Fazer uma pergunta"}
             </a>
           </div>
-          <p style={{ fontSize: 12, color: isDark ? "#334155" : "#94a3b8", marginTop: 20 }}>
+          <p style={{ fontSize: 12, color: isDark ? "#64748b" : "#6b7280", marginTop: 20 }}>
             {lang === "en" ? "10 spots available · Mainnet launch September 2026" : "10 vagas disponíveis · Lançamento mainnet setembro 2026"}
           </p>
         </div>
@@ -673,21 +673,21 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <a href="mailto:support@authonce.io" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               support@authonce.io
             </a>
-            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <a href="/terms" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               {lang === "en" ? "Terms" : "Termos"}
             </a>
-            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <a href="/privacy" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               {lang === "en" ? "Privacy" : "Privacidade"}
             </a>
-            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <a href="/legal" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>
               {lang === "en" ? "Refunds" : "Reembolsos"}
             </a>
-            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>BUSL-1.1</span>
-            <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
+            <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>
               {lang === "en" ? "Base Network" : " Base Network"}
             </span>
