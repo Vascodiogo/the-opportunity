@@ -22,12 +22,12 @@ function HowItWorks({ lang, isDark }) {
     { n: "01", title: "Apply",            sub: "Submit your business details", note: "Wallet optional" },
     { n: "02", title: "Get approved",     sub: "We review and whitelist you",  note: "Within 48 hours" },
     { n: "03", title: "Share your link",  sub: "authonce.io/pay/yourname",     note: "No website needed" },
-    { n: "04", title: "Get paid",         sub: "USDC direct to your wallet",   note: "Every billing cycle" },
+    { n: "04", title: "Get paid",         sub: "Settled in crypto",             note: "Every billing cycle" },
   ] : [
     { n: "01", title: "Registar",         sub: "Envie os seus dados",          note: "Carteira opcional" },
     { n: "02", title: "Ser aprovado",     sub: "Analisamos e aprovamos",       note: "Em 48 horas" },
     { n: "03", title: "Partilhar o link", sub: "authonce.io/pay/seunome",      note: "Sem website" },
-    { n: "04", title: "Receber",          sub: "USDC direto para si",          note: "Cada ciclo" },
+    { n: "04", title: "Receber",          sub: "Receba em cripto",             note: "Cada ciclo" },
   ];
 
   return (
