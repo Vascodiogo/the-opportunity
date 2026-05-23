@@ -12,9 +12,10 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
 
-const VAULT_ADDRESS   = process.env.VAULT_ADDRESS || "0x724C9FF037CeF94b3d03a0F231Ca4580eAA2CECA";
+if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
+const VAULT_ADDRESS   = process.env.VAULT_ADDRESS;
 const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
-const KEEPER_PRIVKEY  = process.env.DEPLOYER_PRIVATE_KEY;
+const KEEPER_PRIVKEY  = process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;
 
 // ─── ABI — v5 ───────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ const INTERVAL_NAME = ["Weekly", "Monthly", "Yearly"];
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 function setup() {
-  if (!KEEPER_PRIVKEY) throw new Error("DEPLOYER_PRIVATE_KEY not set in .env");
+  if (!KEEPER_PRIVKEY) throw new Error("KEEPER_PRIVATE_KEY not set in env");
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet   = new ethers.Wallet(KEEPER_PRIVKEY, provider);
   const vault    = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, wallet);
