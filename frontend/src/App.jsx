@@ -59,7 +59,7 @@ export default function App() {
   }
 }, []);
 
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("theme-dark", "theme-light");
