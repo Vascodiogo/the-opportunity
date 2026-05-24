@@ -108,7 +108,7 @@ const TIERS = [
   },
 ];
 
-export default function Pricing({ lang = "en", isDark = true, onToggleTheme, onLaunchApp }) {
+export default function Pricing({ lang = "en", isDark = false, onToggleTheme, onLaunchApp }) {
   const bg      = isDark ? "#080c14"                : "#f8fafc";
   const cardBg  = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
   const border  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";

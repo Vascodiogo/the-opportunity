@@ -369,8 +369,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               display: "inline-block", animation: "pulse-dot 2s infinite",
             }}/>
             {lang === "en"
-              ? "Founding merchant offer · First 10 only · 0% fees for 3 months"
-              : "Oferta fundadora · Primeiros 10 · 0% taxas durante 3 meses"}
+              ? "First 10 get 0% fees for 3 months · First 5 get lifetime Growth free"
+              : "Primeiros 10 com 0% taxas 3 meses · Primeiros 5 com Growth vitalício grátis"
           </div>
 
           <h1 className="ao-hero-h1 ao-fade-in-2" style={{
@@ -402,10 +402,11 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           <p className="ao-fade-in-3" style={{
             fontSize: 13, color: muted, maxWidth: 480, margin: "0 auto 40px",
             fontFamily: "'DM Mono', monospace", letterSpacing: "0.01em", opacity: 0.75,
+            whiteSpace: "pre-line",
           }}>
             {lang === "en"
-              ? "0.5% flat · No intermediary · No custody · On-chain · AI agent ready"
-              : "0,5% fixo · Sem intermediários · Sem custódia · On-chain · Pronto para IA"}
+              ? "0.5% flat · No intermediary · No custody ·\nOn-chain · AI agent ready"
+              : "0,5% fixo · Sem intermediários · Sem custódia ·\nOn-chain · Pronto para IA"
           </p>
 
           <div className="ao-hero-btns ao-fade-in-4" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
