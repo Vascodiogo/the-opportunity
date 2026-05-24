@@ -369,8 +369,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               display: "inline-block", animation: "pulse-dot 2s infinite",
             }}/>
             {lang === "en"
-              ? "First 10 get 0% fees for 3 months · First 5 get lifetime Growth free"
-              : "Primeiros 10 com 0% taxas 3 meses · Primeiros 5 com Growth vitalício grátis"
+              ? "First 10 get 0% fees for 3 months - First 5 get lifetime Growth free"
+              : "Primeiros 10: 0% taxas 3 meses - Primeiros 5: Growth vitalicio gratis"}
           </div>
 
           <h1 className="ao-hero-h1 ao-fade-in-2" style={{
@@ -406,7 +406,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           }}>
             {lang === "en"
               ? "0.5% flat · No intermediary · No custody ·\nOn-chain · AI agent ready"
-              : "0,5% fixo · Sem intermediários · Sem custódia ·\nOn-chain · Pronto para IA"
+              : "0,5% fixo · Sem intermediários · Sem custódia ·\nOn-chain · Pronto para IA"}
           </p>
 
           <div className="ao-hero-btns ao-fade-in-4" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
