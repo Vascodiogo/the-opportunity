@@ -17,8 +17,8 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.0",
-    "exceljs": "^4.4.0",
     "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
     "hardhat": "^2.22.0",
     "hardhat-gas-reporter": "^1.0.10",
     "solidity-coverage": "^0.8.12"
@@ -35,7 +35,9 @@
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.20.0",
     "resend": "^6.12.2",
+    "sharp": "^0.34.5",
     "stripe": "^22.1.0",
+    "twitter-api-v2": "^1.29.0",
     "viem": "^2.47.10",
     "wagmi": "^3.6.1"
   },
