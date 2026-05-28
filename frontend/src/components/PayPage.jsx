@@ -269,10 +269,17 @@ export default function PayPage() {
       const hash = await writeContractAsync({
         address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "createSubscription",
         args: [
-          resolvedAddress, address, amountRaw, introAmountRaw,
-          isYearly ? 0n : BigInt(product.intro_pulls || 0),
-          isYearly ? 2 : product.interval,
-          ZERO_ADDRESS, BigInt(trialDays), 0n,
+         resolvedAddress,                                        // merchant
+         address,                                                // safeVault
+         USDC_ADDRESS,                                           // token
+         amountRaw,                                              // amount
+         introAmountRaw,                                         // introAmount
+         isYearly ? 0n : BigInt(product.intro_pulls || 0),       // introPulls
+         isYearly ? 2 : product.interval,                        // interval
+         ZERO_ADDRESS,                                           // guardian
+         BigInt(trialDays),                                      // trialDays
+         0n,                                                     // gracePeriodDays_
+         "0x0000000000000000000000000000000000000000000000000000000000000000", // dataVaultId_
         ],
       });
       setSubscribeTxHash(hash);
