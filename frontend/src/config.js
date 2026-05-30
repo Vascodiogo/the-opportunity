@@ -30,13 +30,12 @@ export const RPC_URLS = [
 ];
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-// Updated after v4 redeploy — replace with new addresses after running deploy.js
-export const VAULT_ADDRESS    = "0x9ce26F5d8C4cc7942022FFCa9D4D574D8c497662"; // v5
-export const REGISTRY_ADDRESS = "0xBa8071912Ce59cD9D3D153120C59516fBae10A5C"; // v2
-export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
+export const VAULT_ADDRESS    = "0x55180314174B30e778f35357035d49cAEF55C835"; // v6
+export const REGISTRY_ADDRESS = "0x989376ff6195be2e76871535Db21CB8BdC9175D4"; // v3
+export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
-// ─── SubscriptionVault v5 ABI ─────────────────────────────────────────────────
+// ─── SubscriptionVault v6 ABI ─────────────────────────────────────────────────
 export const VAULT_ABI = [
   {
     name: "subscriptions",
@@ -44,23 +43,25 @@ export const VAULT_ABI = [
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [
-      { name: "owner",           type: "address" },
-      { name: "guardian",        type: "address" },
-      { name: "merchant",        type: "address" },
-      { name: "safeVault",       type: "address" },
-      { name: "token",           type: "address" },
-      { name: "amount",          type: "uint256" },
-      { name: "introAmount",     type: "uint256" },
-      { name: "introPulls",      type: "uint256" },
-      { name: "pullCount",       type: "uint256" },
-      { name: "interval",        type: "uint8"   },
-      { name: "lastPulledAt",    type: "uint256" },
-      { name: "pausedAt",        type: "uint256" },
-      { name: "expiresAt",       type: "uint256" },
-      { name: "trialEndsAt",     type: "uint256" },
-      { name: "gracePeriodDays", type: "uint256" },
-      { name: "dataVaultId",     type: "bytes32" },
-      { name: "status",          type: "uint8"   },
+      { name: "owner",              type: "address" },
+      { name: "guardian",           type: "address" },
+      { name: "merchant",           type: "address" },
+      { name: "safeVault",          type: "address" },
+      { name: "token",              type: "address" },
+      { name: "amount",             type: "uint256" },
+      { name: "introAmount",        type: "uint256" },
+      { name: "introPulls",         type: "uint256" },
+      { name: "pullCount",          type: "uint256" },
+      { name: "interval",           type: "uint8"   },
+      { name: "lastPulledAt",       type: "uint256" },
+      { name: "billingPausedUntil", type: "uint256" }, // v6: merchant billing pause end
+      { name: "pausedAt",           type: "uint256" },
+      { name: "expiresAt",          type: "uint256" },
+      { name: "trialEndsAt",        type: "uint256" },
+      { name: "gracePeriodDays",    type: "uint256" },
+      { name: "dataVaultId",        type: "bytes32" },
+      { name: "status",             type: "uint8"   },
+      { name: "isContractVault",    type: "bool"    }, // v6: vault type flag (SV-01)
     ],
   },
   {
@@ -231,16 +232,19 @@ export const VAULT_ABI = [
     name: "SubscriptionCreated",
     type: "event",
     inputs: [
-      { name: "id",          type: "uint256", indexed: true  },
-      { name: "owner",       type: "address", indexed: true  },
-      { name: "merchant",    type: "address", indexed: true  },
-      { name: "safeVault",   type: "address", indexed: false },
-      { name: "token",       type: "address", indexed: false },
-      { name: "amount",      type: "uint256", indexed: false },
-      { name: "introAmount", type: "uint256", indexed: false },
-      { name: "introPulls",  type: "uint256", indexed: false },
-      { name: "interval",    type: "uint8",   indexed: false },
-      { name: "guardian",    type: "address", indexed: false },
+      { name: "id",              type: "uint256", indexed: true  },
+      { name: "owner",           type: "address", indexed: true  },
+      { name: "merchant",        type: "address", indexed: true  },
+      { name: "safeVault",       type: "address", indexed: false },
+      { name: "token",           type: "address", indexed: false },
+      { name: "amount",          type: "uint256", indexed: false },
+      { name: "introAmount",     type: "uint256", indexed: false },
+      { name: "introPulls",      type: "uint256", indexed: false },
+      { name: "interval",        type: "uint8",   indexed: false },
+      { name: "guardian",        type: "address", indexed: false },
+      { name: "trialEndsAt",     type: "uint256", indexed: false },
+      { name: "gracePeriodDays", type: "uint256", indexed: false },
+      { name: "isContractVault", type: "bool",    indexed: false }, // v6 new field
     ],
   },
   {
@@ -303,7 +307,7 @@ export const VAULT_ABI = [
   },
 ];
 
-// ─── MerchantRegistry v2 ABI ─────────────────────────────────────────────────
+// ─── MerchantRegistry v3 ABI ─────────────────────────────────────────────────
 export const REGISTRY_ABI = [
   {
     name: "isApproved",
@@ -320,11 +324,33 @@ export const REGISTRY_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    // v3: live count of currently approved merchants — O(1)
+    name: "approvedMerchantCount",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     name: "getMerchantAt",
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "index", type: "uint256" }],
     outputs: [{ name: "", type: "address" }],
+  },
+  {
+    // v3: paginated merchant list — offset + limit (max 200)
+    name: "getMerchantsPage",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "offset", type: "uint256" },
+      { name: "limit",  type: "uint256" },
+    ],
+    outputs: [
+      { name: "page",  type: "address[]" },
+      { name: "total", type: "uint256"   },
+    ],
   },
   {
     name: "approveMerchant",
@@ -339,6 +365,38 @@ export const REGISTRY_ABI = [
     stateMutability: "nonpayable",
     inputs: [{ name: "merchant", type: "address" }],
     outputs: [],
+  },
+  {
+    // v3: skipBlacklisted param — true = skip silently, false = revert on blacklisted
+    name: "batchApproveMerchants",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "merchants",        type: "address[]" },
+      { name: "skipBlacklisted",  type: "bool"      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "batchRevokeMerchants",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "merchants", type: "address[]" }],
+    outputs: [],
+  },
+  {
+    name: "blacklistMerchant",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "merchant", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "blacklistedMerchants",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "merchant", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
   },
   {
     name: "selfRegister",
