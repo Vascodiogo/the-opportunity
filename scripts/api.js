@@ -229,6 +229,18 @@ app.get("/api/health", async (req, res) => {
 app.post("/api/admin/login", async (req, res) => {
   const { email, password } = req.body;
 
+  // Rate limit — 5 attempts per IP per 15 minutes
+  const ip = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.ip || "unknown";
+  const rateCheck = checkLoginRateLimit(ip);
+  if (!rateCheck.allowed) {
+    console.warn(`[ADMIN] Rate limited login attempt from ${ip}`);
+    return res.status(429).json({
+      error: "too_many_attempts",
+      message: `Too many login attempts. Try again in ${rateCheck.retryAfter} minute(s).`,
+      retry_after_minutes: rateCheck.retryAfter,
+    });
+  }
+
   if (!email || !password) {
     return res.status(400).json({ error: "missing_fields", message: "Email and password required." });
   }
@@ -263,7 +275,9 @@ app.post("/api/admin/login", async (req, res) => {
     { expiresIn: TOKEN_EXPIRY }
   );
 
-  console.log(`[ADMIN] Login: ${email}`);
+  // Clear rate limit on successful login
+  _loginAttempts.delete(ip);
+  console.log(`[ADMIN] Login: ${email} from ${ip}`);
   res.json({ token, email: ADMIN_EMAIL, expires_in: TOKEN_EXPIRY });
 });
 
@@ -1165,6 +1179,28 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
+// ── Login rate limiter — in-memory, resets on restart ─────────────────────────
+// Max 5 attempts per IP per 15 minutes. Cloudflare Access is the primary guard
+// but this adds a second layer in case someone bypasses it.
+const _loginAttempts = new Map();
+function checkLoginRateLimit(ip) {
+  const now      = Date.now();
+  const window   = 15 * 60 * 1000; // 15 minutes
+  const maxTries = 5;
+  const entry    = _loginAttempts.get(ip) || { count: 0, first: now };
+  if (now - entry.first > window) {
+    _loginAttempts.set(ip, { count: 1, first: now });
+    return { allowed: true };
+  }
+  if (entry.count >= maxTries) {
+    const retryAfter = Math.ceil((entry.first + window - now) / 1000 / 60);
+    return { allowed: false, retryAfter };
+  }
+  entry.count++;
+  _loginAttempts.set(ip, entry);
+  return { allowed: true };
+}
+
 // ── Multi-currency fiat/USDC rates via CoinGecko ─────────────────────────────
 // Fetches all supported currencies in one call, cached 5 minutes.
 // Zero-decimal currencies (JPY, KRW) are flagged for Stripe integer handling.
@@ -1812,25 +1848,31 @@ app.post("/api/subscriber/cancel/:subscriptionId", geofenceMiddleware, async (re
         stateMutability: "nonpayable",
       },
       {
+        // Complete v6 struct — all 19 fields in declaration order.
+        // Always use named access (sub.owner, sub.status) — never numeric indexes.
         name: "subscriptions",
         type: "function",
         inputs: [{ name: "id", type: "uint256" }],
         outputs: [
-          { name: "owner",    type: "address" },
-          { name: "guardian", type: "address" },
-          { name: "merchant", type: "address" },
-          { name: "safeVault",type: "address" },
-          { name: "amount",   type: "uint256" },
-          { name: "introAmount", type: "uint256" },
-          { name: "introPulls",  type: "uint256" },
-          { name: "pullCount",   type: "uint256" },
-          { name: "interval",    type: "uint8"   },
-          { name: "lastPulledAt",type: "uint256" },
-          { name: "pausedAt",    type: "uint256" },
-          { name: "expiresAt",   type: "uint256" },
-          { name: "trialEndsAt", type: "uint256" },
-          { name: "gracePeriodDays", type: "uint256" },
-          { name: "status",      type: "uint8"   },
+          { name: "owner",              type: "address" },
+          { name: "guardian",           type: "address" },
+          { name: "merchant",           type: "address" },
+          { name: "safeVault",          type: "address" },
+          { name: "token",              type: "address" },
+          { name: "amount",             type: "uint256" },
+          { name: "introAmount",        type: "uint256" },
+          { name: "introPulls",         type: "uint256" },
+          { name: "pullCount",          type: "uint256" },
+          { name: "interval",           type: "uint8"   },
+          { name: "lastPulledAt",       type: "uint256" },
+          { name: "billingPausedUntil", type: "uint256" },
+          { name: "pausedAt",           type: "uint256" },
+          { name: "expiresAt",          type: "uint256" },
+          { name: "trialEndsAt",        type: "uint256" },
+          { name: "gracePeriodDays",    type: "uint256" },
+          { name: "dataVaultId",        type: "bytes32" },
+          { name: "status",             type: "uint8"   },
+          { name: "isContractVault",    type: "bool"    },
         ],
         stateMutability: "view",
       },
@@ -1841,18 +1883,20 @@ app.post("/api/subscriber/cancel/:subscriptionId", geofenceMiddleware, async (re
 
     const vault = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI_CANCEL, signer);
 
-    // Verify this subscriber owns the subscription
+    // Verify this subscriber owns the subscription.
+    // Named field access — never numeric indexes.
     const sub = await vault.subscriptions(BigInt(subscriptionId));
-    const subOwner    = sub[0].toLowerCase();
-    const subVault    = sub[3].toLowerCase();
+    const subOwner         = sub.owner.toLowerCase();
+    const subVault         = sub.safeVault.toLowerCase();
     const subscriberWallet = subscriber.wallet_address.toLowerCase();
 
     if (subOwner !== subscriberWallet && subVault !== subscriberWallet) {
       return res.status(403).json({ error: "not_your_subscription" });
     }
 
-    // Check it's cancellable (Active=0 or Paused=1)
-    const status = Number(sub[14]);
+    // Check it's cancellable (Active=0 or Paused=1).
+    // Named access: sub.status — correct regardless of struct field count.
+    const status = Number(sub.status);
     if (status !== 0 && status !== 1) {
       return res.status(400).json({ error: "not_cancellable", message: "Subscription is already cancelled or expired." });
     }
