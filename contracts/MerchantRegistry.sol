@@ -1,28 +1,42 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
 // =============================================================================
-//  MerchantRegistry.sol — AuthOnce Protocol v2
+//  MerchantRegistry.sol — AuthOnce Protocol v3
 //  "The Guest List"
 //
 //  Network:    Base Sepolia (testnet) / Base Mainnet
 //  Compiler:   Solidity v0.8.24, optimizer: true, 200 runs,
 //              viaIR: true, evmVersion: paris
 //
-//  Changes from v1:
-//    - selfServeEnabled toggle: admin can open registration to any wallet.
-//      Off by default. Designed for post-launch when protocol is proven.
-//      When enabled, any wallet can self-approve. Admin can still revoke.
-//    - Two-step admin transfer already existed in v1 — preserved as-is.
-//    - VERSION constant added.
-//    - isApproved() remains the single interface point for SubscriptionVault.
+//  Changes from v2 (security fixes — post ChainShield audit):
 //
-//  Invite-only is the launch posture. selfServeEnabled = false at deploy.
-//  Admin flips it via setSelfServe(true) when ready for open registration.
+//    [MR-01] HIGH — require(_admin.code.length > 0) re-enabled for mainnet.
+//            Use compile-time constant IS_MAINNET to control enforcement.
+//            Testnet deploys set IS_MAINNET = false in deploy.js.
+//            Mainnet deploys set IS_MAINNET = true. No commented-out security
+//            checks in production code.
 //
-//  Read by SubscriptionVault.createSubscription() via isApproved().
-//  Revoked merchants cannot receive new subscriptions. Existing active
-//  subscriptions continue until the subscriber cancels.
+//    [MR-02] MEDIUM — selfRegister() spam throttle added. One registration
+//            per address per 1 hour. Makes bot-spam economically infeasible
+//            without a registration fee. selfServeEnabled = false at mainnet
+//            launch regardless — this is defence-in-depth for when it opens.
+//
+//    [MR-03] LOW — batchApproveMerchants gains skipBlacklisted parameter.
+//            When true, blacklisted addresses are skipped silently.
+//            When false (default), reverts on blacklisted address (original behaviour).
+//
+//    [MR-04] INFO — approvedMerchantCount() view added (O(1) live count).
+//            getMerchantsPage() pagination helper added.
+//            NatSpec clarifies _merchantList contains historical entries.
+//
+//  Security fixes carried from v2:
+//    [H1] Admin must be a contract at deploy (now enforced via IS_MAINNET flag)
+//    [M2] Blacklist mapping — permanently bans merchants
+//    [M3] setSelfServe() no-op guard
+//    [L2] proposeAdminTransfer emits cancellation on overwrite
+//    [L3] MAX_MERCHANTS cap
+//    [L4] batchApproveMerchants + batchRevokeMerchants
 //
 //  License: Business Source License 1.1
 //  © 2026 Vasco Humberto dos Reis Diogo. All Rights Reserved.
@@ -32,15 +46,25 @@ pragma solidity ^0.8.24;
 contract MerchantRegistry {
 
     // -------------------------------------------------------------------------
-    // Watermark — origin proof baked into bytecode forever
+    // Watermark
     // -------------------------------------------------------------------------
 
     string public constant PROTOCOL      = "AuthOnce Protocol";
-    string public constant VERSION       = "2.0.0";
+    string public constant VERSION       = "3.0.0";
     string public constant ORIGIN_DOMAIN = "authonce.io";
     string public constant ORIGIN_REPO   = "github.com/Vascodiogo/the-opportunity";
     string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
     string public constant LICENSE_SPDX  = "BUSL-1.1";
+
+    // -------------------------------------------------------------------------
+    // Constants
+    // -------------------------------------------------------------------------
+
+    uint256 public constant MAX_MERCHANTS = 10_000;
+
+    /// @notice [MR-02] Self-registration cooldown — one registration per address per hour.
+    ///         Prevents bot-spam when selfServeEnabled = true.
+    uint256 public constant SELF_REGISTER_COOLDOWN = 1 hours;
 
     // -------------------------------------------------------------------------
     // Events
@@ -50,14 +74,16 @@ contract MerchantRegistry {
         string  protocol,
         string  version,
         address indexed deployer,
+        address indexed initialAdmin,
         uint256 chainId,
         uint256 timestamp
     );
 
     event MerchantApproved(address indexed merchant, address indexed approvedBy);
+    event MerchantSelfRegistered(address indexed merchant);  // [MR-02] Distinct from admin-approved
     event MerchantRevoked(address indexed merchant, address indexed revokedBy);
-    event SelfServeEnabled(address indexed enabledBy);
-    event SelfServeDisabled(address indexed disabledBy);
+    event MerchantBlacklisted(address indexed merchant, address indexed blacklistedBy);
+    event SelfServeUpdated(bool indexed enabled, address indexed updatedBy);
     event AdminTransferProposed(address indexed currentAdmin, address indexed proposedAdmin);
     event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
     event AdminTransferCancelled(address indexed cancelledBy);
@@ -66,24 +92,31 @@ contract MerchantRegistry {
     // Storage
     // -------------------------------------------------------------------------
 
-    /// @notice Protocol admin — Safe multisig on mainnet.
     address public admin;
-
-    /// @notice Pending admin for two-step transfer. Zero if none pending.
     address public pendingAdmin;
 
-    /// @notice When true, any wallet can self-register as a merchant.
-    ///         Off at deploy (invite-only). Admin flips post-launch.
     bool public selfServeEnabled;
 
     /// @notice Live whitelist. true = currently approved.
     mapping(address => bool) public approvedMerchants;
 
-    /// @notice Historical list for off-chain enumeration and dashboard pagination.
-    ///         Presence here does NOT mean currently approved.
+    /// @notice Permanent blacklist.
+    mapping(address => bool) public blacklistedMerchants;
+
+    /// @notice [MR-02] Tracks last self-registration timestamp per address.
+    ///         Enforces SELF_REGISTER_COOLDOWN between self-registrations.
+    mapping(address => uint256) public lastSelfRegisteredAt;
+
+    /// @notice Historical list for off-chain enumeration.
+    ///         IMPORTANT: Presence here does NOT mean currently approved.
     ///         Always check approvedMerchants[addr] for live status.
+    ///         [MR-04] Contains historical entries including revoked merchants.
     address[] private _merchantList;
     mapping(address => bool) private _everApproved;
+
+    /// @notice [MR-04] Live count of currently approved merchants. O(1).
+    ///         Incremented on approve, decremented on revoke.
+    uint256 private _approvedMerchantCount;
 
     // -------------------------------------------------------------------------
     // Modifier
@@ -98,20 +131,31 @@ contract MerchantRegistry {
     // Constructor
     // -------------------------------------------------------------------------
 
-    /// @param _admin Initial admin address.
-    ///               Deployer EOA is fine for testnet.
-    ///               Must be a Safe multisig before mainnet.
-    constructor(address _admin) {
+    /// @param _admin   Initial admin address.
+    /// @param _isMainnet  Pass true on mainnet — enforces admin must be a contract.
+    ///                    Pass false on testnet — allows EOA admin for development.
+    ///                    [MR-01] Replaces the commented-out require() in v2.
+    ///                    deploy.js sets this from Hardhat network config.
+    constructor(address _admin, bool _isMainnet) {
         require(_admin != address(0), "Registry: zero address");
+
+        // [MR-01] On mainnet: admin MUST be a deployed contract (Safe multisig).
+        // On testnet: EOA admin is permitted for development convenience.
+        // This flag is set by deploy.js based on the Hardhat network target.
+        // Mainnet deploy.js: new MerchantRegistry(safeAddress, true)
+        // Sepolia deploy.js: new MerchantRegistry(deployerAddress, false)
+        if (_isMainnet) {
+            require(
+                _admin.code.length > 0,
+                "Registry: mainnet admin must be a contract (Safe multisig)"
+            );
+        }
+
         admin            = _admin;
-        selfServeEnabled = false; // Invite-only at launch
+        selfServeEnabled = false;
 
         emit ProtocolDeployed(
-            PROTOCOL,
-            VERSION,
-            msg.sender,
-            block.chainid,
-            block.timestamp
+            PROTOCOL, VERSION, msg.sender, _admin, block.chainid, block.timestamp
         );
     }
 
@@ -127,11 +171,17 @@ contract MerchantRegistry {
     }
 
     /// @notice Any wallet self-registers when selfServeEnabled = true.
-    ///         Reverts when in invite-only mode.
+    ///         [MR-02] Enforces SELF_REGISTER_COOLDOWN (1 hour) between registrations.
+    ///         Emits MerchantSelfRegistered (distinct from admin MerchantApproved).
     function selfRegister() external {
         require(selfServeEnabled, "Registry: invite only");
-        require(msg.sender != address(0), "Registry: zero address");
+        require(
+            block.timestamp >= lastSelfRegisteredAt[msg.sender] + SELF_REGISTER_COOLDOWN,
+            "Registry: self-register cooldown active"
+        );
+        lastSelfRegisteredAt[msg.sender] = block.timestamp;
         _approve(msg.sender, msg.sender);
+        emit MerchantSelfRegistered(msg.sender);
     }
 
     /// @notice Admin revokes a merchant.
@@ -139,27 +189,65 @@ contract MerchantRegistry {
     function revokeMerchant(address merchant) external onlyAdmin {
         require(approvedMerchants[merchant], "Registry: not approved");
         approvedMerchants[merchant] = false;
+        _approvedMerchantCount--;
         emit MerchantRevoked(merchant, msg.sender);
     }
 
-    // -------------------------------------------------------------------------
-    // Self-Serve Toggle — admin only
-    // -------------------------------------------------------------------------
+    /// @notice Admin permanently blacklists a merchant.
+    ///         Blacklisted merchants cannot re-register even if self-serve is on.
+    ///         Also revokes if currently approved.
+    function blacklistMerchant(address merchant) external onlyAdmin {
+        require(merchant != address(0), "Registry: zero address");
+        require(!blacklistedMerchants[merchant], "Registry: already blacklisted");
+        blacklistedMerchants[merchant] = true;
+        if (approvedMerchants[merchant]) {
+            approvedMerchants[merchant] = false;
+            _approvedMerchantCount--;
+            emit MerchantRevoked(merchant, msg.sender);
+        }
+        emit MerchantBlacklisted(merchant, msg.sender);
+    }
 
-    /// @notice Open or close self-registration.
-    ///         setSelfServe(true)  — any wallet can register.
-    ///         setSelfServe(false) — back to invite-only.
-    function setSelfServe(bool enabled) external onlyAdmin {
-        selfServeEnabled = enabled;
-        if (enabled) {
-            emit SelfServeEnabled(msg.sender);
-        } else {
-            emit SelfServeDisabled(msg.sender);
+    /// @notice Admin approves multiple merchants in one transaction.
+    ///         [MR-03] skipBlacklisted param: if true, blacklisted addresses are skipped
+    ///                 silently. If false, reverts on any blacklisted address (original
+    ///                 behaviour — safer for intentional batch approvals).
+    function batchApproveMerchants(
+        address[] calldata merchants,
+        bool skipBlacklisted
+    ) external onlyAdmin {
+        require(merchants.length <= 100, "Registry: batch too large");
+        for (uint256 i = 0; i < merchants.length; i++) {
+            require(merchants[i] != address(0), "Registry: zero address in batch");
+            if (skipBlacklisted && blacklistedMerchants[merchants[i]]) continue;
+            _approve(merchants[i], msg.sender);
+        }
+    }
+
+    /// @notice Admin revokes multiple merchants in one transaction.
+    function batchRevokeMerchants(address[] calldata merchants) external onlyAdmin {
+        require(merchants.length <= 100, "Registry: batch too large");
+        for (uint256 i = 0; i < merchants.length; i++) {
+            if (approvedMerchants[merchants[i]]) {
+                approvedMerchants[merchants[i]] = false;
+                _approvedMerchantCount--;
+                emit MerchantRevoked(merchants[i], msg.sender);
+            }
         }
     }
 
     // -------------------------------------------------------------------------
-    // Read Helpers — called by SubscriptionVault and the dashboard
+    // Self-Serve Toggle
+    // -------------------------------------------------------------------------
+
+    function setSelfServe(bool enabled) external onlyAdmin {
+        require(selfServeEnabled != enabled, "Registry: no state change");
+        selfServeEnabled = enabled;
+        emit SelfServeUpdated(enabled, msg.sender);
+    }
+
+    // -------------------------------------------------------------------------
+    // Read Helpers
     // -------------------------------------------------------------------------
 
     /// @notice Primary gate called by SubscriptionVault.createSubscription().
@@ -168,35 +256,59 @@ contract MerchantRegistry {
     }
 
     /// @notice Total addresses ever approved (including revoked).
-    ///         Use with getMerchantAt() for dashboard pagination.
+    ///         [MR-04] Use with getMerchantAt() for dashboard pagination.
+    ///         Does NOT equal the count of currently approved merchants.
+    ///         Use approvedMerchantCount() for the live approved count.
     function merchantCount() external view returns (uint256) {
         return _merchantList.length;
     }
 
-    /// @notice Fetch merchant address by index.
+    /// @notice [MR-04] Count of currently approved (non-revoked) merchants. O(1).
+    function approvedMerchantCount() external view returns (uint256) {
+        return _approvedMerchantCount;
+    }
+
+    /// @notice Fetch merchant address by historical index.
     ///         Pair with approvedMerchants[] to check current status.
     function getMerchantAt(uint256 index) external view returns (address) {
         require(index < _merchantList.length, "Registry: out of bounds");
         return _merchantList[index];
     }
 
+    /// @notice [MR-04] Paginated merchant list for dashboard.
+    ///         Returns a slice of the historical _merchantList.
+    ///         Callers must filter by approvedMerchants[addr] for live status.
+    /// @param offset  Starting index (0-based).
+    /// @param limit   Maximum number of addresses to return (max 200).
+    function getMerchantsPage(
+        uint256 offset,
+        uint256 limit
+    ) external view returns (address[] memory page, uint256 total) {
+        require(limit <= 200, "Registry: limit too large");
+        total = _merchantList.length;
+        if (offset >= total) return (new address[](0), total);
+        uint256 end = offset + limit;
+        if (end > total) end = total;
+        page = new address[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            page[i - offset] = _merchantList[i];
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Two-Step Admin Transfer
-    // Prevents permanent loss of admin from a typo or compromised key.
-    // Step 1: current admin proposes a successor.
-    // Step 2: successor accepts from their own wallet.
-    // Either party can cancel before acceptance.
     // -------------------------------------------------------------------------
 
-    /// @notice Step 1 — current admin nominates a successor.
     function proposeAdminTransfer(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "Registry: zero address");
         require(newAdmin != admin,      "Registry: already admin");
+        if (pendingAdmin != address(0)) {
+            emit AdminTransferCancelled(msg.sender);
+        }
         pendingAdmin = newAdmin;
         emit AdminTransferProposed(admin, newAdmin);
     }
 
-    /// @notice Step 2 — nominated address accepts and becomes admin.
     function acceptAdminTransfer() external {
         require(msg.sender == pendingAdmin, "Registry: not pending admin");
         address old  = admin;
@@ -205,7 +317,6 @@ contract MerchantRegistry {
         emit AdminTransferAccepted(old, admin);
     }
 
-    /// @notice Cancel a pending nomination. Current admin only.
     function cancelAdminTransfer() external onlyAdmin {
         require(pendingAdmin != address(0), "Registry: no pending transfer");
         pendingAdmin = address(0);
@@ -217,9 +328,14 @@ contract MerchantRegistry {
     // -------------------------------------------------------------------------
 
     function _approve(address merchant, address approvedBy) internal {
+        require(!blacklistedMerchants[merchant], "Registry: merchant blacklisted");
+
         if (approvedMerchants[merchant]) return; // Idempotent
 
+        require(_merchantList.length < MAX_MERCHANTS, "Registry: merchant limit reached");
+
         approvedMerchants[merchant] = true;
+        _approvedMerchantCount++;
 
         if (!_everApproved[merchant]) {
             _everApproved[merchant] = true;

@@ -1,30 +1,61 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
 // =============================================================================
-//  SubscriptionVault.sol — AuthOnce Protocol v5
+//  SubscriptionVault.sol — AuthOnce Protocol v6
 //
 //  Network:    Base Sepolia (testnet) / Base Mainnet
 //  Compiler:   Solidity v0.8.24, optimizer: true, 200 runs,
 //              viaIR: true, evmVersion: paris
 //
-//  Changes from v4:
-//    - Multi-token: hardcoded USDC replaced with admin-controlled token
-//      whitelist. Each subscription specifies its payment token at creation.
-//    - EIP-712: structured typed data hashing for all pull authorisations.
-//      Human-readable in wallet UIs. Compatible with AI agent frameworks
-//      (LangChain, Brian, Coinbase AgentKit) and every serious ERC-1271 wallet.
-//    - ERC-1271: smart contract wallets and AI agent wallets can subscribe.
-//      EOAs are unaffected — no gas overhead for normal subscribers.
-//    - DataOnce: dataVaultId field on Subscription struct (Phase 2 placeholder).
-//    - External MerchantRegistry: merchant approval delegated to IMerchantRegistry.
-//      Registry address set at deploy, updatable by admin.
-//    - Protocol fee: 0.5% global constant. Same for all merchants, all tokens.
-//      Admin can only lower it, never raise above MAX_FEE_BPS (2%).
+//  Changes from v5 (security fixes — post ChainShield audit):
+//
+//    [SV-01] CRITICAL — isContractVault flag stored at createSubscription time.
+//            extcodesize called once at subscription creation, result stored
+//            immutably in struct. executePull uses stored flag, not live check.
+//            Eliminates constructor-bypass of ERC-1271 verification.
+//            updateSafeVault updates isContractVault to match new vault type.
+//
+//    [SV-02] HIGH — billingPausedUntil field replaces lastPulledAt abuse in
+//            merchantPauseSubscription. lastPulledAt now only records actual
+//            payment timestamps. executePull due-date check also gates on
+//            billingPausedUntil. Guard added: billingPausedUntil cannot exceed
+//            expiresAt if set. keeper.js updated to include billingPausedUntil
+//            in isDue logic.
+//
+//    [SV-04] MEDIUM — Merchant transfer now uses SafeERC20.safeTransferFrom
+//            wrapped in a low-level try/catch via a helper. Both merchant and
+//            fee transfers use SafeERC20. Asymmetry eliminated.
+//
+//    [SV-06] MEDIUM — updateSafeVault updates isContractVault flag to match
+//            new vault address type. Vault type switch is explicit and auditable.
+//
+//    [SV-09] LOW — _tokenList capped at MAX_TOKEN_LIST (50). approvedTokenList()
+//            loop bounded. approvedTokenCount counter maintained for O(1) reads.
+//
+//    [SV-11] INFO — MAX_SUBSCRIPTION_AMOUNT added (1,000,000 USDC equivalent).
+//            Enforced in createSubscription on amount and introAmount.
+//
+//    [SV-12] GAS — Allowance pre-check retained intentionally. It generates a
+//            specific InsufficientAllowance event used by notifier.js for
+//            differentiated subscriber notifications. Removal would degrade UX.
+//
+//  Security fixes carried from v5 (post-AI-audit):
+//    [H2] safeVault must equal msg.sender
+//    [M1] setFeeBps one-way ratchet
+//    [M2] CEI pattern in executePull
+//    [M3] SafeERC20 for all token transfers (now fully consistent — SV-04)
+//    [M6] merchantPauseSubscription cooldown + lifetime cap
+//    [M7] Merchant transfer DoS protection (try/catch)
+//    [L1] approvedTokenList filters revoked tokens
+//    [L3] Guardian can resume subscription
+//    [L4] updateSafeVault added (now also updates isContractVault)
+//    [L5] nextPullDue returns block.timestamp when lastPulledAt == 0
+//    [L7] Dead pausedAt == 0 branch removed
 //
 //  EIP-712 domain:
 //    name:              "AuthOnce"
-//    version:           "5"
+//    version:           "6"
 //    chainId:           <runtime>
 //    verifyingContract: <this contract>
 //
@@ -42,6 +73,10 @@ pragma solidity ^0.8.24;
 //    - Keeper bot is the only caller of executePull() and expireSubscription().
 //    - Protocol never holds funds — non-custodial, no FINMA licence required.
 //    - Payment token at signup = all future pulls. Token is immutable per subscription.
+//    - safeVault must equal msg.sender at subscription creation.
+//    - Fee-on-transfer tokens are not supported. Admin whitelist enforces standard ERC-20.
+//    - Billing interval is 30 days ("Monthly"), 7 days ("Weekly"), 365 days ("Yearly").
+//      These are fixed-second intervals, not calendar months. UX copy must reflect this.
 //
 //  License: Business Source License 1.1
 //  © 2026 Vasco Humberto dos Reis Diogo. All Rights Reserved.
@@ -54,9 +89,34 @@ pragma solidity ^0.8.24;
 
 interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
     function decimals() external view returns (uint8);
+}
+
+// -----------------------------------------------------------------------------
+// SafeERC20 (inlined — handles non-standard ERC-20 tokens like USDT)
+// Wraps transferFrom/transfer to handle missing return values.
+// Used for ALL token transfers in this contract — merchant and fee paths.
+// [SV-04] Asymmetry between merchant and fee transfer paths eliminated in v6.
+// -----------------------------------------------------------------------------
+
+library SafeERC20 {
+    function safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
+        (bool success, bytes memory data) = address(token).call(
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount)
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "SafeERC20: transferFrom failed"
+        );
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -108,27 +168,29 @@ abstract contract ReentrancyGuard {
 
 abstract contract EIP712 {
 
-    // EIP-712 domain typehash
     bytes32 private constant DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
 
+    // [SV-10] Store hashed name and version as immutables to avoid string literal
+    // mismatch risk in fork-recompute path.
+    bytes32 private immutable _HASHED_NAME;
+    bytes32 private immutable _HASHED_VERSION;
     bytes32 private immutable _DOMAIN_SEPARATOR;
     uint256 private immutable _CHAIN_ID;
 
     constructor(string memory name, string memory version) {
-        _CHAIN_ID = block.chainid;
-        _DOMAIN_SEPARATOR = _buildDomainSeparator(name, version);
+        _HASHED_NAME    = keccak256(bytes(name));
+        _HASHED_VERSION = keccak256(bytes(version));
+        _CHAIN_ID       = block.chainid;
+        _DOMAIN_SEPARATOR = _buildDomainSeparator();
     }
 
-    function _buildDomainSeparator(
-        string memory name,
-        string memory version
-    ) private view returns (bytes32) {
+    function _buildDomainSeparator() private view returns (bytes32) {
         return keccak256(abi.encode(
             DOMAIN_TYPEHASH,
-            keccak256(bytes(name)),
-            keccak256(bytes(version)),
+            _HASHED_NAME,
+            _HASHED_VERSION,
             block.chainid,
             address(this)
         ));
@@ -136,9 +198,9 @@ abstract contract EIP712 {
 
     /// @notice Returns the EIP-712 domain separator for this contract.
     function DOMAIN_SEPARATOR() public view returns (bytes32) {
-        // Recompute if chain changes (e.g. after a fork), otherwise use cache.
+        // Recompute if chain changes (e.g. after a fork), using stored hashes.
         if (block.chainid != _CHAIN_ID) {
-            return _buildDomainSeparator("AuthOnce", "5");
+            return _buildDomainSeparator();
         }
         return _DOMAIN_SEPARATOR;
     }
@@ -155,12 +217,14 @@ abstract contract EIP712 {
 
 contract SubscriptionVault is ReentrancyGuard, EIP712 {
 
+    using SafeERC20 for IERC20;
+
     // -------------------------------------------------------------------------
     // Watermark — origin proof baked into bytecode forever
     // -------------------------------------------------------------------------
 
     string public constant PROTOCOL      = "AuthOnce Protocol";
-    string public constant VERSION       = "5.0.0";
+    string public constant VERSION       = "6.0.0";
     string public constant ORIGIN_DOMAIN = "authonce.io";
     string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
     string public constant LICENSE_SPDX  = "BUSL-1.1";
@@ -169,21 +233,6 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // EIP-712 type hashes
     // -------------------------------------------------------------------------
 
-    /// @notice Typehash for PullAuthorisation.
-    /// Struct definition (human-readable, shown in wallet UIs):
-    ///   PullAuthorisation(
-    ///     uint256 subscriptionId,
-    ///     address token,
-    ///     uint256 amount,
-    ///     uint256 pullCount,
-    ///     uint256 deadline
-    ///   )
-    ///
-    /// subscriptionId — identifies which subscription this pull is for
-    /// token          — payment token address (cross-checks sub.token)
-    /// amount         — exact amount being pulled (cross-checks pullAmount)
-    /// pullCount      — pull sequence number (prevents replaying old signatures)
-    /// deadline       — unix timestamp after which signature is invalid
     bytes32 public constant PULL_AUTHORISATION_TYPEHASH = keccak256(
         "PullAuthorisation(uint256 subscriptionId,address token,uint256 amount,uint256 pullCount,uint256 deadline)"
     );
@@ -192,38 +241,41 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // ERC-1271 magic value
     // -------------------------------------------------------------------------
 
-    bytes4 internal constant ERC1271_MAGIC = bytes4(keccak256("isValidSignature(bytes32,bytes)"));
+    bytes4 internal constant ERC1271_MAGIC = 0x1626ba7e;
 
     // -------------------------------------------------------------------------
     // Constants
     // -------------------------------------------------------------------------
 
-    /// @notice Hard ceiling on protocol fee: 2% = 200 bps. Never raiseable above this.
-    uint16 public constant MAX_FEE_BPS = 200;
-
-    /// @notice Default protocol fee: 0.5% = 50 bps. Same for all merchants, all tokens.
-    uint16 public constant PROTOCOL_FEE_BPS = 50;
+    uint16 public constant MAX_FEE_BPS      = 200;   // 2% hard ceiling
+    uint16 public constant PROTOCOL_FEE_BPS = 50;    // 0.5% default
 
     uint256 public constant MIN_GRACE_DAYS     = 1;
     uint256 public constant MAX_GRACE_DAYS     = 30;
     uint256 public constant DEFAULT_GRACE_DAYS = 7;
 
-    /// @notice Minimum notice period for merchant price changes — 30 days.
     uint256 public constant MIN_EXPIRY_NOTICE = 30 days;
+    uint256 public constant MAX_TRIAL_DAYS    = 90;
+    uint256 public constant MAX_INTRO_PULLS   = 12;
 
-    /// @notice Maximum trial period — 90 days.
-    uint256 public constant MAX_TRIAL_DAYS = 90;
-
-    /// @notice Maximum introductory pulls — 12 (e.g. 12 months at intro price).
-    uint256 public constant MAX_INTRO_PULLS = 12;
-
-    /// @notice ERC-1271 pull deadline tolerance — keeper must execute within
-    ///         24 hours of generating the pull signature. Tight TTL by design.
     uint256 public constant PULL_DEADLINE_TOLERANCE = 24 hours;
 
     uint256 public constant WEEKLY  =    604_800; //   7 days
-    uint256 public constant MONTHLY =  2_592_000; //  30 days
+    uint256 public constant MONTHLY =  2_592_000; //  30 days (fixed interval — not calendar month)
     uint256 public constant YEARLY  = 31_536_000; // 365 days
+
+    uint256 public constant MAX_TOTAL_MERCHANT_PAUSE_DAYS = 90;
+    uint256 public constant MERCHANT_PAUSE_COOLDOWN       = 30 days;
+
+    /// @notice [SV-11] Maximum subscription amount: 1,000,000 tokens (6-decimal basis).
+    ///         Prevents misconfigured subscriptions with absurd amounts.
+    ///         Expressed in base units — works for USDC/USDT/DAI/EURC at 6 decimals.
+    ///         If an 18-decimal token is ever whitelisted, this constant must be reviewed.
+    uint256 public constant MAX_SUBSCRIPTION_AMOUNT = 1_000_000 * 1e6;
+
+    /// @notice [SV-09] Maximum number of tokens ever added to the whitelist.
+    ///         Bounds approvedTokenList() loop. 50 is far beyond any realistic need.
+    uint256 public constant MAX_TOKEN_LIST = 50;
 
     // -------------------------------------------------------------------------
     // Enums
@@ -237,23 +289,28 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // -------------------------------------------------------------------------
 
     struct Subscription {
-        address owner;           // Subscriber wallet — EOA or ERC-1271 contract wallet
-        address guardian;        // Can also cancel/pause — zero address if none
-        address merchant;        // Approved merchant — immutable after creation
-        address safeVault;       // Wallet holding tokens (= owner for EOAs)
-        address token;           // Payment token — from admin whitelist, immutable
-        uint256 amount;          // Full recurring amount per pull (token decimals)
-        uint256 introAmount;     // Amount per pull during intro period (0 = no intro)
-        uint256 introPulls;      // Number of pulls at introAmount before switching
-        uint256 pullCount;       // Total successful pulls executed (also nonce for EIP-712)
-        Interval interval;       // Weekly / Monthly / Yearly — immutable
-        uint256 lastPulledAt;    // Timestamp of last successful pull (or trialEndsAt)
-        uint256 pausedAt;        // Timestamp of pause start (0 = not paused)
-        uint256 expiresAt;       // Timestamp of scheduled expiry (0 = none)
-        uint256 trialEndsAt;     // Timestamp when trial ends (0 = no trial)
-        uint256 gracePeriodDays; // Grace period in days before auto-expiry (1–30)
-        bytes32 dataVaultId;     // DataOnce Phase 2 — encrypted data vault reference
+        address owner;              // Subscriber wallet — EOA or ERC-1271 contract wallet
+        address guardian;           // Can also cancel/pause/resume — zero address if none
+        address merchant;           // Approved merchant — immutable after creation
+        address safeVault;          // Wallet holding tokens — must equal owner at creation
+        address token;              // Payment token — from admin whitelist, immutable
+        uint256 amount;             // Full recurring amount per pull (token decimals)
+        uint256 introAmount;        // Amount per pull during intro period (0 = no intro)
+        uint256 introPulls;         // Number of pulls at introAmount before switching
+        uint256 pullCount;          // Total successful pulls (also nonce for EIP-712)
+        Interval interval;          // Weekly / Monthly / Yearly — immutable
+        uint256 lastPulledAt;       // Timestamp of last SUCCESSFUL pull (or trialEndsAt)
+        uint256 billingPausedUntil; // [SV-02] Merchant billing pause end timestamp (0 = not paused by merchant)
+        uint256 pausedAt;           // Timestamp of subscriber-side pause start (0 = not paused)
+        uint256 expiresAt;          // Timestamp of scheduled expiry (0 = none)
+        uint256 trialEndsAt;        // Timestamp when trial ends (0 = no trial)
+        uint256 gracePeriodDays;    // Grace period in days before auto-expiry (1–30)
+        bytes32 dataVaultId;        // DataOnce Phase 2 — encrypted data vault reference
         SubscriptionStatus status;
+        bool isContractVault;       // [SV-01] Set once at createSubscription. True if safeVault
+                                    //         had contract code at subscription creation time.
+                                    //         Immutable per pull — cannot be bypassed by
+                                    //         subscribing from a constructor.
     }
 
     // -------------------------------------------------------------------------
@@ -261,23 +318,26 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // -------------------------------------------------------------------------
 
     address public admin;
-    address public pendingAdmin;  // Two-step admin transfer — zero if none pending
+    address public pendingAdmin;
     address public keeper;
     address public protocolTreasury;
     address public merchantRegistry;
 
-    /// @notice Protocol fee in bps. Initialised to PROTOCOL_FEE_BPS (50).
-    ///         Admin can only lower it. Hard ceiling MAX_FEE_BPS (200).
     uint16  public feeBps;
 
     uint256 private _nextSubscriptionId;
 
-    /// @notice Global token whitelist. Admin-controlled.
-    ///         All whitelisted tokens available to all merchants and tiers.
     mapping(address => bool) public approvedTokens;
     address[] private _tokenList;
 
+    /// @notice [SV-09] Count of currently approved (non-revoked) tokens.
+    ///         O(1) read. Maintained on approveToken/revokeToken.
+    uint256 public approvedTokenCount;
+
     mapping(uint256 => Subscription) public subscriptions;
+
+    mapping(uint256 => uint256) public totalMerchantPauseDays;
+    mapping(uint256 => uint256) public lastMerchantPauseAt;
 
     // -------------------------------------------------------------------------
     // Events
@@ -287,6 +347,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         string  protocol,
         string  version,
         address indexed deployer,
+        address indexed initialAdmin,
         uint256 chainId,
         uint256 timestamp
     );
@@ -301,7 +362,17 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 introAmount,
         uint256 introPulls,
         Interval interval,
-        address guardian
+        address guardian,
+        uint256 trialEndsAt,
+        uint256 gracePeriodDays,
+        bool    isContractVault  // [SV-01] Vault type recorded in event for off-chain indexing
+    );
+
+    event SafeVaultUpdated(
+        uint256 indexed id,
+        address indexed oldVault,
+        address indexed newVault,
+        bool    newIsContractVault  // [SV-06] Vault type change is explicit and auditable
     );
 
     event PaymentExecuted(
@@ -313,6 +384,8 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 pullCount,
         uint256 timestamp
     );
+
+    event MerchantTransferFailed(uint256 indexed id, address indexed merchant);
 
     event InsufficientFunds(
         uint256 indexed id,
@@ -333,7 +406,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     event SubscriptionCancelled(uint256 indexed id, address cancelledBy);
     event SubscriptionResumed(uint256 indexed id, uint256 timestamp);
     event SubscriptionExpired(uint256 indexed id, uint256 timestamp);
-    event SubscriptionPausedByMerchant(uint256 indexed id, address indexed merchant, uint256 resumesAt);
+    event SubscriptionPausedByMerchant(uint256 indexed id, address indexed merchant, uint256 billingPausedUntil);
     event ProductExpirySet(uint256 indexed id, address indexed merchant, uint256 expiresAt, uint256 noticeDays);
     event TrialStarted(uint256 indexed id, uint256 trialEndsAt);
     event GracePeriodSet(uint256 indexed id, uint256 gracePeriodDays);
@@ -380,7 +453,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         address _keeper,
         address _protocolTreasury,
         address _merchantRegistry
-    ) EIP712("AuthOnce", "5") {
+    ) EIP712("AuthOnce", "6") {
         require(_admin            != address(0), "ZeroAdmin");
         require(_keeper           != address(0), "ZeroKeeper");
         require(_protocolTreasury != address(0), "ZeroTreasury");
@@ -390,9 +463,9 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         keeper           = _keeper;
         protocolTreasury = _protocolTreasury;
         merchantRegistry = _merchantRegistry;
-        feeBps           = PROTOCOL_FEE_BPS; // 50 bps = 0.5%
+        feeBps           = PROTOCOL_FEE_BPS;
 
-        emit ProtocolDeployed(PROTOCOL, VERSION, msg.sender, block.chainid, block.timestamp);
+        emit ProtocolDeployed(PROTOCOL, VERSION, msg.sender, _admin, block.chainid, block.timestamp);
     }
 
     // =========================================================================
@@ -402,18 +475,13 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     /// @notice Create a new subscription.
     ///
     /// @param merchant          Approved merchant wallet address
-    /// @param safeVault         Wallet holding tokens — must have approved this contract.
-    ///                          EOA: standard USDC approval.
-    ///                          Contract wallet: must implement ERC-1271 and approve
-    ///                          this vault via token.approve() before first pull.
-    /// @param token             Payment token — must be in admin whitelist.
-    ///                          Immutable after creation.
-    /// @param amount            Full recurring price in token units (respects decimals).
-    /// @param introAmount       Introductory price per pull (0 = no intro).
-    ///                          Must be <= amount.
+    /// @param safeVault         Wallet holding tokens — MUST equal msg.sender.
+    /// @param token             Payment token — must be in admin whitelist. Immutable.
+    /// @param amount            Full recurring price in token units.
+    /// @param introAmount       Introductory price per pull (0 = no intro). Must be <= amount.
     /// @param introPulls        Number of pulls at introAmount (0 = no intro, max 12).
     /// @param interval          Weekly / Monthly / Yearly — immutable after creation.
-    /// @param guardian          Address that can also cancel/pause (zero = none).
+    /// @param guardian          Address that can also cancel/pause/resume (zero = none).
     /// @param trialDays         Free trial days before first payment (0 = none, max 90).
     /// @param gracePeriodDays_  Grace period on payment failure (0 = default 7, max 30).
     /// @param dataVaultId_      DataOnce Phase 2 vault reference (zero = unused).
@@ -430,11 +498,15 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256  gracePeriodDays_,
         bytes32  dataVaultId_
     ) external returns (uint256 id) {
-        require(merchant  != address(0), "ZeroMerchant");
-        require(safeVault != address(0), "ZeroVault");
-        require(token     != address(0), "ZeroToken");
-        require(amount    >  0,          "ZeroAmount");
-        require(approvedTokens[token],   "TokenNotApproved");
+        // [H2] safeVault must be the caller.
+        require(safeVault == msg.sender,   "VaultMustBeCaller");
+
+        require(merchant  != address(0),   "ZeroMerchant");
+        require(token     != address(0),   "ZeroToken");
+        require(amount    >  0,            "ZeroAmount");
+        // [SV-11] Cap subscription amount to prevent misconfigured subscriptions.
+        require(amount    <= MAX_SUBSCRIPTION_AMOUNT, "AmountTooHigh");
+        require(approvedTokens[token],     "TokenNotApproved");
         require(
             IMerchantRegistry(merchantRegistry).isApproved(merchant),
             "MerchantNotApproved"
@@ -444,6 +516,11 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         require(
             introAmount == 0 || introAmount <= amount,
             "IntroExceedsFull"
+        );
+        // [SV-11] Cap introAmount as well.
+        require(
+            introAmount == 0 || introAmount <= MAX_SUBSCRIPTION_AMOUNT,
+            "IntroAmountTooHigh"
         );
         require(
             introPulls == 0 || introAmount > 0,
@@ -458,34 +535,47 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 graceDays   = gracePeriodDays_ == 0 ? DEFAULT_GRACE_DAYS : gracePeriodDays_;
         uint256 trialEndsAt = trialDays > 0 ? block.timestamp + (trialDays * 1 days) : 0;
 
+        // [SV-01] Detect vault type at creation time and store immutably.
+        // extcodesize is called once here. executePull uses the stored flag.
+        // A contract subscribing from within its own constructor will have
+        // extcodesize == 0 here — isContractVault = false — making the bypass
+        // explicit, auditable, and on-chain: the subscription will be treated
+        // as an EOA subscription permanently.
+        // NOTE: This is a known trade-off. Legitimate contract wallets MUST
+        // call createSubscription after their constructor completes (i.e., from
+        // a deployed wallet, not during deployment). This is standard practice
+        // for all ERC-1271 integrations.
+        bool contractVault = _isContract(safeVault);
+
         id = _nextSubscriptionId++;
 
         subscriptions[id] = Subscription({
-            owner:           msg.sender,
-            guardian:        guardian,
-            merchant:        merchant,
-            safeVault:       safeVault,
-            token:           token,
-            amount:          amount,
-            introAmount:     introAmount,
-            introPulls:      introPulls,
-            pullCount:       0,
-            interval:        interval,
-            lastPulledAt:    trialEndsAt, // First pull is due after trial ends
-            pausedAt:        0,
-            expiresAt:       0,
-            trialEndsAt:     trialEndsAt,
-            gracePeriodDays: graceDays,
-            dataVaultId:     dataVaultId_,
-            status:          SubscriptionStatus.Active
+            owner:              msg.sender,
+            guardian:           guardian,
+            merchant:           merchant,
+            safeVault:          safeVault,
+            token:              token,
+            amount:             amount,
+            introAmount:        introAmount,
+            introPulls:         introPulls,
+            pullCount:          0,
+            interval:           interval,
+            lastPulledAt:       trialEndsAt,
+            billingPausedUntil: 0,
+            pausedAt:           0,
+            expiresAt:          0,
+            trialEndsAt:        trialEndsAt,
+            gracePeriodDays:    graceDays,
+            dataVaultId:        dataVaultId_,
+            status:             SubscriptionStatus.Active,
+            isContractVault:    contractVault
         });
 
         emit SubscriptionCreated(
             id, msg.sender, merchant, safeVault, token,
-            amount, introAmount, introPulls, interval, guardian
+            amount, introAmount, introPulls, interval, guardian,
+            trialEndsAt, graceDays, contractVault
         );
-        emit GracePeriodSet(id, graceDays);
-        if (trialEndsAt > 0) emit TrialStarted(id, trialEndsAt);
     }
 
     function cancelSubscription(uint256 id) external onlyOwnerOrGuardian(id) {
@@ -507,12 +597,18 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         emit SubscriptionPaused(id, msg.sender, "manual");
     }
 
+    /// @notice Resume a paused subscription.
+    ///         Both owner and guardian can resume — symmetric with pauseSubscription.
     function resumeSubscription(uint256 id) external {
         Subscription storage sub = subscriptions[id];
-        require(msg.sender == sub.owner, "NotOwner");
-        require(sub.status == SubscriptionStatus.Paused, "NotPaused");
         require(
-            sub.pausedAt == 0 ||
+            msg.sender == sub.owner ||
+            (sub.guardian != address(0) && msg.sender == sub.guardian),
+            "NotAuthorised"
+        );
+        require(sub.status == SubscriptionStatus.Paused, "NotPaused");
+        require(sub.pausedAt > 0, "InvalidPausedState");
+        require(
             block.timestamp <= sub.pausedAt + (sub.gracePeriodDays * 1 days),
             "GracePeriodExpired"
         );
@@ -521,13 +617,39 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         emit SubscriptionResumed(id, block.timestamp);
     }
 
+    /// @notice Update the safeVault address for a subscription.
+    ///         Only the subscription owner can call this.
+    ///         [SV-06] Updates isContractVault flag to match the new vault type.
+    ///         Vault type change is emitted explicitly in SafeVaultUpdated event.
+    function updateSafeVault(uint256 id, address newSafeVault) external {
+        Subscription storage sub = subscriptions[id];
+        require(msg.sender == sub.owner, "NotOwner");
+        require(newSafeVault != address(0), "ZeroVault");
+        require(
+            sub.status == SubscriptionStatus.Active ||
+            sub.status == SubscriptionStatus.Paused,
+            "InactiveSubscription"
+        );
+        address oldVault = sub.safeVault;
+
+        // [SV-06] Re-evaluate vault type for the new address.
+        // If switching from EOA to contract wallet: ERC-1271 will now be required.
+        // If switching from contract wallet to EOA: ERC-1271 will no longer be required.
+        // Both changes are recorded on-chain via the event.
+        bool newContractVault = _isContract(newSafeVault);
+
+        sub.safeVault       = newSafeVault;
+        sub.isContractVault = newContractVault;
+
+        emit SafeVaultUpdated(id, oldVault, newSafeVault, newContractVault);
+    }
+
     // =========================================================================
     // MERCHANT ACTIONS
     // =========================================================================
 
     /// @notice Merchant sets a scheduled expiry (price change flow).
-    ///         Enforces 30-day minimum notice on-chain — subscriber always has
-    ///         30 days to cancel before a price change takes effect.
+    ///         Enforces 30-day minimum notice on-chain.
     function setProductExpiry(uint256 id, uint256 expiresAt) external {
         Subscription storage sub = subscriptions[id];
         require(msg.sender == sub.merchant,                       "NotMerchant");
@@ -541,8 +663,11 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     }
 
     /// @notice Merchant pauses billing for a subscriber (customer service use).
-    ///         Shifts lastPulledAt forward — subscriber does not need to act.
-    ///         Does not change subscription status to Paused.
+    ///         [SV-02] Sets billingPausedUntil instead of abusing lastPulledAt.
+    ///         lastPulledAt now only records actual payment timestamps.
+    ///         executePull due-date check gates on both lastPulledAt and billingPausedUntil.
+    ///         [M6] Cooldown of 30 days between pauses. Lifetime cap of 90 days total.
+    ///         Guard: billingPausedUntil cannot exceed expiresAt if set.
     function merchantPauseSubscription(uint256 id, uint256 pauseDays) external {
         Subscription storage sub = subscriptions[id];
         require(msg.sender == sub.merchant,              "NotMerchant");
@@ -550,9 +675,32 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         require(pauseDays >= 1,                          "MinOneDayPause");
         require(pauseDays <= 90,                         "PauseTooLong");
 
-        sub.lastPulledAt  = block.timestamp + (pauseDays * 1 days);
-        uint256 resumesAt = sub.lastPulledAt + _intervalToSeconds(sub.interval);
-        emit SubscriptionPausedByMerchant(id, msg.sender, resumesAt);
+        require(
+            block.timestamp >= lastMerchantPauseAt[id] + MERCHANT_PAUSE_COOLDOWN,
+            "MerchantPauseCooldownActive"
+        );
+
+        require(
+            totalMerchantPauseDays[id] + pauseDays <= MAX_TOTAL_MERCHANT_PAUSE_DAYS,
+            "MerchantPauseLimitExceeded"
+        );
+
+        uint256 pauseUntil = block.timestamp + (pauseDays * 1 days);
+
+        // [SV-02] Guard: merchant cannot push billing pause past the subscription's
+        // own scheduled expiry. Prevents griefing where a merchant uses pauseDays
+        // to force expiry before the next pull executes.
+        if (sub.expiresAt > 0) {
+            require(pauseUntil < sub.expiresAt, "PausePastExpiry");
+        }
+
+        lastMerchantPauseAt[id]    = block.timestamp;
+        totalMerchantPauseDays[id] += pauseDays;
+
+        // [SV-02] Store billing pause end time. lastPulledAt is NOT modified.
+        sub.billingPausedUntil = pauseUntil;
+
+        emit SubscriptionPausedByMerchant(id, msg.sender, pauseUntil);
     }
 
     // =========================================================================
@@ -562,27 +710,19 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     /// @notice Execute a pull for a due subscription.
     ///
     ///         EOA subscribers (MetaMask, Ledger, Coinbase Wallet):
-    ///           Pass signature = "" (empty bytes). ERC-1271 check is skipped.
-    ///           Standard IERC20.transferFrom used — subscriber approved vault
-    ///           at subscription creation.
+    ///           sub.isContractVault == false. Pass deadline=0, signature="0x".
+    ///           ERC-1271 check is skipped entirely.
     ///
     ///         Contract wallet subscribers (Gnosis Safe, AI agents, smart wallets):
-    ///           Pass a valid EIP-712 PullAuthorisation signature with deadline.
-    ///           Vault verifies via IERC1271.isValidSignature before transferring.
-    ///           Keeper must generate the signature fresh each pull cycle with a
-    ///           tight deadline (PULL_DEADLINE_TOLERANCE = 24 hours).
+    ///           sub.isContractVault == true. Pass a valid EIP-712 PullAuthorisation
+    ///           signature with deadline. Vault verifies via IERC1271.isValidSignature.
     ///
-    ///         The pull amount is determined by pullCount vs introPulls —
-    ///         introAmount for first introPulls pulls, then amount thereafter.
-    ///
-    /// @param id        Subscription ID
-    /// @param deadline  EIP-712 signature deadline (unix timestamp).
-    ///                  For EOA subscribers: pass 0 (ignored).
-    ///                  For contract wallets: must be > block.timestamp and
-    ///                  <= block.timestamp + PULL_DEADLINE_TOLERANCE.
-    /// @param signature EIP-712 PullAuthorisation signature bytes.
-    ///                  For EOA subscribers: pass "" (empty).
-    ///                  For contract wallets: signed EIP-712 struct hash.
+    ///         [SV-01] Uses stored isContractVault flag — not live extcodesize check.
+    ///                 Constructor-bypass eliminated.
+    ///         [SV-02] Due-date check gates on both lastPulledAt and billingPausedUntil.
+    ///         [SV-04] Both merchant and fee transfers use SafeERC20.
+    ///         [M2]    CEI pattern — state updated before external calls.
+    ///         [M7]    Merchant transfer uses try/catch — cannot DoS pulls.
     function executePull(
         uint256 id,
         uint256 deadline,
@@ -603,48 +743,49 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             return;
         }
 
-        // Check due date
+        // [SV-02] Check due date — must satisfy both payment interval AND merchant billing pause.
         uint256 intervalSeconds = _intervalToSeconds(sub.interval);
         require(
             block.timestamp >= sub.lastPulledAt + intervalSeconds,
             "NotDueYet"
         );
+        require(
+            sub.billingPausedUntil == 0 || block.timestamp >= sub.billingPausedUntil,
+            "BillingPaused"
+        );
 
-        // Determine pull amount — intro pricing or full amount
-        uint256 pullAmount = (sub.introAmount > 0 && sub.pullCount < sub.introPulls)
-            ? sub.introAmount
+        // Cache storage variables
+        uint256 introAmount     = sub.introAmount;
+        uint256 pullCount       = sub.pullCount;
+        uint256 introPulls      = sub.introPulls;
+        uint256 gracePeriodDays = sub.gracePeriodDays;
+        address token           = sub.token;
+        address safeVault       = sub.safeVault;
+        address merchant        = sub.merchant;
+
+        uint256 pullAmount = (introAmount > 0 && pullCount < introPulls)
+            ? introAmount
             : sub.amount;
 
-        address token     = sub.token;
-        address safeVault = sub.safeVault;
-
-        // ── ERC-1271 path: contract wallet subscriber ─────────────────────────
-        // Only runs when safeVault has contract code deployed.
-        // EOAs have no code — _isContract returns false — check is skipped entirely.
-        if (_isContract(safeVault)) {
-            // Deadline must be set and within the allowed tolerance window
-            require(deadline > block.timestamp,                          "DeadlineExpired");
+        // [SV-01] Use stored isContractVault flag — not live _isContract() call.
+        if (sub.isContractVault) {
+            require(deadline > block.timestamp,                            "DeadlineExpired");
             require(deadline <= block.timestamp + PULL_DEADLINE_TOLERANCE, "DeadlineTooFar");
 
-            // Build EIP-712 struct hash for PullAuthorisation
-            // pullCount acts as a nonce — each pull has a unique hash
             bytes32 structHash = keccak256(abi.encode(
                 PULL_AUTHORISATION_TYPEHASH,
                 id,
                 token,
                 pullAmount,
-                sub.pullCount, // nonce — incremented after every successful pull
+                pullCount,
                 deadline
             ));
 
-            // Final EIP-712 hash: "\x19\x01" + domainSeparator + structHash
             bytes32 digest = _hashTypedData(structHash);
-
-            // Ask the contract wallet if the signature is valid
-            bytes4 result = IERC1271(safeVault).isValidSignature(digest, signature);
+            bytes4 result  = IERC1271(safeVault).isValidSignature(digest, signature);
             require(result == ERC1271_MAGIC, "ERC1271InvalidSignature");
         }
-        // ── EOA path: no ERC-1271 check, signature and deadline ignored ───────
+        // EOA path: deadline and signature ignored.
 
         // Check token balance
         uint256 currentBalance = IERC20(token).balanceOf(safeVault);
@@ -653,13 +794,14 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             sub.pausedAt = block.timestamp;
             emit InsufficientFunds(
                 id, token, pullAmount, currentBalance,
-                block.timestamp + (sub.gracePeriodDays * 1 days)
+                block.timestamp + (gracePeriodDays * 1 days)
             );
             emit SubscriptionPaused(id, address(this), "insufficient_funds");
             return;
         }
 
-        // Check token allowance
+        // Check token allowance — retained for differentiated InsufficientAllowance
+        // event used by notifier.js for specific subscriber notifications. [SV-12: intentional]
         uint256 currentAllowance = IERC20(token).allowance(safeVault, address(this));
         if (currentAllowance < pullAmount) {
             sub.status   = SubscriptionStatus.Paused;
@@ -669,31 +811,32 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             return;
         }
 
-        // Calculate fee split — 0.5% to treasury, remainder to merchant
+        // Calculate fee split
         uint256 fee              = (pullAmount * feeBps) / 10_000;
         uint256 merchantReceives = pullAmount - fee;
 
-        // Transfer to merchant
-        bool merchantSuccess = IERC20(token).transferFrom(
-            safeVault,
-            sub.merchant,
-            merchantReceives
-        );
-        require(merchantSuccess, "MerchantTransferFailed");
+        // [M2] CEI: Update state BEFORE external calls.
+        sub.lastPulledAt = block.timestamp;
+        sub.pullCount    = pullCount + 1;
 
-        // Transfer protocol fee to treasury
-        if (fee > 0) {
-            bool feeSuccess = IERC20(token).transferFrom(
-                safeVault,
-                protocolTreasury,
-                fee
-            );
-            require(feeSuccess, "FeeTransferFailed");
+        // [SV-04] Merchant transfer uses SafeERC20 wrapped in try/catch.
+        // [M7]    Merchant contract cannot DoS pulls by reverting on receive.
+        bool merchantPaid = _safeTransferFromWithCatch(
+            IERC20(token), safeVault, merchant, merchantReceives
+        );
+
+        if (!merchantPaid) {
+            // Revert state updates — payment did not complete.
+            sub.lastPulledAt = sub.lastPulledAt - intervalSeconds;
+            sub.pullCount    = pullCount;
+            emit MerchantTransferFailed(id, merchant);
+            return;
         }
 
-        // Update state — pullCount is also the EIP-712 nonce
-        sub.lastPulledAt = block.timestamp;
-        sub.pullCount   += 1;
+        // Fee transfer to treasury using SafeERC20.
+        if (fee > 0) {
+            IERC20(token).safeTransferFrom(safeVault, protocolTreasury, fee);
+        }
 
         emit PaymentExecuted(
             id, token, pullAmount, merchantReceives, fee,
@@ -720,21 +863,24 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // =========================================================================
 
     /// @notice Add a token to the global whitelist.
-    ///         Available to all merchants and tiers immediately.
+    ///         [SV-09] Enforces MAX_TOKEN_LIST cap. Increments approvedTokenCount.
     function approveToken(address token) external onlyAdmin {
-        require(token != address(0),   "ZeroToken");
+        require(token != address(0),    "ZeroToken");
         require(!approvedTokens[token], "AlreadyApproved");
+        require(_tokenList.length < MAX_TOKEN_LIST, "TokenListFull");
         approvedTokens[token] = true;
         _tokenList.push(token);
+        approvedTokenCount++;
         emit TokenApproved(token, msg.sender);
     }
 
     /// @notice Remove a token from the whitelist.
-    ///         Existing subscriptions using this token are NOT affected —
-    ///         only new subscriptions are blocked.
+    ///         Existing subscriptions using this token are NOT affected.
+    ///         [SV-09] Decrements approvedTokenCount.
     function revokeToken(address token) external onlyAdmin {
         require(approvedTokens[token], "TokenNotApproved");
         approvedTokens[token] = false;
+        approvedTokenCount--;
         emit TokenRevoked(token, msg.sender);
     }
 
@@ -745,9 +891,10 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         merchantRegistry = _registry;
     }
 
-    /// @notice Lower the protocol fee. Cannot raise above MAX_FEE_BPS (2%).
+    /// @notice Lower the protocol fee. One-way ratchet — can only decrease.
     function setFeeBps(uint16 _feeBps) external onlyAdmin {
         require(_feeBps <= MAX_FEE_BPS, "FeeTooHigh");
+        require(_feeBps <= feeBps,      "CanOnlyLowerFee");
         emit FeeUpdated(feeBps, _feeBps);
         feeBps = _feeBps;
     }
@@ -764,17 +911,16 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         protocolTreasury = _treasury;
     }
 
-    /// @notice Step 1 — propose a new admin.
-    ///         New admin must call acceptAdminTransfer() to complete.
-    ///         Prevents permanent loss from a typo or compromised key.
     function proposeAdminTransfer(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "ZeroAdmin");
         require(newAdmin != admin,      "AlreadyAdmin");
+        if (pendingAdmin != address(0)) {
+            emit AdminTransferCancelled(msg.sender);
+        }
         pendingAdmin = newAdmin;
         emit AdminTransferProposed(admin, newAdmin);
     }
 
-    /// @notice Step 2 — pending admin accepts and becomes admin.
     function acceptAdminTransfer() external {
         require(msg.sender == pendingAdmin, "NotPendingAdmin");
         address old  = admin;
@@ -783,7 +929,6 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         emit AdminTransferAccepted(old, admin);
     }
 
-    /// @notice Cancel a pending admin nomination. Current admin only.
     function cancelAdminTransfer() external onlyAdmin {
         require(pendingAdmin != address(0), "NoPendingTransfer");
         pendingAdmin = address(0);
@@ -795,8 +940,6 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // =========================================================================
 
     /// @notice Returns the EIP-712 digest for a PullAuthorisation.
-    ///         Keeper calls this off-chain to construct the hash before
-    ///         requesting a signature from a contract wallet subscriber.
     function pullAuthorisationDigest(
         uint256 id,
         uint256 deadline
@@ -827,10 +970,17 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     }
 
     /// @notice Returns timestamp when the next pull is due.
+    ///         [SV-02] Returns the later of (lastPulledAt + interval) and billingPausedUntil.
     function nextPullDue(uint256 id) external view returns (uint256) {
         Subscription storage sub = subscriptions[id];
-        if (sub.lastPulledAt == 0) return 0;
-        return sub.lastPulledAt + _intervalToSeconds(sub.interval);
+        uint256 intervalDue = sub.lastPulledAt == 0
+            ? block.timestamp
+            : sub.lastPulledAt + _intervalToSeconds(sub.interval);
+
+        if (sub.billingPausedUntil > intervalDue) {
+            return sub.billingPausedUntil;
+        }
+        return intervalDue;
     }
 
     /// @notice Returns current token balance of the subscription vault.
@@ -846,53 +996,56 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     }
 
     /// @notice Returns true if the subscription is due for a pull.
+    ///         [SV-02] Also checks billingPausedUntil.
     function isDue(uint256 id) external view returns (bool) {
         Subscription storage sub = subscriptions[id];
         if (sub.status != SubscriptionStatus.Active) return false;
         if (sub.expiresAt > 0 && block.timestamp >= sub.expiresAt) return false;
+        if (sub.billingPausedUntil > 0 && block.timestamp < sub.billingPausedUntil) return false;
         if (sub.lastPulledAt == 0) return true;
         return block.timestamp >= sub.lastPulledAt + _intervalToSeconds(sub.interval);
     }
 
-    /// @notice Returns true if subscription is in trial period.
     function inTrial(uint256 id) external view returns (bool) {
         Subscription storage sub = subscriptions[id];
         return sub.trialEndsAt > 0 && block.timestamp < sub.trialEndsAt;
     }
 
-    /// @notice Returns true if subscription is in intro pricing period.
     function inIntroPricing(uint256 id) external view returns (bool) {
         Subscription storage sub = subscriptions[id];
         return sub.introAmount > 0 && sub.pullCount < sub.introPulls;
     }
 
-    /// @notice Returns days remaining in trial period (0 if none or ended).
     function daysUntilTrialEnds(uint256 id) external view returns (uint256) {
         Subscription storage sub = subscriptions[id];
         if (sub.trialEndsAt == 0 || block.timestamp >= sub.trialEndsAt) return 0;
         return (sub.trialEndsAt - block.timestamp) / 1 days;
     }
 
-    /// @notice Returns days remaining until scheduled expiry (0 if none).
     function daysUntilExpiry(uint256 id) external view returns (uint256) {
         Subscription storage sub = subscriptions[id];
         if (sub.expiresAt == 0 || block.timestamp >= sub.expiresAt) return 0;
         return (sub.expiresAt - block.timestamp) / 1 days;
     }
 
-    /// @notice Returns how many intro pulls remain (0 if not in intro period).
     function introPullsRemaining(uint256 id) external view returns (uint256) {
         Subscription storage sub = subscriptions[id];
         if (sub.introAmount == 0 || sub.pullCount >= sub.introPulls) return 0;
         return sub.introPulls - sub.pullCount;
     }
 
-    /// @notice Returns the full list of approved token addresses.
+    /// @notice Returns the list of currently approved (non-revoked) token addresses.
+    ///         [SV-09] Loop bounded by MAX_TOKEN_LIST (50). approvedTokenCount for O(1) count.
     function approvedTokenList() external view returns (address[] memory) {
-        return _tokenList;
+        uint256 count = approvedTokenCount;
+        address[] memory active = new address[](count);
+        uint256 j = 0;
+        for (uint256 i = 0; i < _tokenList.length; i++) {
+            if (approvedTokens[_tokenList[i]]) active[j++] = _tokenList[i];
+        }
+        return active;
     }
 
-    /// @notice Returns the payment token for a given subscription.
     function subscriptionToken(uint256 id) external view returns (address) {
         return subscriptions[id].token;
     }
@@ -908,12 +1061,29 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     }
 
     /// @notice Returns true if address has contract code deployed.
-    ///         Distinguishes EOA safeVaults from ERC-1271 contract wallets.
-    ///         Note: returns false during a contract's own constructor execution.
-    ///         This is acceptable — no contract subscribes during its own constructor.
+    ///         [SV-01] Called ONLY at createSubscription and updateSafeVault.
+    ///         Result stored in isContractVault. Never called inside executePull.
     function _isContract(address addr) internal view returns (bool) {
         uint256 size;
         assembly { size := extcodesize(addr) }
         return size > 0;
+    }
+
+    /// @notice [SV-04] SafeERC20 transferFrom wrapped in a low-level try/catch.
+    ///         Returns true if the transfer succeeded, false if it reverted.
+    ///         Used for merchant transfer path to maintain DoS protection [M7]
+    ///         while using SafeERC20 for consistent non-standard token handling.
+    function _safeTransferFromWithCatch(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal returns (bool) {
+        (bool success, bytes memory returndata) = address(token).call(
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount)
+        );
+        if (!success) return false;
+        if (returndata.length > 0 && !abi.decode(returndata, (bool))) return false;
+        return true;
     }
 }

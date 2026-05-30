@@ -1,13 +1,18 @@
 // scripts/keeper.js
-// AuthOnce Keeper Bot — v5
-// Works with SubscriptionVault v5:
-//   - executePull(id, deadline, signature) — updated v5 signature
-//   - EOA subscribers: deadline=0, signature="0x" (ERC-1271 check skipped by contract)
-//   - Contract wallet subscribers: keeper must call pullAuthorisationDigest(id, deadline)
-//     off-chain, request EIP-712 signature, then pass to executePull
-//   - Per-subscription gracePeriodDays (read from contract)
-//   - Intro pricing aware (logged, not calculated — contract handles it)
-//   - Multi-token: token address read from subscription struct
+// AuthOnce Keeper Bot — v6
+//
+// Changes from v5:
+//   - ABI updated for SubscriptionVault v6:
+//       subscriptions() now returns billingPausedUntil and isContractVault fields
+//   - isDue() on-chain already accounts for billingPausedUntil (v6 contract).
+//       Keeper reads it from struct for logging purposes only.
+//   - processDueSubscriptions: logs billingPausedUntil state when subscription
+//       is active but not due, to distinguish "interval not elapsed" from
+//       "merchant billing pause active".
+//   - expireGracePeriodSubscriptions: no change — still uses pausedAt field.
+//   - ERC-1271 note: isContractVault is now stored in the struct. Keeper logs
+//       vault type. Full ERC-1271 signature generation for contract wallets is
+//       planned for v6.1 — EOA-only path is still used for all current subscribers.
 
 require("dotenv").config();
 const { ethers } = require("ethers");
@@ -18,12 +23,15 @@ const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.bas
 const KEEPER_PRIVKEY  = process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;
 
-// ─── ABI — v5 ───────────────────────────────────────────────────────────────
-// Key changes from v4:
-//   - executePull(id, deadline, signature) — EIP-712 + ERC-1271 support
-//   - subscriptions() now returns token (multi-token) and dataVaultId (DataOnce)
-//   - pullAuthorisationDigest(id, deadline) — EIP-712 hash for contract wallets
-//   - EOA subscribers: pass deadline=0, signature="0x" to executePull
+// ─── ABI — v6 ───────────────────────────────────────────────────────────────
+// Key changes from v5:
+//   - subscriptions() returns billingPausedUntil (new field, SV-02 fix)
+//   - subscriptions() returns isContractVault (new field, SV-01 fix)
+//   - isDue() updated in contract: also gates on billingPausedUntil
+//   - nextPullDue() updated: returns later of interval due and billingPausedUntil
+//   - SubscriptionCreated event has isContractVault field
+//   - SafeVaultUpdated event has newIsContractVault field
+//   - MerchantRegistry constructor takes (address, bool) — deploy.js updated
 
 const VAULT_ABI = [
   {
@@ -32,23 +40,25 @@ const VAULT_ABI = [
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [
-      { name: "owner",           type: "address" },
-      { name: "guardian",        type: "address" },
-      { name: "merchant",        type: "address" },
-      { name: "safeVault",       type: "address" },
-      { name: "token",           type: "address" },
-      { name: "amount",          type: "uint256" },
-      { name: "introAmount",     type: "uint256" },
-      { name: "introPulls",      type: "uint256" },
-      { name: "pullCount",       type: "uint256" },
-      { name: "interval",        type: "uint8"   },
-      { name: "lastPulledAt",    type: "uint256" },
-      { name: "pausedAt",        type: "uint256" },
-      { name: "expiresAt",       type: "uint256" },
-      { name: "trialEndsAt",     type: "uint256" },
-      { name: "gracePeriodDays", type: "uint256" },
-      { name: "dataVaultId",     type: "bytes32" },
-      { name: "status",          type: "uint8"   },
+      { name: "owner",              type: "address" },
+      { name: "guardian",           type: "address" },
+      { name: "merchant",           type: "address" },
+      { name: "safeVault",          type: "address" },
+      { name: "token",              type: "address" },
+      { name: "amount",             type: "uint256" },
+      { name: "introAmount",        type: "uint256" },
+      { name: "introPulls",         type: "uint256" },
+      { name: "pullCount",          type: "uint256" },
+      { name: "interval",           type: "uint8"   },
+      { name: "lastPulledAt",       type: "uint256" },
+      { name: "billingPausedUntil", type: "uint256" }, // [SV-02] new field
+      { name: "pausedAt",           type: "uint256" },
+      { name: "expiresAt",          type: "uint256" },
+      { name: "trialEndsAt",        type: "uint256" },
+      { name: "gracePeriodDays",    type: "uint256" },
+      { name: "dataVaultId",        type: "bytes32" },
+      { name: "status",             type: "uint8"   },
+      { name: "isContractVault",    type: "bool"    }, // [SV-01] new field
     ],
   },
   {
@@ -80,8 +90,8 @@ const VAULT_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    // v5: EOA subscribers pass deadline=0 and signature="0x"
-    // Contract wallet subscribers pass EIP-712 deadline + signature bytes
+    // v6: EOA subscribers pass deadline=0 and signature="0x" (isContractVault=false)
+    // Contract wallet subscribers pass EIP-712 deadline + signature bytes (isContractVault=true)
     name: "executePull",
     type: "function",
     stateMutability: "nonpayable",
@@ -121,7 +131,6 @@ const VAULT_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    // Used by keeper to build EIP-712 digest for contract wallet subscribers
     name: "pullAuthorisationDigest",
     type: "function",
     stateMutability: "view",
@@ -146,6 +155,8 @@ function setup() {
 }
 
 // ─── Scan all subscription IDs ───────────────────────────────────────────────
+// TODO v6.1: replace with DB-driven query for scale.
+// Current approach scans from 0 until ZeroAddress owner — works for testnet.
 async function getSubscriptionIds(vault) {
   const ids = [];
   let id = 0;
@@ -171,24 +182,47 @@ async function processDueSubscriptions(vault, ids) {
     const sub    = await vault.subscriptions(id);
     const status = Number(sub.status);
 
-    // ── Active: check if due and pull ───────────────────────────────────────
+    // ── Active: check if due and pull ──────────────────────────────────────
     if (status === STATUS.Active) {
       const due = await vault.isDue(id);
-      if (!due) { skipped++; continue; }
 
-      // nextPullAmount tells us exactly what the contract will pull
-      const pullAmount    = await vault.nextPullAmount(id);
-      const isIntro       = await vault.inIntroPricing(id);
+      if (!due) {
+        // [SV-02] Log reason for skip: billing pause vs interval not elapsed.
+        const now = Math.floor(Date.now() / 1000);
+        const billingPausedUntil = Number(sub.billingPausedUntil);
+        if (billingPausedUntil > 0 && now < billingPausedUntil) {
+          const hoursLeft = Math.ceil((billingPausedUntil - now) / 3600);
+          console.log(`  Subscription #${id} billing paused by merchant for ${hoursLeft}h more.`);
+        }
+        skipped++;
+        continue;
+      }
+
+      const pullAmount     = await vault.nextPullAmount(id);
+      const isIntro        = await vault.inIntroPricing(id);
       const introPullsLeft = isIntro ? await vault.introPullsRemaining(id) : 0n;
 
+      // [SV-01] Log vault type for observability.
+      const vaultType = sub.isContractVault ? "contract-wallet (ERC-1271)" : "EOA";
+
       console.log(`  -> Pulling subscription #${id}`);
-      console.log(`     Owner:    ${sub.owner}`);
-      console.log(`     Merchant: ${sub.merchant}`);
-      console.log(`     Amount:   ${ethers.formatUnits(pullAmount, 6)} USDC${isIntro ? ` (intro — ${introPullsLeft} pulls remaining at intro price)` : ""}`);
-      console.log(`     Interval: ${INTERVAL_NAME[Number(sub.interval)]}`);
+      console.log(`     Owner:      ${sub.owner}`);
+      console.log(`     Merchant:   ${sub.merchant}`);
+      console.log(`     Vault type: ${vaultType}`);
+      console.log(`     Amount:     ${ethers.formatUnits(pullAmount, 6)} USDC${isIntro ? ` (intro — ${introPullsLeft} pulls remaining at intro price)` : ""}`);
+      console.log(`     Interval:   ${INTERVAL_NAME[Number(sub.interval)]}`);
+
+      // [SV-01] Contract vault path — ERC-1271 signature required.
+      // Currently all subscribers are EOA. ERC-1271 full flow planned for v6.1.
+      if (sub.isContractVault) {
+        console.warn(`     WARNING: Subscription #${id} is a contract vault. ERC-1271 signing not yet implemented in keeper. Skipping.`);
+        console.warn(`     ACTION:  Upgrade keeper to v6.1 before onboarding contract wallet subscribers.`);
+        skipped++;
+        continue;
+      }
 
       try {
-        // v5: EOA subscribers — deadline=0, signature="0x" (ERC-1271 skipped by contract)
+        // EOA path: deadline=0, signature="0x"
         const tx      = await vault.executePull(id, 0, "0x");
         console.log(`     TX sent:  ${tx.hash}`);
         const receipt = await tx.wait();
@@ -200,21 +234,28 @@ async function processDueSubscriptions(vault, ids) {
       console.log("");
     }
 
-    // ── Paused: retry if vault topped up within grace period ─────────────────
+    // ── Paused: retry if vault topped up within grace period ────────────────
     if (status === STATUS.Paused) {
       const pausedAt       = Number(sub.pausedAt);
       const graceSecs      = Number(sub.gracePeriodDays) * 86_400;
       const now            = Math.floor(Date.now() / 1000);
       const gracePeriodEnd = pausedAt + graceSecs;
 
-      if (now > gracePeriodEnd) continue;  // will be expired by expiry loop
+      if (now > gracePeriodEnd) continue; // will be expired by expiry loop
 
-      const balance    = await vault.vaultBalance(id);
-      const allowance  = await vault.vaultAllowance(id);
-      const required   = await vault.nextPullAmount(id);
+      const balance   = await vault.vaultBalance(id);
+      const allowance = await vault.vaultAllowance(id);
+      const required  = await vault.nextPullAmount(id);
 
       if (balance >= required && allowance >= required) {
         console.log(`  -> Retrying subscription #${id} (vault funded + allowance restored during grace period)`);
+
+        if (sub.isContractVault) {
+          console.warn(`     WARNING: Contract vault — ERC-1271 signing not yet implemented. Cannot retry.`);
+          skipped++;
+          continue;
+        }
+
         try {
           const tx1 = await vault.resumeSubscription(id);
           await tx1.wait();
@@ -230,9 +271,9 @@ async function processDueSubscriptions(vault, ids) {
         }
         console.log("");
       } else {
-        const balFmt = ethers.formatUnits(balance, 6);
-        const reqFmt = ethers.formatUnits(required, 6);
-        const alwFmt = ethers.formatUnits(allowance, 6);
+        const balFmt         = ethers.formatUnits(balance, 6);
+        const reqFmt         = ethers.formatUnits(required, 6);
+        const alwFmt         = ethers.formatUnits(allowance, 6);
         const graceRemaining = Math.floor((gracePeriodEnd - now) / 3600);
         console.log(`  Subscription #${id} in grace (${graceRemaining}h left) — balance: ${balFmt} USDC, allowance: ${alwFmt} USDC, required: ${reqFmt} USDC`);
         skipped++;
@@ -254,7 +295,7 @@ async function expireGracePeriodSubscriptions(vault, ids) {
 
     if (status !== STATUS.Paused) continue;
 
-    const pausedAt   = Number(sub.pausedAt);
+    const pausedAt = Number(sub.pausedAt);
     if (pausedAt === 0) continue;
 
     const graceSecs      = Number(sub.gracePeriodDays) * 86_400;
@@ -284,7 +325,7 @@ async function run() {
   const { wallet, vault } = setup();
 
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Keeper Bot v5");
+  console.log("  AuthOnce — Keeper Bot v6");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  Keeper:   ${wallet.address}`);
@@ -310,7 +351,7 @@ async function run() {
       const { pulled, skipped } = await processDueSubscriptions(vault, ids);
       const expired = await expireGracePeriodSubscriptions(vault, ids);
 
-      console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due.`);
+      console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due / skipped.`);
       console.log("");
     } catch (err) {
       console.error(`  Keeper error: ${err.message}`);
