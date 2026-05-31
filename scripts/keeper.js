@@ -248,28 +248,14 @@ async function processDueSubscriptions(vault, ids) {
       const required  = await vault.nextPullAmount(id);
 
       if (balance >= required && allowance >= required) {
-        console.log(`  -> Retrying subscription #${id} (vault funded + allowance restored during grace period)`);
-
-        if (sub.isContractVault) {
-          console.warn(`     WARNING: Contract vault — ERC-1271 signing not yet implemented. Cannot retry.`);
-          skipped++;
-          continue;
-        }
-
-        try {
-          const tx1 = await vault.resumeSubscription(id);
-          await tx1.wait();
-          console.log(`     Resumed`);
-
-          const tx2     = await vault.executePull(id, 0, "0x");
-          console.log(`     TX sent:  ${tx2.hash}`);
-          const receipt = await tx2.wait();
-          console.log(`     Payment confirmed in block ${receipt.blockNumber}`);
-          pulled++;
-        } catch (err) {
-          console.error(`     Retry failed: ${err.message}`);
-        }
-        console.log("");
+        // Vault is funded and allowance restored during grace period.
+        // Keeper does NOT call resumeSubscription — only the subscriber/guardian
+        // can resume. Keeper's role is executePull and expireSubscription only.
+        // Log the recovery state so notifier can send subscriber a reminder.
+        console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
+        console.log(`     Balance: ${ethers.formatUnits(balance, 6)} USDC, Required: ${ethers.formatUnits(required, 6)} USDC`);
+        console.log(`     Subscriber must call resumeSubscription to reactivate.`);
+        skipped++;
       } else {
         const balFmt         = ethers.formatUnits(balance, 6);
         const reqFmt         = ethers.formatUnits(required, 6);

@@ -648,6 +648,56 @@ app.get("/api/merchants/:address/webhooks", requireMerchantAuth, async (req, res
 });
 
 // -----------------------------------------------------------------------------
+// POST /api/merchants/:address/webhook — update merchant webhook URL
+// Used by merchant dashboard to set/update their webhook endpoint
+// -----------------------------------------------------------------------------
+app.post("/api/merchants/:address/webhook", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    const { webhook_url } = req.body;
+    if (!webhook_url || !webhook_url.startsWith("https://")) {
+      return res.status(400).json({ error: "invalid_url", message: "Webhook URL must start with https://" });
+    }
+
+    const webhookSecret = generateWebhookSecret();
+    await db.upsertMerchant(address, { webhookUrl: webhook_url, webhookSecret });
+
+    res.json({
+      success: true,
+      webhook_configured: true,
+      webhook_secret: webhookSecret,
+      message: "Webhook URL updated. Save your webhook secret — it will not be shown again.",
+    });
+  } catch (err) {
+    console.error("[API] Update webhook error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// GET /api/merchants/:address/webhook — get current webhook config
+app.get("/api/merchants/:address/webhook", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+    const merchant = await db.getMerchant(address);
+    if (!merchant) return res.status(404).json({ error: "not_found" });
+    res.json({
+      webhook_configured: !!merchant.webhook_url,
+      webhook_url: merchant.webhook_url || null,
+    });
+  } catch (err) {
+    console.error("[API] Get webhook error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // POST /api/webhooks/test — fire a test ping to a specific webhook
 // -----------------------------------------------------------------------------
 app.post("/api/webhooks/test", requireMerchantAuth, async (req, res) => {
@@ -1709,7 +1759,16 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const session        = require("express-session");
 const { ethers }     = require("ethers");
 
+// Use PostgreSQL session store to eliminate MemoryStore warning
+// and persist sessions across Railway restarts.
+const pgSession = require("connect-pg-simple")(session);
 app.use(session({
+  store: new pgSession({
+    conString: process.env.DATABASE_URL,
+    tableName: "session",
+    createTableIfMissing: true,
+    ssl: { rejectUnauthorized: false },
+  }),
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
