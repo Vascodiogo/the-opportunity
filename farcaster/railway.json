@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node ../scripts/farcaster-bot.js",
+    "startCommand": "node farcaster-bot.js",
     "restartPolicyType": "ALWAYS"
   }
 }
