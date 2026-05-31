@@ -3,5 +3,7 @@
   "version": "1.0.0",
   "description": "AuthOnce Farcaster bot — daily posts via Neynar API",
   "main": "../scripts/farcaster-bot.js",
-  "dependencies": {}
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
 }

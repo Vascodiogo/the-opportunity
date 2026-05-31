@@ -9,7 +9,6 @@
 //   NEYNAR_SIGNER_UUID   — Signer UUID for @authonce (FID: 3324301)
 //   FARCASTER_FID        — AuthOnce FID (3324301)
 
-const fs   = require('fs');
 const path = require('path');
 
 const NEYNAR_API_KEY     = process.env.NEYNAR_API_KEY;
@@ -18,19 +17,38 @@ const NEYNAR_SIGNER_UUID = process.env.NEYNAR_SIGNER_UUID;
 if (!NEYNAR_API_KEY)     throw new Error('NEYNAR_API_KEY not set');
 if (!NEYNAR_SIGNER_UUID) throw new Error('NEYNAR_SIGNER_UUID not set');
 
-// ─── State ────────────────────────────────────────────────────────────────────
-const STATE_FILE = '/tmp/farcaster-bot-state.json';
+// ─── State — PostgreSQL backed (survives Railway restarts) ───────────────────
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-function getState() {
-  try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-  } catch {
-    return { index: 0 };
-  }
+async function initStateTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bot_state (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
 }
 
-function saveState(state) {
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state), 'utf8');
+async function getState() {
+  try {
+    const res = await pool.query("SELECT value FROM bot_state WHERE key = 'farcaster-bot-index'");
+    if (res.rows.length > 0) return { index: parseInt(res.rows[0].value, 10) };
+  } catch (e) {
+    console.error('[farcaster-bot] DB state read failed:', e.message);
+  }
+  return { index: 0 };
+}
+
+async function saveState(state) {
+  try {
+    await pool.query(
+      "INSERT INTO bot_state (key, value) VALUES ('farcaster-bot-index', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+      [String(state.index)]
+    );
+  } catch (e) {
+    console.error('[farcaster-bot] DB state save failed:', e.message);
+  }
 }
 
 // ─── Post bank — 21 posts, 3-week rotation ────────────────────────────────────
@@ -324,7 +342,7 @@ async function castToFarcaster(text) {
 
 // ─── Post ─────────────────────────────────────────────────────────────────────
 async function post() {
-  const state = getState();
+  const state = await getState();
   const index = state.index % POSTS.length;
   const text  = POSTS[index];
 
@@ -335,7 +353,7 @@ async function post() {
     const result = await castToFarcaster(text);
     const hash   = result?.cast?.hash || 'unknown';
     console.log(`[farcaster-bot] ✅ Cast posted: ${hash}`);
-    saveState({ index: index + 1 });
+    await saveState({ index: index + 1 });
   } catch (err) {
     console.error(`[farcaster-bot] ❌ Error: ${err.message}`);
   }
@@ -355,5 +373,6 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
+initStateTable().catch(e => console.error('[farcaster-bot] DB init failed:', e.message));
 console.log('[farcaster-bot] Running — posts daily at 12:00 UTC');
 console.log(`[farcaster-bot] Post bank: ${POSTS.length} posts (${Math.ceil(POSTS.length / 7)}-week rotation)`);

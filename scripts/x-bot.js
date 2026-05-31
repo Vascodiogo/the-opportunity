@@ -231,20 +231,39 @@ const BANNERS = {
   banner_6_multitoken: `<svg width="1200" height="675" viewBox="0 0 1200 675" xmlns="http://www.w3.org/2000/svg"><rect width="1200" height="675" fill="#f4f6fb"/><line stroke="#e8edf6" stroke-width="1" x1="0" y1="225" x2="1200" y2="225"/><line stroke="#e8edf6" stroke-width="1" x1="0" y1="450" x2="1200" y2="450"/><line stroke="#e8edf6" stroke-width="1" x1="400" y1="0" x2="400" y2="675"/><line stroke="#e8edf6" stroke-width="1" x1="800" y1="0" x2="800" y2="675"/><rect fill="#fff" x="60" y="52" width="1080" height="570" rx="20"/><rect fill="none" stroke="#e2e8f4" stroke-width="1.5" x="60" y="52" width="1080" height="570" rx="20"/><rect fill="#2563ff" x="60" y="52" width="6" height="570" rx="3"/><text font-family="Arial,sans-serif" font-size="17" fill="#2563ff" letter-spacing="3" x="102" y="118">// MULTI-TOKEN</text><text font-family="Arial Black,sans-serif" font-size="72" fill="#0f1624" font-weight="900" x="98" y="205">Four stablecoins.</text><text font-family="Arial Black,sans-serif" font-size="72" fill="#0f1624" font-weight="900" x="98" y="285">One <tspan fill="#2563ff">protocol.</tspan></text><text font-family="Arial,sans-serif" font-size="17" fill="#8896b3" x="102" y="320">Subscriber picks their token at signup. Locked for the life of the subscription.</text><line stroke="#e2e8f4" stroke-width="1.5" x1="102" y1="344" x2="1118" y2="344"/><rect fill="#f8faff" x="102" y="364" width="236" height="130" rx="14"/><rect fill="none" stroke="#2775ca" stroke-width="2" x="102" y="364" width="236" height="130" rx="14"/><text font-family="Arial Black,sans-serif" font-size="28" fill="#2775ca" font-weight="900" x="220" y="415" text-anchor="middle">USDC</text><text font-family="Arial,sans-serif" font-size="14" fill="#8896b3" x="220" y="438" text-anchor="middle">USD Coin</text><text font-family="Arial,sans-serif" font-size="13" fill="#2775ca" x="220" y="462" text-anchor="middle">Circle · Base native</text><text font-family="Arial,sans-serif" font-size="12" fill="#2775ca" x="220" y="482" text-anchor="middle">Most liquid</text><rect fill="#f8faff" x="356" y="364" width="236" height="130" rx="14"/><rect fill="none" stroke="#26a17b" stroke-width="2" x="356" y="364" width="236" height="130" rx="14"/><text font-family="Arial Black,sans-serif" font-size="28" fill="#26a17b" font-weight="900" x="474" y="415" text-anchor="middle">USDT</text><text font-family="Arial,sans-serif" font-size="14" fill="#8896b3" x="474" y="438" text-anchor="middle">Tether USD</text><text font-family="Arial,sans-serif" font-size="13" fill="#26a17b" x="474" y="462" text-anchor="middle">Tether · Base</text><text font-family="Arial,sans-serif" font-size="12" fill="#26a17b" x="474" y="482" text-anchor="middle">Highest volume</text><rect fill="#f8faff" x="610" y="364" width="236" height="130" rx="14"/><rect fill="none" stroke="#f5ac37" stroke-width="2" x="610" y="364" width="236" height="130" rx="14"/><text font-family="Arial Black,sans-serif" font-size="28" fill="#f5ac37" font-weight="900" x="728" y="415" text-anchor="middle">DAI</text><text font-family="Arial,sans-serif" font-size="14" fill="#8896b3" x="728" y="438" text-anchor="middle">Dai Stablecoin</text><text font-family="Arial,sans-serif" font-size="13" fill="#f5ac37" x="728" y="462" text-anchor="middle">MakerDAO · decentralised</text><text font-family="Arial,sans-serif" font-size="12" fill="#f5ac37" x="728" y="482" text-anchor="middle">DeFi native</text><rect fill="#f8faff" x="864" y="364" width="236" height="130" rx="14"/><rect fill="none" stroke="#2563ff" stroke-width="2" x="864" y="364" width="236" height="130" rx="14"/><text font-family="Arial Black,sans-serif" font-size="28" fill="#2563ff" font-weight="900" x="982" y="415" text-anchor="middle">EURC</text><text font-family="Arial,sans-serif" font-size="14" fill="#8896b3" x="982" y="438" text-anchor="middle">Euro Coin</text><text font-family="Arial,sans-serif" font-size="13" fill="#2563ff" x="982" y="462" text-anchor="middle">Circle · EUR-pegged</text><text font-family="Arial,sans-serif" font-size="12" fill="#2563ff" x="982" y="482" text-anchor="middle">European merchants</text><line stroke="#e2e8f4" stroke-width="1.5" x1="102" y1="512" x2="1118" y2="512"/><text font-family="Arial,sans-serif" font-size="15" fill="#059669" x="102" y="542">✓ Token set at signup — immutable per subscription</text><text font-family="Arial,sans-serif" font-size="15" fill="#059669" x="102" y="566">✓ All tokens available on all merchant tiers</text><text font-family="Arial,sans-serif" font-size="15" fill="#059669" x="600" y="542">✓ WETH / cbBTC coming in v6 (Chainlink oracle)</text><text font-family="Arial,sans-serif" font-size="15" fill="#059669" x="600" y="566">✓ Merchant receives exact token subscriber chose</text><line stroke="#e2e8f4" stroke-width="1.5" x1="102" y1="582" x2="1118" y2="582"/><text font-family="Arial Black,sans-serif" font-size="18" fill="#2563ff" font-weight="900" x="1118" y="614" text-anchor="end">authonce.io</text><text font-family="Arial,sans-serif" font-size="13" fill="#8896b3" x="102" y="614">Base Network · Non-custodial · 0.5% flat fee</text></svg>`,
 };
 
-// ─── State file — track which post is next ────────────────────────────────────
-const STATE_FILE = '/tmp/x-bot-state.json';
-const fs = require('fs');
+// ─── State — PostgreSQL backed (survives Railway restarts) ───────────────────
+// Falls back to index 0 if DB not available.
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-function getState() {
-  try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-  } catch {
-    return { index: 0 };
-  }
+async function initStateTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bot_state (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
 }
 
-function saveState(state) {
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state), 'utf8');
+async function getState() {
+  try {
+    const res = await pool.query("SELECT value FROM bot_state WHERE key = 'x-bot-index'");
+    if (res.rows.length > 0) return { index: parseInt(res.rows[0].value, 10) };
+  } catch (e) {
+    console.error('[x-bot] DB state read failed:', e.message);
+  }
+  return { index: 0 };
+}
+
+async function saveState(state) {
+  try {
+    await pool.query(
+      "INSERT INTO bot_state (key, value) VALUES ('x-bot-index', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+      [String(state.index)]
+    );
+  } catch (e) {
+    console.error('[x-bot] DB state save failed:', e.message);
+  }
 }
 
 // ─── SVG → PNG buffer via sharp ───────────────────────────────────────────────
@@ -254,7 +273,7 @@ async function svgToPng(svgString) {
 
 // ─── Post ─────────────────────────────────────────────────────────────────────
 async function post() {
-  const state = getState();
+  const state = await getState();
   const item = POSTS[state.index % POSTS.length];
 
   console.log(`[x-bot] Posting item ${state.index % POSTS.length}: ${item.banner || 'text-only'}`);
@@ -278,7 +297,7 @@ async function post() {
     console.log(`[x-bot] Posted: https://x.com/AuthOnce/status/${tweet.data.id}`);
 
     // Advance index
-    saveState({ index: (state.index + 1) % POSTS.length });
+    await saveState({ index: (state.index + 1) % POSTS.length });
 
   } catch (err) {
     console.error('[x-bot] Error:', err?.data || err.message);
@@ -301,4 +320,5 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
+initStateTable().catch(e => console.error('[x-bot] DB init failed:', e.message));
 console.log('[x-bot] Running — posts Mon/Wed/Fri 12:00 UTC');
