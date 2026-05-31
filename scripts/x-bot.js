@@ -16,30 +16,202 @@ const client = new TwitterApi({
 }).readWrite;
 
 // ─── Post rotation ────────────────────────────────────────────────────────────
-// 6 posts × 6 banners — repeats every 2 weeks (3 posts/week)
+// 12 posts — repeats every 4 weeks (Mon/Wed/Fri = 3 posts/week)
+// 6 with banners, 6 text-only (text-only often gets better reach on X)
+// banner: null = text-only post, no image uploaded
 const POSTS = [
+  // 1 — Hot take, text-only
   {
-    text: `Web3 subscriptions are broken.\n\nMerchants chase failed payments. Subscribers can't verify pulls. Nobody ships reliable recurring crypto payments.\n\nWe did — on @base.\n\nauthonce.io\n\n#DeFi #USDC #Base #Web3`,
+    text: `Hot take: crypto subscriptions failed because everyone tried to stream payments.
+
+Streaming is great for yield. Terrible for subscriptions.
+
+A subscription is a promise: pull exactly this amount, on this date, every cycle.
+
+That needs a keeper, not a stream.
+
+@base got this right. We built on it.
+
+#DeFi #Base #Web3`,
+    banner: null,
+  },
+  // 2 — Question, drives replies
+  {
+    text: `Question for crypto users:
+
+If you paid for a Web3 subscription and the merchant disappeared — what happens to your funds?
+
+With most protocols: locked in escrow nobody controls.
+
+With @AuthOnce: vault is yours. Cancel anytime. Merchant cannot touch it.
+
+How should Web3 subscriptions handle this? 👇
+
+#DeFi #Base #USDC @base`,
+    banner: null,
+  },
+  // 3 — How it works, with banner
+  {
+    text: `Web3 subscriptions are broken.
+
+Merchants chase failed payments. Subscribers can\'t verify pulls. Nobody ships reliable recurring crypto payments.
+
+We did — on @base.
+
+Authorize once. Pay forever. Stay in control.
+
+authonce.io
+
+#DeFi #USDC #Base #Web3`,
     banner: 'banner_1_vault_flow',
   },
+  // 4 — Build in public, text-only
   {
-    text: `0.5% flat fee.\n\nSame for every merchant. Same for every token. Same for every tier.\n\nHardcoded on-chain. We cannot change it unilaterally.\n\nStripe Billing charges 0.5% + 0.7%. We charge 0.5%. Full stop.\n\nauthonce.io\n\n#DeFi #USDC #Base`,
+    text: `Building @AuthOnce in public. Here\'s where we are:
+
+✅ Smart contracts on @base — security audited
+✅ Keeper bot running 24/7
+✅ Stripe fiat onramp live
+✅ USDC · USDT · DAI · EURC supported
+✅ Google OAuth subscriber portal
+⏳ Mainnet — Q3 2026
+
+Solo founder. Evenings and weekends.
+
+What would you ship first? 👇
+
+#BuildInPublic #Base #DeFi`,
+    banner: null,
+  },
+  // 5 — Fee comparison, with banner
+  {
+    text: `0.5% flat fee. Hardcoded on-chain.
+
+We cannot raise it. Ever.
+
+The contract enforces a one-way ratchet — fees can only go down, never up.
+
+Stripe Billing: 0.5% + 0.7%
+Unlock Protocol: 1–2%
+AuthOnce: 0.5% flat
+
+Only charged on success. Failed pull = zero fee.
+
+authonce.io
+
+#DeFi #USDC #Base @base`,
     banner: 'banner_2_fee',
   },
+  // 6 — AI agents, question, text-only
   {
-    text: `Web2 subscription billing gives merchants 5 problems:\n\n✗ Store card numbers (PCI scope)\n✗ Chase failed payments manually\n✗ Refund disputes + chargebacks\n✗ Subscribers can't verify pulls\n✗ Price changes without notice\n\nAuthOnce removes all five.\n\nauthonce.io\n\n#Web3 #DeFi #Base`,
+    text: `AI agents will need to pay for subscriptions autonomously.
+
+An agent that pays for its own API access, renews its own tools, manages its own recurring costs — no human in the loop.
+
+This needs ERC-1271. @AuthOnce supports it natively on @base.
+
+Which AI agent frameworks are you most excited about? 👇
+
+#AI #DeFi #Base @coinbase`,
+    banner: null,
+  },
+  // 7 — Pain points vs Web2, with banner
+  {
+    text: `Web2 subscription billing gives you 5 problems.
+
+AuthOnce removes all five.
+
+No card storage. No chargeback disputes. No manual dunning. On-chain price change notice enforced. Subscribers can verify every pull.
+
+This is what recurring payments look like rebuilt from scratch.
+
+authonce.io
+
+#Web3 #DeFi #Base @base`,
     banner: 'banner_3_pain',
   },
+  // 8 — Educational thread-style, text-only
   {
-    text: `The protocol never holds funds.\n\nNot for a second. Not in escrow. Not in a buffer.\n\nFunds move directly: subscriber → merchant.\n\nThis is why we need no custodian licence. Non-custodial by design.\n\nauthonce.io\n\n#DeFi #USDC #Base #Web3`,
+    text: `Why non-custodial matters for subscription payments:
+
+1/ Most crypto payment protocols hold your funds in escrow. That makes them a custodian. Custodians need licences.
+
+2/ AuthOnce never holds funds. Tokens move directly: subscriber → merchant in one atomic on-chain transaction.
+
+3/ This eliminates: custodian licence requirements, counterparty risk, and an entire class of UX complexity.
+
+Non-custodial is not a marketing word. It\'s a legal and architectural decision.
+
+#DeFi #Base #USDC @base`,
+    banner: null,
+  },
+  // 9 — Non-custodial, with banner
+  {
+    text: `The protocol never holds funds.
+
+Not for a second. Not in escrow. Not in a buffer.
+
+Funds move directly: subscriber → merchant.
+
+This is why we need no custodian licence. Non-custodial by design — locked into the architecture forever.
+
+authonce.io
+
+#DeFi #USDC #Base #Web3 @base @jessepollak`,
     banner: 'banner_4_noncustodial',
   },
+  // 10 — Unpopular opinion, drives engagement, text-only
   {
-    text: `Failed payment ≠ lost subscriber.\n\nAuthOnce gives merchants a programmable 1–30 day grace period.\n\nKeeper retries daily. Subscriber gets notified. Most recover.\n\nDunning logic on-chain. No Zapier. No manual intervention.\n\nauthonce.io\n\n#DeFi #Base #USDC`,
+    text: `Unpopular opinion:
+
+Most Web3 payment projects are not solving payments. They\'re solving token distribution with a payments UI.
+
+Real recurring payments need:
+— Exact amounts (not streams)
+— Grace periods (not instant cuts)
+— Subscriber control (not merchant control)
+— On-chain dunning (not Zapier)
+
+Very few have all four.
+
+What am I missing? 👇
+
+#DeFi #Web3 #Base @base`,
+    banner: null,
+  },
+  // 11 — Grace period / dunning, with banner
+  {
+    text: `Failed payment ≠ lost subscriber.
+
+Most protocols cancel instantly on failure.
+
+AuthOnce gives merchants a programmable 1–30 day grace period. Keeper retries daily. Subscriber gets notified. Most recover.
+
+Dunning logic. On-chain. No Zapier. No manual intervention.
+
+authonce.io
+
+#DeFi #Base #USDC @base`,
     banner: 'banner_5_grace',
   },
+  // 12 — Poll / multi-token, with banner
   {
-    text: `Four stablecoins. One protocol.\n\nUSAUSDC · USDT · DAI · EURC\n\nSubscriber picks their token at signup. Locked for the life of the subscription. Merchant receives exactly what was agreed.\n\nWETH + cbBTC coming in v6.\n\nauthonce.io\n\n#DeFi #Base #USDC #EURC`,
+    text: `Quick question for the crypto community:
+
+If you paid for a recurring subscription in crypto, which stablecoin would you use?
+
+🔵 USDC
+🟢 USDT
+🟡 DAI
+🔴 EURC
+
+AuthOnce supports all four. Subscriber picks at signup.
+
+Drop your answer below 👇
+
+authonce.io
+
+#DeFi #Base #USDC @base @coinbase`,
     banner: 'banner_6_multitoken',
   },
 ];
@@ -85,20 +257,23 @@ async function post() {
   const state = getState();
   const item = POSTS[state.index % POSTS.length];
 
-  console.log(`[x-bot] Posting item ${state.index % POSTS.length}: ${item.banner}`);
+  console.log(`[x-bot] Posting item ${state.index % POSTS.length}: ${item.banner || 'text-only'}`);
 
   try {
-    // Convert SVG banner to PNG
-    const pngBuffer = await svgToPng(BANNERS[item.banner]);
+    let tweet;
 
-    // Upload media
-    const mediaId = await client.v1.uploadMedia(pngBuffer, { mimeType: 'image/png' });
-
-    // Post tweet with media
-    const tweet = await client.v2.tweet({
-      text: item.text,
-      media: { media_ids: [mediaId] },
-    });
+    if (item.banner && BANNERS[item.banner]) {
+      // Image post
+      const pngBuffer = await svgToPng(BANNERS[item.banner]);
+      const mediaId   = await client.v1.uploadMedia(pngBuffer, { mimeType: 'image/png' });
+      tweet = await client.v2.tweet({
+        text: item.text,
+        media: { media_ids: [mediaId] },
+      });
+    } else {
+      // Text-only post
+      tweet = await client.v2.tweet({ text: item.text });
+    }
 
     console.log(`[x-bot] Posted: https://x.com/AuthOnce/status/${tweet.data.id}`);
 
