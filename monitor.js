@@ -7,9 +7,9 @@
 //  Environment variables (set in Railway monitor service):
 //    BASE_SEPOLIA_RPC_URL   — https://sepolia.base.org
 //    BASE_MAINNET_RPC_URL   — https://mainnet.base.org
-//    RESEND_API_KEY         — your Resend API key
+//    RESEND_API_KEY         — re_ErugsLVR_Hhu7nWWdMsqD4BmmywBFwPC6
 //    ALERT_EMAIL            — vasco@authonce.io
-//    AUTHORIZED_DEPLOYER    — 0x44444D60136Cf62804963fA14d62a55c34a96f8F
+//    AUTHORIZED_DEPLOYER    — 0xDcbFdDD5d849271D984867f682204B43B5eBBD40
 // =============================================================================
 
 require("dotenv").config();
@@ -18,7 +18,7 @@ const { Resend }  = require("resend");
 
 const AUTHORIZED_DEPLOYER = (
     process.env.AUTHORIZED_DEPLOYER ||
-    "0x44444D60136Cf62804963fA14d62a55c34a96f8F"
+    "0xDcbFdDD5d849271D984867f682204B43B5eBBD40"
 ).toLowerCase();
 
 const ALERT_EMAIL  = process.env.ALERT_EMAIL  || "vasco@authonce.io";
