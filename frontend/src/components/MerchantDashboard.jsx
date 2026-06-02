@@ -427,11 +427,18 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     : 0;
 
   const toggleMethod = (method) => {
+    // "crypto" base method cannot be removed — always required for crypto wallet payments
     if (method === "crypto") return;
     setPaymentMethods(prev =>
       prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]
     );
   };
+
+  // Ensure "crypto" is always in paymentMethods (crypto wallet is always enabled)
+  // and USDC is always included as a token
+  const effectivePaymentMethods = paymentMethods.includes("crypto")
+    ? paymentMethods
+    : ["crypto", ...paymentMethods];
 
   const handleAdd = async () => {
     if (!name || !amount) return;
@@ -446,22 +453,28 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
         body: JSON.stringify({
           name,
-          amount:            priceType === "crypto" ? parseFloat(amount) : 0,
+          // For fiat price type, send fiat_price as amount so API validation passes
+          // API uses fiat_price for actual billing; amount field holds USDC equivalent
+          amount:            priceType === "crypto" ? parseFloat(amount) : parseFloat(fiatPrice || 0),
           interval:          intervalMap[interval],
           intro_amount:      hasIntro  ? parseFloat(introAmount)  : 0,
           intro_pulls:       hasIntro  ? parseInt(introPulls)     : 0,
           yearly_amount:     hasYearly && priceType === "crypto" ? parseFloat(yearlyAmount) : null,
-          payment_methods:   paymentMethods,
+          payment_methods:   effectivePaymentMethods,
           price_type:        priceType,
           fiat_currency:     fiatCurrency,
           fiat_price:        priceType === "fiat" ? parseFloat(fiatPrice) : null,
           fiat_yearly_price: priceType === "fiat" && hasYearly ? parseFloat(fiatYearlyPrice) : null,
         }),
       });
-      if (!res.ok) throw new Error("Failed to create product");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData.message || errData.error || "Failed to create product";
+        throw new Error(msg);
+      }
       onAdded();
       onClose();
-    } catch { alert("Could not create product. Please try again."); }
+    } catch (err) { alert(err.message || "Could not create product. Please try again."); }
     finally { setSaving(false); }
   };
 

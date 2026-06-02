@@ -930,25 +930,31 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
         });
       }
     }
-    if (!name || !amount || !interval) {
-      return res.status(400).json({ error: "missing_fields", message: "name, amount, interval required." });
+    if (!name || !interval) {
+      return res.status(400).json({ error: "missing_fields", message: "name, interval required." });
     }
     if (!["weekly", "monthly", "yearly"].includes(interval)) {
       return res.status(400).json({ error: "invalid_interval", message: "interval must be weekly, monthly, or yearly." });
     }
-    if (isNaN(amount) || parseFloat(amount) <= 0) {
+    // For fiat price type, validate fiat_price instead of amount
+    const effectiveAmount = price_type === "fiat" ? fiat_price : amount;
+    if (!effectiveAmount || isNaN(effectiveAmount) || parseFloat(effectiveAmount) <= 0) {
       return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
     }
+    // For fiat products, set amount to fiat_price so DB constraint passes
+    const finalAmount = price_type === "fiat" ? parseFloat(fiat_price) : parseFloat(amount);
 
     const trialDays      = Math.min(Math.max(parseInt(trial_days)    || 0, 0), 90);
-    const introAmount    = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), parseFloat(amount));
+    const introAmount    = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), finalAmount);
     const introPulls     = Math.min(Math.max(parseInt(intro_pulls)    || 0, 0), 12);
     const yearlyAmount   = yearly_amount && parseFloat(yearly_amount) > 0 ? parseFloat(yearly_amount) : null;
     const paymentMethods = Array.isArray(payment_methods) && payment_methods.length > 0
-      ? payment_methods.filter(m => ["crypto","card","sepa","ideal","bancontact","eps","klarna","blik","mbway","multibanco"].includes(m))
+      ? payment_methods.filter(m => ["crypto","card","sepa","ideal","bancontact","eps","klarna","blik","mbway","multibanco","usdc","usdt","dai","eurc"].includes(m))
       : ["crypto"];
+    // Ensure crypto is always in payment methods for crypto-wallet subscriptions
+    const finalPaymentMethods = paymentMethods.includes("crypto") ? paymentMethods : ["crypto", ...paymentMethods];
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const product = await db.upsertProduct(address, { slug, name, amount: parseFloat(amount), interval, trialDays, introAmount, introPulls, yearlyAmount, paymentMethods });
+    const product = await db.upsertProduct(address, { slug, name, amount: finalAmount, interval, trialDays, introAmount, introPulls, yearlyAmount, paymentMethods: finalPaymentMethods, price_type, fiat_currency, fiat_price: fiat_price ? parseFloat(fiat_price) : null, fiat_yearly_price: fiat_yearly_price ? parseFloat(fiat_yearly_price) : null });
 
     console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (methods: ${paymentMethods.join(",")})`);
     res.status(201).json({
