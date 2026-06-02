@@ -1,6 +1,10 @@
 // src/components/MerchantDashboard.jsx — Visual redesign May 2026
 // Logic: unchanged. Visual: full overhaul — sidebar nav, consistent tokens, both themes.
 import { useState, useEffect, useCallback } from "react";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 import { useWriteContract } from "wagmi";
 import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http, fallback } from "viem";
@@ -202,50 +206,245 @@ function Sidebar({ tab, setTab, onPaymentsClick, activeSubs, totalMRR, products,
   );
 }
 
-// ─── MRR Chart ────────────────────────────────────────────────────────────────
-function MRRChart({ payments }) {
-  if (!payments || payments.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)", fontSize: 12 }}>
-        No payment data yet. Chart appears after first pull.
-      </div>
-    );
-  }
-  const now    = new Date();
-  const months = Array.from({ length: 24 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (23 - i), 1);
-    return {
-      key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: i % 4 === 0 ? d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) : "",
-      total: 0,
-    };
-  });
-  payments.forEach(p => {
-    const key    = p.executed_at?.slice(0, 7);
-    const bucket = months.find(m => m.key === key);
-    if (bucket) bucket.total += parseFloat(p.merchant_received_usdc || 0);
-  });
-  const max    = Math.max(...months.map(m => m.total), 1);
-  const chartH = 120;
+// ─── Analytics Panel ──────────────────────────────────────────────────────────
+// Full MRR + GTV analytics with Recharts. Fetches from /api/merchants/:address/analytics.
+// Replaces the old hand-rolled MRRChart.
+
+const RANGE_OPTIONS = [
+  { id: "30d", label: "30d" },
+  { id: "6m",  label: "6M"  },
+  { id: "12m", label: "12M" },
+  { id: "24m", label: "All" },
+];
+
+// Custom tooltip shared by both charts
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
   return (
-    <div style={{ width: "100%", overflowX: "auto" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: chartH + 28, paddingBottom: 24, position: "relative", minWidth: 480 }}>
-        {months.map((m, i) => {
-          const isLast = i === 23;
-          const barH   = Math.max((m.total / max) * chartH, m.total > 0 ? 4 : 0);
-          return (
-            <div key={m.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
-              {m.total > 0 && <div style={{ fontSize: 9, color: "var(--green)", fontFamily: "monospace", marginBottom: 2 }}>${m.total.toFixed(0)}</div>}
-              <div style={{
-                width: "100%", height: barH,
-                background: isLast ? "var(--green)" : `rgba(29,158,117,${0.12 + (i / 23) * 0.35})`,
-                borderRadius: "3px 3px 0 0", transition: "height 0.3s ease",
-              }} />
-              {m.label && <div style={{ fontSize: 8, color: "var(--text-muted)", position: "absolute", bottom: 0 }}>{m.label}</div>}
-            </div>
-          );
-        })}
+    <div style={{
+      background: "var(--bg-card)", border: "0.5px solid var(--border)",
+      borderRadius: 8, padding: "10px 14px", boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+      fontSize: 12,
+    }}>
+      <div style={{ color: "var(--text-muted)", marginBottom: 6, fontSize: 11 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />
+          <span style={{ color: "var(--text-secondary)" }}>{p.name}</span>
+          <span style={{ color: "var(--text-primary)", fontWeight: 700, fontFamily: "monospace", marginLeft: "auto", paddingLeft: 16 }}>
+            ${parseFloat(p.value || 0).toFixed(2)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Stat pill inside the analytics panel
+function AnalyticsStat({ label, value, sub, color }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+      <span style={{ fontSize: 20, fontWeight: 700, color: color || "var(--text-primary)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.02em", lineHeight: 1.1 }}>{value}</span>
+      {sub && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{sub}</span>}
+    </div>
+  );
+}
+
+function AnalyticsPanel({ address }) {
+  const [range, setRange]         = useState("12m");
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [activeChart, setActiveChart] = useState("mrr"); // "mrr" | "gtv"
+
+  useEffect(() => {
+    if (!address) return;
+    setLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/api/merchants/${address}/analytics?range=${range}`, {
+      headers: { "X-Merchant-Address": address },
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(d => { setData(d); setLoading(false); })
+      .catch(err => { setError(err.message); setLoading(false); });
+  }, [address, range]);
+
+  // Format month key "2026-05" → "May" or "May '26"
+  const fmtMonth = (key, short = false) => {
+    if (!key) return "";
+    const [y, m] = key.split("-");
+    const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+    if (short) return d.toLocaleDateString("en-GB", { month: "short" });
+    return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+  };
+
+  // Build chart data — label every month for short ranges, every other for long
+  const chartData = (data?.months || []).map((m, i, arr) => ({
+    ...m,
+    label: arr.length <= 6 ? fmtMonth(m.month, true) : (i % 2 === 0 ? fmtMonth(m.month) : ""),
+    mrr_display:  parseFloat(m.mrr_usdc   || 0),
+    gtv_display:  parseFloat(m.gtv_usdc   || 0),
+    net_display:  parseFloat(m.net_usdc   || 0),
+    fee_display:  parseFloat(m.fee_usdc   || 0),
+  }));
+
+  const s = data?.summary;
+
+  const GREEN       = "#1D9E75";
+  const GREEN_FADE  = "rgba(29,158,117,0.08)";
+  const BLUE        = "#3b82f6";
+  const BLUE_FADE   = "rgba(59,130,246,0.08)";
+  const RED         = "#f87171";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+      {/* Header row: stat pills + range toggle */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+          <AnalyticsStat
+            label="MRR"
+            value={s ? `$${parseFloat(s.current_mrr).toFixed(2)}` : "—"}
+            sub="monthly recurring"
+            color={GREEN}
+          />
+          <AnalyticsStat
+            label="GTV"
+            value={s ? `$${parseFloat(s.total_gtv).toFixed(2)}` : "—"}
+            sub="all-time gross volume"
+          />
+          <AnalyticsStat
+            label="Net Revenue"
+            value={s ? `$${parseFloat(s.total_net).toFixed(2)}` : "—"}
+            sub="after 0.5% fee"
+            color={GREEN}
+          />
+          <AnalyticsStat
+            label="Active Subs"
+            value={s?.active_subs ?? "—"}
+            sub={s?.churn_rate_pct != null ? `${s.churn_rate_pct}% churn rate` : ""}
+          />
+        </div>
+
+        {/* Range toggle */}
+        <div style={{ display: "flex", gap: 4, background: "var(--bg-tag)", padding: 3, borderRadius: 8, border: "0.5px solid var(--border)", alignSelf: "flex-start" }}>
+          {RANGE_OPTIONS.map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setRange(opt.id)}
+              style={{
+                padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+                fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+                background: range === opt.id ? "var(--bg-card)" : "transparent",
+                color: range === opt.id ? "var(--text-primary)" : "var(--text-muted)",
+                boxShadow: range === opt.id ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                transition: "all 0.15s",
+              }}
+            >{opt.label}</button>
+          ))}
+        </div>
       </div>
+
+      {/* Chart type tabs */}
+      <div style={{ display: "flex", gap: 0, borderBottom: "0.5px solid var(--border)", marginBottom: 20 }}>
+        {[
+          { id: "mrr", label: "MRR over time" },
+          { id: "gtv", label: "GTV & revenue" },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveChart(t.id)}
+            style={{
+              padding: "8px 16px", border: "none", background: "transparent",
+              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+              color: activeChart === t.id ? GREEN : "var(--text-muted)",
+              borderBottom: `2px solid ${activeChart === t.id ? GREEN : "transparent"}`,
+              marginBottom: -1, transition: "all 0.15s",
+            }}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      {/* Chart area */}
+      {loading ? (
+        <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
+          Loading analytics…
+        </div>
+      ) : error ? (
+        <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: RED, fontSize: 12 }}>
+          Could not load analytics: {error}
+        </div>
+      ) : chartData.length === 0 || chartData.every(d => d.mrr_display === 0 && d.gtv_display === 0) ? (
+        <div style={{ height: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", gap: 8 }}>
+          <div style={{ fontSize: 28, opacity: 0.2 }}>◎</div>
+          <div style={{ fontSize: 13 }}>No payment data yet</div>
+          <div style={{ fontSize: 11 }}>Charts will appear after the first keeper pull.</div>
+        </div>
+      ) : activeChart === "mrr" ? (
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={GREEN} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={GREEN} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)", fontFamily: "inherit" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--text-muted)", fontFamily: "inherit" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} width={52} />
+            <Tooltip content={<ChartTooltip />} />
+            <Area type="monotone" dataKey="mrr_display" name="MRR" stroke={GREEN} strokeWidth={2} fill="url(#mrrGrad)" dot={false} activeDot={{ r: 4, fill: GREEN, strokeWidth: 0 }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)", fontFamily: "inherit" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--text-muted)", fontFamily: "inherit" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} width={52} />
+            <Tooltip content={<ChartTooltip />} />
+            <Legend
+              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value) => <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{value}</span>}
+            />
+            <Bar dataKey="gtv_display" name="GTV"         fill={BLUE}  fillOpacity={0.7} radius={[3,3,0,0]} maxBarSize={28} />
+            <Bar dataKey="net_display" name="Net revenue" fill={GREEN} fillOpacity={0.85} radius={[3,3,0,0]} maxBarSize={28} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* Active subscriber trend below charts */}
+      {!loading && !error && chartData.some(d => d.active_count > 0) && (
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: "0.5px solid var(--border)" }}>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+            Active subscribers by month
+          </div>
+          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 48 }}>
+            {chartData.map((d, i) => {
+              const max = Math.max(...chartData.map(m => m.active_count), 1);
+              const h   = Math.max((d.active_count / max) * 44, d.active_count > 0 ? 3 : 0);
+              const isLast = i === chartData.length - 1;
+              return (
+                <div key={d.month} title={`${d.label || d.month}: ${d.active_count} active`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+                  <div style={{
+                    width: "100%", height: h,
+                    background: isLast ? GREEN : `rgba(29,158,117,${0.15 + (i / chartData.length) * 0.5})`,
+                    borderRadius: "2px 2px 0 0", transition: "height 0.4s ease",
+                  }} />
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{chartData[0]?.label || ""}</span>
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{chartData[chartData.length - 1]?.label || "Now"}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1235,24 +1434,9 @@ export default function MerchantDashboard({ address }) {
         {tab === "overview" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
-            {/* MRR chart */}
+            {/* Analytics panel */}
             <div style={{ ...S.card, gridColumn: "1 / -1" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <span style={S.label}>Revenue — last 24 months (USDC)</span>
-                <div style={{ display: "flex", gap: 24 }}>
-                  {[
-                    { label: "Gross", value: `$${totalRevenue.toFixed(2)}`, color: "var(--text-primary)" },
-                    { label: "Fee",   value: `-$${protocolFee.toFixed(4)}`, color: "var(--red)" },
-                    { label: "Net",   value: `$${netRevenue.toFixed(2)}`,   color: "var(--green)" },
-                  ].map(r => (
-                    <div key={r.label} style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{r.label}</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: r.color, fontFamily: "monospace" }}>{r.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <MRRChart payments={payments} />
+              <AnalyticsPanel address={address} />
             </div>
 
             {/* Subscriber breakdown */}

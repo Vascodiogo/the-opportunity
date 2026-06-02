@@ -450,6 +450,169 @@ app.get("/api/merchants/:address", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// GET /api/merchants/:address/analytics
+// Returns monthly MRR, GTV, active subscriber counts, and churn events for
+// the merchant's dashboard charts. Supports ?range=30d|6m|12m (default 12m).
+//
+// MRR definition: annualised monthly-equivalent of active subscription amounts.
+//   weekly  → amount × 4.33
+//   monthly → amount
+//   yearly  → amount / 12
+//
+// GTV: gross transaction volume (sum of payment amounts before protocol fee).
+// Net revenue: GTV × 0.995 (after 0.5% protocol fee).
+// Churn: subscriptions whose status changed to cancelled/expired in the period.
+// -----------------------------------------------------------------------------
+app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    // Determine bucketing window
+    const range = req.query.range || "12m";
+    let months = 12;
+    if (range === "6m")  months = 6;
+    if (range === "30d") months = 1;
+    if (range === "24m") months = 24;
+
+    // ── Monthly GTV + payment count ────────────────────────────────────────
+    const gtvResult = await db.pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', executed_at), 'YYYY-MM') AS month,
+        COUNT(*)::int                                          AS payment_count,
+        COALESCE(SUM(amount::numeric)      / 1e6, 0)          AS gtv_usdc,
+        COALESCE(SUM(merchant_received::numeric) / 1e6, 0)    AS net_usdc,
+        COALESCE(SUM(fee::numeric)         / 1e6, 0)          AS fee_usdc
+      FROM payments
+      WHERE LOWER(merchant_address) = $1
+        AND executed_at >= NOW() - ($2 || ' months')::interval
+      GROUP BY month
+      ORDER BY month ASC
+    `, [address, months]);
+
+    // ── Snapshot of active subscriptions at end of each month ─────────────
+    // We approximate MRR by looking at subscriptions that were active during
+    // each month bucket (created before month end, not cancelled before month start).
+    const mrrResult = await db.pool.query(`
+      WITH months AS (
+        SELECT generate_series(
+          DATE_TRUNC('month', NOW() - ($2 || ' months')::interval),
+          DATE_TRUNC('month', NOW()),
+          '1 month'::interval
+        ) AS month_start
+      )
+      SELECT
+        TO_CHAR(m.month_start, 'YYYY-MM') AS month,
+        COUNT(s.id)::int                  AS active_count,
+        COALESCE(SUM(
+          CASE s.interval
+            WHEN 'weekly'  THEN (s.amount::numeric / 1e6) * 4.33
+            WHEN 'yearly'  THEN (s.amount::numeric / 1e6) / 12
+            ELSE                (s.amount::numeric / 1e6)
+          END
+        ), 0)                             AS mrr_usdc
+      FROM months m
+      LEFT JOIN subscriptions s
+        ON LOWER(s.merchant_address) = $1
+       AND s.created_at < m.month_start + INTERVAL '1 month'
+       AND (s.status = 'active' OR (
+             s.status IN ('cancelled','expired')
+             AND s.updated_at > m.month_start + INTERVAL '1 month'
+           ))
+      GROUP BY m.month_start
+      ORDER BY m.month_start ASC
+    `, [address, months]);
+
+    // ── Churn events per month ─────────────────────────────────────────────
+    const churnResult = await db.pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', updated_at), 'YYYY-MM') AS month,
+        COUNT(*)::int AS churned
+      FROM subscriptions
+      WHERE LOWER(merchant_address) = $1
+        AND status IN ('cancelled', 'expired')
+        AND updated_at >= NOW() - ($2 || ' months')::interval
+      GROUP BY month
+      ORDER BY month ASC
+    `, [address, months]);
+
+    // ── All-time summary stats ─────────────────────────────────────────────
+    const summaryResult = await db.pool.query(`
+      SELECT
+        COUNT(DISTINCT CASE WHEN status = 'active'  THEN id END)::int AS active_subs,
+        COUNT(DISTINCT CASE WHEN status = 'paused'  THEN id END)::int AS paused_subs,
+        COUNT(DISTINCT id)::int                                        AS total_subs,
+        COUNT(DISTINCT CASE WHEN status IN ('cancelled','expired') THEN id END)::int AS churned_total
+      FROM subscriptions
+      WHERE LOWER(merchant_address) = $1
+    `, [address]);
+
+    const paymentSummaryResult = await db.pool.query(`
+      SELECT
+        COUNT(*)::int                                      AS total_payments,
+        COALESCE(SUM(amount::numeric)      / 1e6, 0)      AS total_gtv,
+        COALESCE(SUM(merchant_received::numeric) / 1e6, 0) AS total_net,
+        COALESCE(SUM(fee::numeric)         / 1e6, 0)      AS total_fees
+      FROM payments
+      WHERE LOWER(merchant_address) = $1
+    `, [address]);
+
+    // ── Merge MRR + GTV buckets by month ──────────────────────────────────
+    const mrrByMonth   = Object.fromEntries(mrrResult.rows.map(r => [r.month, r]));
+    const gtvByMonth   = Object.fromEntries(gtvResult.rows.map(r => [r.month, r]));
+    const churnByMonth = Object.fromEntries(churnResult.rows.map(r => [r.month, r.churned]));
+
+    // Build complete month list for the range (fill gaps with zeros)
+    const allMonths = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      allMonths.push({
+        month:         key,
+        mrr_usdc:      parseFloat(mrrByMonth[key]?.mrr_usdc || 0),
+        active_count:  parseInt(mrrByMonth[key]?.active_count || 0),
+        gtv_usdc:      parseFloat(gtvByMonth[key]?.gtv_usdc || 0),
+        net_usdc:      parseFloat(gtvByMonth[key]?.net_usdc || 0),
+        fee_usdc:      parseFloat(gtvByMonth[key]?.fee_usdc || 0),
+        payment_count: parseInt(gtvByMonth[key]?.payment_count || 0),
+        churned:       parseInt(churnByMonth[key] || 0),
+      });
+    }
+
+    const summary   = summaryResult.rows[0];
+    const paySum    = paymentSummaryResult.rows[0];
+    const totalMRR  = allMonths.length ? allMonths[allMonths.length - 1].mrr_usdc : 0;
+    const churnRate = summary.active_subs + summary.churned_total > 0
+      ? (summary.churned_total / (summary.active_subs + summary.churned_total) * 100).toFixed(1)
+      : "0.0";
+
+    res.json({
+      range,
+      months: allMonths,
+      summary: {
+        active_subs:    summary.active_subs,
+        paused_subs:    summary.paused_subs,
+        total_subs:     summary.total_subs,
+        churned_total:  summary.churned_total,
+        churn_rate_pct: parseFloat(churnRate),
+        current_mrr:    parseFloat(totalMRR).toFixed(2),
+        total_gtv:      parseFloat(paySum.total_gtv).toFixed(2),
+        total_net:      parseFloat(paySum.total_net).toFixed(2),
+        total_fees:     parseFloat(paySum.total_fees).toFixed(4),
+        total_payments: paySum.total_payments,
+      },
+    });
+  } catch (err) {
+    console.error("[API] Analytics error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // PUT /api/merchants/:address
 // -----------------------------------------------------------------------------
 app.put("/api/merchants/:address", async (req, res) => {
