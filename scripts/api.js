@@ -37,7 +37,7 @@ const { Resend }       = require("resend");
 const resend           = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const app  = express();
-const PORT = process.env.API_PORT || 3001;
+const PORT = process.env.PORT || process.env.API_PORT || 3001;
 
 // Admin config
 const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    || "vasco@authonce.io";
