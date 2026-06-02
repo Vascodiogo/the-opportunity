@@ -1182,6 +1182,11 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
     };
     const stripePaymentMethods = stripeMethodMap[payment_method] || ["card"];
 
+    // AuthOnce 0.5% protocol fee collected via Stripe application_fee_amount
+    // Routes automatically to AuthOnce Stripe platform account on every fiat payment
+    // Minimum 1 unit to avoid Stripe rejection on very small amounts
+    const applicationFeeAmount = Math.max(1, Math.round(stripeAmount * 0.005));
+
     // Create Stripe Checkout session on merchant's connected account
     const session = await stripe.checkout.sessions.create({
       payment_method_types: stripePaymentMethods,
@@ -1197,14 +1202,18 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
         quantity: 1,
       }],
       mode: "payment",
+      payment_intent_data: {
+        application_fee_amount: applicationFeeAmount,
+      },
       success_url: success_url || `${process.env.FRONTEND_URL || "https://authonce.io"}/pay/${address}/${product_slug}?checkout=success`,
       cancel_url:  cancel_url  || `${process.env.FRONTEND_URL || "https://authonce.io"}/pay/${address}/${product_slug}`,
       metadata: {
-        merchant_address: address,
-        product_slug:     product_slug,
-        payment_method:   payment_method,
-        interval:         interval || product.interval,
-        authonce_protocol: "v5",
+        merchant_address:       address,
+        product_slug:           product_slug,
+        payment_method:         payment_method,
+        interval:               interval || product.interval,
+        authonce_protocol:      "v6",
+        application_fee_amount: String(applicationFeeAmount),
       },
     }, {
       stripeAccount: merchant.stripe_account_id,

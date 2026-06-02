@@ -418,6 +418,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [fiatPrice, setFiatPrice]       = useState("");
   const [fiatYearlyPrice, setFiatYearlyPrice] = useState("");
   const [saving, setSaving]             = useState(false);
+  const [errors, setErrors]             = useState({});
 
   const intervalLabel  = { "0": "week", "1": "month", "2": "year" };
   const currencySymbol = getCurrencySymbol(fiatCurrency);
@@ -440,11 +441,33 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     ? paymentMethods
     : ["crypto", ...paymentMethods];
 
+  // Validate all fields before submitting — no API call if form is invalid
+  const validate = () => {
+    const e = {};
+    if (!name.trim())                                              e.name        = "Product name is required";
+    if (name.trim().length > 100)                                  e.name        = "Name must be under 100 characters";
+    if (priceType === "crypto") {
+      if (!amount || isNaN(amount) || parseFloat(amount) <= 0)    e.amount      = "Enter a valid price";
+      if (parseFloat(amount) > 1000000)                           e.amount      = "Price too high (max 1,000,000)";
+    } else {
+      if (!fiatPrice || isNaN(fiatPrice) || parseFloat(fiatPrice) <= 0) e.amount = "Enter a valid price";
+    }
+    if (hasIntro) {
+      if (!introAmount || parseFloat(introAmount) <= 0)            e.introAmount = "Enter a valid intro price";
+      const mainPrice = priceType === "crypto" ? parseFloat(amount) : parseFloat(fiatPrice);
+      if (parseFloat(introAmount) >= mainPrice)                    e.introAmount = "Intro price must be less than full price";
+    }
+    if (hasYearly) {
+      if (priceType === "crypto" && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) e.yearlyAmount = "Enter a valid yearly price";
+      if (priceType === "fiat"   && (!fiatYearlyPrice || parseFloat(fiatYearlyPrice) <= 0)) e.yearlyAmount = "Enter a valid yearly price";
+    }
+    return e;
+  };
+
   const handleAdd = async () => {
-    if (!name || !amount) return;
-    if (hasIntro && (!introAmount || parseFloat(introAmount) <= 0)) { alert("Please enter a valid intro price."); return; }
-    if (hasIntro && parseFloat(introAmount) > parseFloat(amount)) { alert("Intro price cannot be higher than the full price."); return; }
-    if (hasYearly && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) { alert("Please enter a valid yearly price."); return; }
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
     setSaving(true);
     try {
       const intervalMap = { "0": "weekly", "1": "monthly", "2": "yearly" };
@@ -469,12 +492,21 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        const msg = errData.message || errData.error || "Failed to create product";
-        throw new Error(msg);
+        // Show specific field error if API returns one, otherwise generic
+        if (errData.error === "missing_fields") {
+          setErrors({ name: "Please fill in all required fields" });
+        } else if (errData.error === "volatile_token") {
+          setErrors({ tokens: "Selected token not supported yet" });
+        } else {
+          setErrors({ general: "Could not save product. Please try again." });
+        }
+        return;
       }
       onAdded();
       onClose();
-    } catch (err) { alert(err.message || "Could not create product. Please try again."); }
+    } catch (err) {
+      setErrors({ general: "Connection error. Please check your network and try again." });
+    }
     finally { setSaving(false); }
   };
 
@@ -488,7 +520,13 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
             <label style={S.label}>Product name</label>
-            <input placeholder="Pro Plan" value={name} onChange={e => setName(e.target.value)} />
+            <input
+              placeholder="Pro Plan"
+              value={name}
+              onChange={e => { setName(e.target.value.replace(/[^a-zA-Z0-9 \-\.]/g, "")); setErrors(prev => ({ ...prev, name: undefined })); }}
+              style={{ borderColor: errors.name ? "var(--red)" : undefined }}
+            />
+            {errors.name && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.name}</div>}
           </div>
           {/* Price type toggle */}
           <div>
@@ -515,7 +553,13 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <label style={S.label}>Price (USDC)</label>
-                <input type="number" placeholder="29.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                <input
+                  type="number" placeholder="29.00" min="0.01" step="0.01"
+                  value={amount}
+                  onChange={e => { setAmount(e.target.value); setErrors(prev => ({ ...prev, amount: undefined })); }}
+                  style={{ borderColor: errors.amount ? "var(--red)" : undefined }}
+                />
+                {errors.amount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.amount}</div>}
               </div>
               <div>
                 <label style={S.label}>Billing interval</label>
@@ -696,6 +740,11 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             </div>
           )}
 
+          {errors.general && (
+            <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 12, color: "var(--red)" }}>
+              {errors.general}
+            </div>
+          )}
           <button onClick={handleAdd} disabled={saving} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1 }}>
             {saving ? "Saving..." : "Create Product"}
           </button>

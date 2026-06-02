@@ -5,6 +5,8 @@
   },
   "deploy": {
     "startCommand": "node scripts/keeper.js & node scripts/notifier.js & node scripts/api.js & node scripts/x-bot.js",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 30,
     "restartPolicyType": "ALWAYS"
   }
 }
