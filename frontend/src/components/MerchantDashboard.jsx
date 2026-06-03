@@ -967,16 +967,36 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   const [introPulls, setIntroPulls]   = useState(product.intro_pulls > 0 ? String(product.intro_pulls) : "1");
   const [hasYearly, setHasYearly]     = useState(!!product.yearly_amount);
   const [yearlyAmount, setYearlyAmount] = useState(product.yearly_amount ? product.yearly_amount.toFixed(2) : "");
-  const [paymentMethods, setPaymentMethods] = useState(product.payment_methods || ["crypto"]);
+  // Separate crypto tokens from fiat payment methods
+  const CRYPTO_TOKENS = ["usdc", "usdt", "dai", "eurc"];
+  const initialMethods = product.payment_methods || ["crypto"];
+  const [cryptoTokens, setCryptoTokens]   = useState(
+    initialMethods.filter(m => CRYPTO_TOKENS.includes(m)).length > 0
+      ? initialMethods.filter(m => CRYPTO_TOKENS.includes(m))
+      : ["usdc"]
+  );
+  const [paymentMethods, setPaymentMethods] = useState(
+    initialMethods.filter(m => !CRYPTO_TOKENS.includes(m) && m !== "crypto") 
+  );
   const [saving, setSaving]           = useState(false);
 
   const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
   const yearlyDiscount   = amount && yearlyAmount
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100) : 0;
 
+  const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "dai", "eurc"];
+
   const toggleMethod = (method) => {
     if (method === "crypto") return;
-    setPaymentMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+    if (CRYPTO_TOKEN_IDS.includes(method)) {
+      // Toggle crypto token — at least one must remain selected
+      setCryptoTokens(prev => {
+        if (prev.includes(method) && prev.length === 1) return prev; // keep at least one
+        return prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method];
+      });
+    } else {
+      setPaymentMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+    }
   };
 
   const handleSave = async () => {
@@ -994,7 +1014,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
           intro_amount:  hasIntro  ? parseFloat(introAmount) : 0,
           intro_pulls:   hasIntro  ? parseInt(introPulls)    : 0,
           yearly_amount: hasYearly ? parseFloat(yearlyAmount): null,
-          payment_methods: paymentMethods,
+          payment_methods: ["crypto", ...cryptoTokens, ...paymentMethods],
         }),
       });
       if (!res.ok) throw new Error("Failed to update product");
@@ -1068,28 +1088,58 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
             )}
           </div>
 
+          {/* Crypto tokens */}
           <div>
-            <label style={S.label}>Accept payments via</label>
+            <label style={S.label}>Accepted crypto tokens</label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
               {[
-                { id: "crypto", label: "⬡ USDC (Base)", always: true },
-                { id: "card", label: "💳 Card (Stripe)" },
-                { id: "mbway", label: "📱 MB Way (PT)" },
+                { id: "usdc", label: "⬡ USDC" },
+                { id: "usdt", label: "₮ USDT" },
+                { id: "dai",  label: "◈ DAI" },
+                { id: "eurc", label: "€ EURC" },
+              ].map(({ id, label }) => {
+                const isEnabled = cryptoTokens.includes(id);
+                const isLast = cryptoTokens.length === 1 && isEnabled;
+                return (
+                  <div key={id} onClick={() => !isLast && toggleMethod(id)} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
+                    cursor: isLast ? "default" : "pointer",
+                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
+                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
+                    opacity: isLast ? 0.7 : 1,
+                  }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`, background: isEnabled ? "var(--green)" : "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>Only affects new subscribers — existing subscribers keep their original token.</div>
+          </div>
+
+          {/* Fiat payment methods */}
+          <div>
+            <label style={S.label}>Accept fiat payments via</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {[
+                { id: "card",       label: "💳 Card (Stripe)" },
+                { id: "mbway",      label: "📱 MB Way (PT)" },
                 { id: "multibanco", label: "🏧 Multibanco (PT)" },
-                { id: "ideal", label: "🇳🇱 iDEAL (NL)" },
+                { id: "ideal",      label: "🇳🇱 iDEAL (NL)" },
                 { id: "bancontact", label: "🇧🇪 Bancontact (BE)" },
-                { id: "eps", label: "🇦🇹 EPS (AT)" },
-                { id: "klarna", label: "🛍 Klarna" },
-                { id: "blik", label: "🇵🇱 BLIK (PL)" },
-              ].map(({ id, label, always }) => {
+                { id: "eps",        label: "🇦🇹 EPS (AT)" },
+                { id: "klarna",     label: "🛍 Klarna" },
+                { id: "blik",       label: "🇵🇱 BLIK (PL)" },
+              ].map(({ id, label }) => {
                 const isEnabled = paymentMethods.includes(id);
                 return (
                   <div key={id} onClick={() => toggleMethod(id)} style={{
                     display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
-                    cursor: always ? "default" : "pointer",
+                    cursor: "pointer",
                     border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
                     background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                    opacity: always ? 0.7 : 1,
                   }}>
                     <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`, background: isEnabled ? "var(--green)" : "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
