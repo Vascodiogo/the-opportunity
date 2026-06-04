@@ -250,8 +250,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
   };
 
   return (
-    <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+    <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
       <style>{`
         @media (max-width: 768px) {
           .ao-hero-content { padding: 80px 24px 60px !important; }

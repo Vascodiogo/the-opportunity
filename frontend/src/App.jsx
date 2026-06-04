@@ -143,8 +143,7 @@ export default function App() {
 
   if (!isConnected && showApp) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 24, padding: 24, background: isDark ? "#080c14" : "#f8fafc", fontFamily: "'DM Sans', sans-serif" }}>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 24, padding: 24, background: isDark ? "#080c14" : "#f8fafc", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
         <div style={{ position: "absolute", top: 20, right: 24, display: "flex", gap: 10 }}>
           <button onClick={() => setShowApp(false)} style={{ background: "none", border: `0.5px solid ${borderColor}`, borderRadius: 6, padding: "6px 12px", cursor: "pointer", color: textMuted, fontSize: 12 }}>← {lang === "en" ? "Back" : "Voltar"}</button>
           <button onClick={toggleTheme} style={{ background: "none", border: `0.5px solid ${borderColor}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14 }}>{isDark ? "☀️" : "🌙"}</button>
@@ -169,8 +168,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: isDark ? "#080c14" : "#f8fafc", fontFamily: "'DM Sans', sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <div style={{ minHeight: "100vh", background: isDark ? "#080c14" : "#f8fafc", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 58, borderBottom: `0.5px solid ${borderColor}`, background: navBg, backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img src="/logo.svg" alt="AuthOnce" style={{ width: 28, height: 28 }} />

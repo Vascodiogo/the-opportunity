@@ -36,9 +36,8 @@ export default function AdminLogin({ onLogin, isDark }) {
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
       minHeight: "100vh", background: "var(--bg-primary)", padding: 24,
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 
       {/* Logo */}
       <div style={{ textAlign: "center", marginBottom: 32 }}>

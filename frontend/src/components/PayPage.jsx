@@ -334,9 +334,8 @@ export default function PayPage() {
     <div style={{
       minHeight: "100vh", background: "var(--bg-primary)",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: 24, fontFamily: "'DM Sans', system-ui, sans-serif",
+      padding: 24, fontFamily: "'DM Sans Variable', 'DM Sans', system-ui, sans-serif",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
       {/* Ambient glow */}
       <div style={{

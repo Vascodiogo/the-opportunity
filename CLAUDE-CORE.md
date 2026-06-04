@@ -18,12 +18,12 @@
 
 | Layer | Technology | Status |
 |---|---|---|
-| Smart Contracts | Solidity 0.8.24 via **Hardhat** | ✅ Base Sepolia v5 (security fixes applied May 30) |
-| Keeper Bot | Node.js v5 on Railway | ✅ Running 24/7 |
-| Notifier | Node.js v5 on Railway | ✅ Running |
+| Smart Contracts | Solidity 0.8.24 via **Hardhat** | ✅ Base Sepolia v6 (all audit fixes applied May 31) |
+| Keeper Bot | Node.js v6 on Railway | ✅ Running 24/7 |
+| Notifier | Node.js v6 on Railway | ✅ Running |
 | Backend API | Express.js on Railway | ✅ Built |
 | Database | PostgreSQL on Railway | ✅ Schema live |
-| Frontend | React + Vite on Cloudflare Pages | ✅ Live at authonce.io |
+| Frontend | React + Vite on Cloudflare Pages | ✅ Live at authonce.io (recharts + react-is added Jun 3) |
 | Auth (subscriber) | Google OAuth via Passport.js | ✅ Verified + Published May 17 2026 |
 | Auth (merchant/admin) | MetaMask / RainbowKit + JWT | ✅ Working |
 | Admin security | Cloudflare Access + rate limiting | ✅ May 24 2026 |
@@ -36,26 +36,26 @@
 | Railway plan | Hobby ($5/month) | ✅ Active |
 | Landing page | LandingPage.jsx v3 — Web3 native, gradient hero | ✅ Updated May 30 |
 
-**Contract addresses — Base Sepolia testnet (redeployed May 30 with security fixes):**
+**Contract addresses — Base Sepolia testnet (redeployed May 31 with all audit fixes — v6):**
 - SubscriptionVault v6: `0x55180314174B30e778f35357035d49cAEF55C835`
 - MerchantRegistry v3:  `0x989376ff6195be2e76871535Db21CB8BdC9175D4`
 - USDC Sepolia:         `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 
 **Contract addresses — Base Mainnet (not yet deployed):**
 - USDC Mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- SubscriptionVault v5: `[DEPLOY AND RECORD HERE]`
-- MerchantRegistry v2:  `[DEPLOY AND RECORD HERE]`
+- SubscriptionVault v6: `[DEPLOY AND RECORD HERE]`
+- MerchantRegistry v3:  `[DEPLOY AND RECORD HERE]`
 - Protocol Treasury:    `0x737D4EeAEF67f776724482a29367615703A2DEB1`
 
 **Wallets:**
 - Deployer: `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` (new — May 30 2026)
-- Keeper:   `0x08d3817E5D6dfebA6c9E566dc775B5F12D0EEF99`
+- Keeper:   `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151` (confirmed May 31 2026)
 - Protocol Treasury (Safe 2/2): `0x737D4EeAEF67f776724482a29367615703A2DEB1`
   - Signer 1: Ledger `0x94FD52B6a6FcAcCb41BBE5717264BC9e95a35B4a`
   - Signer 2: MetaMask `0x00df2Dbb2455C372204EdD901894E27281fA02C0`
   - Threshold: 2/2 — upgrade to 2/3 when sister added
 
-⚠️ **Security:** Old deployer key exposed May 3 — replaced May 30. Local .env RESEND_API_KEY needs updating (Railway already updated). Railway DEPLOYER_PRIVATE_KEY also needs updating to new deployer.
+✅ **Security:** Deployer key replaced May 30. Keeper wallet confirmed May 31 (`0xdCEa737...`). Railway env vars all updated.
 
 ---
 
@@ -99,8 +99,8 @@
 ## 4. Backend File Map
 ```
 scripts/
-  keeper.js           — polls subscriptions, executes pulls, expires grace periods (v5)
-  notifier.js         — on-chain event polling, sends branded notifications (v5)
+  keeper.js           — polls subscriptions, executes pulls, expires grace periods (v6)
+  notifier.js         — on-chain event polling, sends branded notifications (v6)
   api.js              — Express REST API + Google OAuth + Stripe + admin endpoints
   db.js               — PostgreSQL schema, queries, migrations (auto-runs on startup)
   webhook.js          — HMAC-SHA256 dispatcher, branded fallback emails, 5-attempt backoff
@@ -147,7 +147,7 @@ frontend/src/
   App.jsx                       — main app, light mode default, lang switching (localStorage)
   LandingPage.jsx               — v3: Web3 native, gradient hero, GTM, competition ✅ May 30
   i18n.js                       — internationalisation (EN/PT)
-  config.js                     — v5 ABI, contract addresses, VITE_ALCHEMY_KEY
+  config.js                     — v6 ABI, contract addresses, VITE_ALCHEMY_KEY
   components/
     Dashboard.jsx               — subscriber view
     MerchantDashboard.jsx       — merchant portal + price type toggle + 15 currencies
@@ -240,6 +240,10 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 | OpenVC | ✅ Profile live · Deck uploaded · Outreach email set · 1 submission left |
 | RR² Capital (investments@rr2.capital) | ✅ Email sent with deck |
 | Nuno Correia / SumCap | ✅ LinkedIn connection request sent |
+| Colin Armstrong / Paragraph | ✅ Email sent Jun 2 — colin@armstr.ng |
+| Afonso S. Monteiro / Subvisual BD | ✅ LinkedIn message sent Jun 2 |
+| Subvisual intro call | ✅ Booked June 9th 13:30 |
+| João Andrade / Hacken Portugal | ✅ Replied Jun 2 — personal contact established |
 | Roberto Machado / Subvisual | ✅ LinkedIn connection request sent |
 | Cyfrin (Will) — VC intro asked | 🔄 Pending |
 | Hashlock (Fletcher) — VC intro asked | 🔄 Pending |
@@ -270,9 +274,9 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 |---|---|
 | authonce.io | ✅ Live — Landing page v3 deployed |
 | @AuthOnce on X | ✅ Active |
-| @authonce on Warpcast (FID: 3324301) | ✅ Farcaster bot posting Mon+Thu |
+| @authonce on Warpcast (FID: 3324301) | ✅ Farcaster bot posting daily 12:00 UTC — 21 posts, 3-week rotation |
 | LinkedIn company page | ✅ Created May 30 — linkedin.com/company/authonce |
-| X bot | ✅ Running Mon/Wed/Fri 12:00 UTC on Railway |
+| X bot | ✅ Running Mon/Wed/Fri 12:00 UTC — 12 posts, 4-week rotation, text+banner mix |
 
 ---
 
@@ -310,20 +314,32 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 - [x] Cloudflare Access on /admin ✅ May 24
 - [x] Rate limiting on admin login ✅ May 24
 - [x] Basescan API key ✅ Etherscan V2
-- [ ] Update local .env RESEND_API_KEY
-- [ ] Update Railway DEPLOYER_PRIVATE_KEY to new deployer
+- [x] Update local .env RESEND_API_KEY ✅
+- [x] Update Railway DEPLOYER_PRIVATE_KEY to new deployer ✅ May 31
 - [ ] Smart contract audit — Cyfrin $12K proposal on table, awaiting funds
+- [x] PostgreSQL session store — MemoryStore warning fixed ✅ May 31
+- [x] Merchant webhook route POST /api/merchants/:address/webhook added ✅ May 31
+- [x] Keeper resumeSubscription removed — keeper only calls executePull + expireSubscription ✅ May 31
+- [x] Bot state PostgreSQL-backed — survives Railway restarts ✅ May 31
+- [ ] Pay link dark/light mode toggle (post-mainnet)
+- [x] Stripe application_fee_amount 0.5% wired ✅ Jun 3
+- [x] Multi-token product creation fixed ✅ Jun 3
+- [x] Product form bulletproof validation ✅ Jun 3
+- [x] Edit Product — crypto token selection (USDC/USDT/DAI/EURC) ✅ Jun 3
+- [x] Railway PORT fix — API on port 8080 ✅ Jun 3
+- [ ] Subscriber token selector on pay page — choose USDC/EURC/USDT at subscription time
+- [ ] Netlify — confirm fully decommissioned (paused, not serving anything)
 - [x] Google OAuth app publishing ✅
 - [x] Cloudflare Pages SPA routing ✅
 - [x] Legal pages live ✅
-- [x] v5 contracts security fixes applied ✅ May 30
-- [x] v5 contracts redeployed + verified Base Sepolia ✅ May 30
-- [x] config.js v5 ABI updated ✅
+- [x] v6 contracts — all ChainShield audit fixes applied ✅ May 31
+- [x] v6 contracts redeployed + verified Base Sepolia ✅ May 31
+- [x] config.js v6 ABI updated ✅ May 31
 - [x] VITE_ALCHEMY_KEY set ✅
 - [x] Safe multisig confirmed on Base Mainnet ✅ May 30
 - [x] Landing page v3 deployed ✅ May 30
-- [ ] End-to-end Sepolia subscriber flow test
-- [ ] Uncomment [H1] check in MerchantRegistry before mainnet deploy
+- [x] End-to-end Sepolia subscriber flow test ✅ May 31 — all 10 flows passed
+- [x] [H1] guard — solved via _isMainnet bool in MerchantRegistry v3 constructor ✅
 
 ---
 
@@ -357,6 +373,8 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
   Domain: authonce.io (Cloudflare DNS, auto-updated on push)
   Env vars: VITE_ALCHEMY_KEY, VITE_API_URL, VITE_NETWORK, VITE_STRIPE_PUBLISHABLE_KEY
 
+**Railway API port:** 8080 (Railway injects PORT=8080 · Public networking configured to port 8080 · Do not change)
+
 **Admin security:** Cloudflare Zero Trust → Access → Applications → AuthOnce Admin
   Domain: authonce.io/admin · Policy: Emails → vasco@authonce.io · Session: 24h
   Team: frosty-lake-d608.cloudflareaccess.com
@@ -372,7 +390,7 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 **Farcaster Bot:**
   Service: farcaster-bot on Railway
   Account: @authonce on Warpcast (FID: 3324301)
-  Posts: Mon/Wed/Fri 12:00 UTC — 6 banners, 2-week rotation
+  Posts: Daily 12:00 UTC — 21 posts, 3-week rotation. PostgreSQL state (survives restarts).
 
 **Hardhat networks:**
   - `base-sepolia` — chainId 84532
@@ -385,18 +403,18 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 
 ## 16. Next Session Priorities
 
-1. **End-to-end Sepolia test** — map every action, test systematically, verify all flows A→B
-2. **Secure audit funding** — wait for RR², Mission, Nuno, Fletcher VC intro responses
+1. **Subvisual call** — June 9th 13:30 — prepare deck, demo link, €150K raise story
+2. **Secure audit funding** — follow up RR², Mission Fund, Nuno Correia, Fletcher VC intro responses
 3. **Confirm Cyfrin** — once funds secured, reply to Will and book August slot
-4. **Update Railway DEPLOYER_PRIVATE_KEY** — to new deployer `0xbb6d...`
+4. **Subscriber token selector on pay page** — choose USDC/EURC/USDT at subscription time
 5. **MRR chart + GTV analytics** — Merchant Dashboard + Admin Dashboard
-6. **Zapier integration** — Phase 3 GTM, quick to build, marketable
-7. **Developer SDK** — `npm install @authonce/sdk`
-8. **keeper.js** — update `getSubscriptionIds()` to DB-driven query (scale prep)
+6. **MB Way + Multibanco + SEPA** — wire in API payment method mapping
+7. **keeper.js** — update `getSubscriptionIds()` to DB-driven query (scale prep)
+8. **Keeper wallet ETH monitoring** — alert when `0xdCEa737...` balance drops below 0.005 ETH
 
 **Session file protocol:** Upload CLAUDE-CORE.md every session. Upload specific files being touched (max 2-3). Never upload CLAUDE-REFERENCE.md unless specifically needed.
 
 **CLAUDE-REFERENCE.md** contains: decisions log, fee analysis, competitive landscape, legal notes,
 marketing strategy, DataOnce, social media. Upload only when needed.
 
-*Last updated: 2026-05-30*
+*Last updated: 2026-06-03*

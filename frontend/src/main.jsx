@@ -8,6 +8,7 @@ import { RainbowKitProvider, getDefaultConfig, darkTheme } from "@rainbow-me/rai
 import { baseSepolia } from "wagmi/chains";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx";
+import "@fontsource-variable/dm-sans";
 import PayPage from "./components/PayPage.jsx";
 import Pricing from "./components/Pricing.jsx";
 import "@rainbow-me/rainbowkit/styles.css";
