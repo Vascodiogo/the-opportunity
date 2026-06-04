@@ -2,6 +2,50 @@
 // AuthOnce Admin Dashboard — v2
 // Tabs: Overview · Merchants · Subscriptions · Subscribers · Payments · Webhooks · Analytics · Tax · Audit · Contracts
 import { useState, useEffect, useCallback, useRef } from "react";
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+// ─── Analytics helpers ────────────────────────────────────────────────────────
+function buildMonthlyGTV(payments) {
+  const map = {};
+  payments.forEach(p => {
+    if (!p.created_at || !p.amount_usdc) return;
+    const d     = new Date(p.created_at);
+    const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("default", { month: "short", year: "2-digit" });
+    if (!map[key]) map[key] = { month: label, gtv: 0, fees: 0 };
+    map[key].gtv  += parseFloat(p.amount_usdc || 0);
+    map[key].fees += parseFloat(p.fee_usdc || 0);
+  });
+  return Object.keys(map).sort().map(k => ({
+    ...map[k],
+    gtv:  parseFloat(map[k].gtv.toFixed(2)),
+    fees: parseFloat(map[k].fees.toFixed(2)),
+  }));
+}
+
+function calcMRR(payments) {
+  const now   = new Date();
+  const month = now.getMonth();
+  const year  = now.getFullYear();
+  return payments
+    .filter(p => {
+      const d = new Date(p.created_at);
+      return d.getMonth() === month && d.getFullYear() === year;
+    })
+    .reduce((sum, p) => sum + parseFloat(p.amount_usdc || 0), 0);
+}
+
+function calcFeeMRR(payments) {
+  const now   = new Date();
+  const month = now.getMonth();
+  const year  = now.getFullYear();
+  return payments
+    .filter(p => {
+      const d = new Date(p.created_at);
+      return d.getMonth() === month && d.getFullYear() === year;
+    })
+    .reduce((sum, p) => sum + parseFloat(p.fee_usdc || 0), 0);
+}
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
 
@@ -530,6 +574,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     if (tab === "subscriptions" && subscriptions.length === 0) fetchSubscriptions();
     if (tab === "subscribers"   && subscribers.length === 0)   fetchSubscribers();
     if (tab === "payments"      && payments.length === 0)       fetchPayments();
+    if (tab === "analytics"     && payments.length === 0)       fetchPayments();
     if (tab === "webhooks"      && webhooks.length === 0)       fetchWebhooks();
     if (tab === "audit"         && auditLog.length === 0)       fetchAuditLog();
   }, [tab]);
@@ -864,48 +909,114 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
         )}
 
         {/* ── Analytics ── */}
-        {tab === "analytics" && stats && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-              <StatCard label="Total volume (USDC)" value={`$${(stats.payments?.volume_usdc || 0).toFixed(2)}`} color="var(--green)" />
-              <StatCard label="Protocol fees collected" value={`$${(stats.payments?.total_fees_usdc || 0).toFixed(2)}`} color="var(--green)"
-                sub={stats.payments?.avg_eur_rate ? `Avg EUR rate: ${parseFloat(stats.payments.avg_eur_rate).toFixed(4)}` : undefined} />
-              <StatCard label="Active merchants" value={approvedCount} color="var(--blue)" />
-              <StatCard label="Total subscriptions" value={stats.subscriptions?.total || 0} color="var(--text-secondary)" />
-            </div>
-            <div style={{ ...S.card, padding: 24 }}>
-              <span style={S.label}>Subscription health</span>
-              <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-                {(() => {
-                  const total    = stats.subscriptions?.total || 1;
-                  const active   = stats.subscriptions?.active || 0;
-                  const paused   = stats.subscriptions?.paused || 0;
-                  const expired  = stats.subscriptions?.expired || 0;
-                  const cancelled = stats.subscriptions?.cancelled || 0;
-                  const churn    = total > 0 ? (((expired + cancelled) / total) * 100).toFixed(1) : "0.0";
-                  const health   = total > 0 ? ((active / total) * 100).toFixed(1) : "0.0";
-                  return [
-                    { label: "Active rate",   value: `${health}%`,  color: "var(--green)" },
-                    { label: "Churn rate",    value: `${churn}%`,   color: paused > 2 ? "var(--red)" : "var(--text-muted)" },
-                    { label: "In grace",      value: paused,         color: "var(--amber)" },
-                    { label: "Lost (expired+cancelled)", value: expired + cancelled, color: "var(--red)" },
-                  ];
-                })().map(({ label, value, color }) => (
-                  <div key={label}>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: "monospace" }}>{value}</div>
-                  </div>
-                ))}
+        {tab === "analytics" && stats && (() => {
+          const monthlyData = buildMonthlyGTV(payments);
+          const mrr         = calcMRR(payments);
+          const feeMRR      = calcFeeMRR(payments);
+          const arr         = mrr * 12;
+          const gtv         = payments.reduce((s, p) => s + parseFloat(p.amount_usdc || 0), 0);
+          const totalFees   = payments.reduce((s, p) => s + parseFloat(p.fee_usdc || 0), 0);
+          const tooltipStyle = {
+            background: "var(--bg-card)", border: "0.5px solid var(--border)",
+            borderRadius: 8, fontSize: 12, color: "var(--text-primary)",
+          };
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* ── KPI row ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+                <StatCard label="MRR (this month)" value={`$${mrr.toFixed(2)}`} color="var(--green)"
+                  sub={`ARR $${arr.toFixed(0)}`} />
+                <StatCard label="Protocol fee MRR" value={`$${feeMRR.toFixed(2)}`} color="var(--green)"
+                  sub={`ARR $${(feeMRR * 12).toFixed(0)}`} />
+                <StatCard label="GTV all-time" value={`$${gtv.toFixed(2)}`} color="var(--blue)" />
+                <StatCard label="Fees all-time" value={`$${totalFees.toFixed(2)}`} color="var(--blue)" />
+                <StatCard label="Active merchants" value={approvedCount} color="var(--text-secondary)" />
+                <StatCard label="Active subscriptions" value={stats.subscriptions?.active || 0} color="var(--text-secondary)" />
               </div>
+
+              {/* ── GTV bar chart ── */}
+              <div style={{ ...S.card, padding: 24 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>
+                  Monthly GTV (USDC)
+                </div>
+                {monthlyData.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13, padding: "32px 0" }}>
+                    No payment data yet.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={monthlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={v => [`$${v.toFixed(2)}`, "GTV"]} />
+                      <Bar dataKey="gtv" fill="rgba(52,211,153,0.7)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* ── Protocol fee area chart ── */}
+              <div style={{ ...S.card, padding: 24 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>
+                  Monthly Protocol Fees (USDC)
+                </div>
+                {monthlyData.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13, padding: "32px 0" }}>
+                    No payment data yet.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <AreaChart data={monthlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="feeGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={v => [`$${v.toFixed(4)}`, "Fees"]} />
+                      <Area type="monotone" dataKey="fees" stroke="#3b82f6" fill="url(#feeGradient)" strokeWidth={2} dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* ── Subscription health ── */}
+              <div style={{ ...S.card, padding: 24 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>
+                  Subscription health
+                </div>
+                <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+                  {(() => {
+                    const total     = stats.subscriptions?.total || 1;
+                    const active    = stats.subscriptions?.active || 0;
+                    const paused    = stats.subscriptions?.paused || 0;
+                    const expired   = stats.subscriptions?.expired || 0;
+                    const cancelled = stats.subscriptions?.cancelled || 0;
+                    const churn     = total > 0 ? (((expired + cancelled) / total) * 100).toFixed(1) : "0.0";
+                    const health    = total > 0 ? ((active / total) * 100).toFixed(1) : "0.0";
+                    return [
+                      { label: "Active rate",            value: `${health}%`,        color: "var(--green)" },
+                      { label: "Churn rate",             value: `${churn}%`,         color: parseFloat(churn) > 10 ? "var(--red)" : "var(--text-muted)" },
+                      { label: "In grace",               value: paused,              color: "var(--amber)" },
+                      { label: "Lost (expired+cancelled)", value: expired + cancelled, color: "var(--red)" },
+                    ];
+                  })().map(({ label, value, color }) => (
+                    <div key={label}>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: "monospace" }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
-            <div style={{ ...S.card, padding: 24 }}>
-              <span style={S.label}>Note</span>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, lineHeight: 1.6 }}>
-                Full MRR, ARR, LTV and churn charts are coming in the next build. The underlying data is already in the database.
-              </p>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Tax ── */}
         {tab === "tax" && (
