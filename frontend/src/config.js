@@ -35,6 +35,21 @@ export const REGISTRY_ADDRESS = "0x989376ff6195be2e76871535Db21CB8BdC9175D4"; //
 export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
+// ─── Subscription token addresses by network ─────────────────────────────────
+// Sepolia: only USDC is whitelisted on the vault — others not yet deployed
+// Mainnet: all four stablecoins whitelisted at deploy time (see deploy.js)
+export const TOKEN_ADDRESSES = {
+  "base-sepolia": {
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  },
+  "base-mainnet": {
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    usdt: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+    dai:  "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+    eurc: "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+  },
+};
+
 // ─── SubscriptionVault v6 ABI ─────────────────────────────────────────────────
 export const VAULT_ABI = [
   {

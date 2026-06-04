@@ -138,6 +138,7 @@ function StatusBadge({ status }) {
 // ─── Sidebar Nav ──────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { id: "overview",    label: "Overview",    icon: "◎" },
+  { id: "analytics",  label: "Analytics",   icon: "⊿" },
   { id: "products",    label: "Products",    icon: "⊞" },
   { id: "subscribers", label: "Subscribers", icon: "⊙" },
   { id: "payments",    label: "Payments",    icon: "⊟" },
@@ -1543,6 +1544,16 @@ export default function MerchantDashboard({ address }) {
                 <button onClick={() => setTab("settings")} style={S.btn.ghost}>Settings</button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── Analytics ── */}
+        {tab === "analytics" && (
+          <div style={S.card}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 20, letterSpacing: "-0.01em" }}>
+              Analytics
+            </div>
+            <AnalyticsPanel address={address} />
           </div>
         )}
 

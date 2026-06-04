@@ -1,6 +1,6 @@
 // src/components/PayPage.jsx — Visual redesign May 2026
 // Logic: unchanged. Visual: CSS variables, solid green CTAs, no hardcoded colors.
-import { VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, INTERVAL_NAMES } from "../config.js";
+import { VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, INTERVAL_NAMES, TOKEN_ADDRESSES } from "../config.js";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
@@ -29,6 +29,23 @@ const USDC_APPROVE_ABI = [
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
+
+// ─── Network-aware token map ─────────────────────────────────────────────────
+// TOKEN_ADDRESSES imported from config.js — keyed by network string.
+// VITE_NETWORK must be "base-sepolia" or "base-mainnet".
+const NETWORK = import.meta.env.VITE_NETWORK || "base-sepolia";
+const NETWORK_TOKENS = TOKEN_ADDRESSES[NETWORK] || TOKEN_ADDRESSES["base-sepolia"];
+
+const TOKEN_META = {
+  usdc: { label: "USDC", icon: "⬡", decimals: 6 },
+  eurc: { label: "EURC", icon: "€",  decimals: 6 },
+  usdt: { label: "USDT", icon: "₮",  decimals: 6 },
+  dai:  { label: "DAI",  icon: "◈", decimals: 18 },
+};
+
+// Stablecoins available for subscriber token selection — derived from network whitelist.
+// On Sepolia only USDC is whitelisted. On mainnet: USDC, USDT, DAI, EURC.
+const SELECTABLE_TOKENS = Object.keys(NETWORK_TOKENS);
 
 function getTrialDays() {
   const raw = new URLSearchParams(window.location.search).get("trial");
@@ -168,6 +185,7 @@ export default function PayPage() {
   const [paymentMethod, setPaymentMethod]   = useState("crypto");
   const [availableMethods, setAvailableMethods] = useState(null);
   const [stripeLoading, setStripeLoading]   = useState(false);
+  const [selectedToken, setSelectedToken]   = useState("usdc"); // crypto token choice
 
   const { address, isConnected } = useAccount();
   const chainId                  = useChainId();
@@ -184,10 +202,14 @@ export default function PayPage() {
 
   const isYearly     = selectedInterval === "yearly" && product?.yearly_amount;
   const activeAmount = isYearly ? product.yearly_amount : product?.amount;
-  const amountRaw    = activeAmount ? parseUnits(activeAmount.toString(), 6) : 0n;
+  const selectedTokenAddress = NETWORK_TOKENS[selectedToken] || USDC_ADDRESS;
+  const selectedTokenMeta    = TOKEN_META[selectedToken] || TOKEN_META.usdc;
+  const amountRaw    = activeAmount
+    ? parseUnits(activeAmount.toString(), selectedTokenMeta.decimals)
+    : 0n;
 
   const { data: currentAllowance } = useReadContract({
-    address: USDC_ADDRESS, abi: USDC_APPROVE_ABI, functionName: "allowance",
+    address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "allowance",
     args: [address, VAULT_ADDRESS], query: { enabled: !!address && !!product },
   });
 
@@ -250,7 +272,7 @@ export default function PayPage() {
     setFlowStatus("approving");
     try {
       const hash = await writeContractAsync({
-        address: USDC_ADDRESS, abi: USDC_APPROVE_ABI, functionName: "approve",
+        address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "approve",
         args: [VAULT_ADDRESS, amountRaw],
       });
       setApproveTxHash(hash);
@@ -271,7 +293,7 @@ export default function PayPage() {
         args: [
          resolvedAddress,                                        // merchant
          address,                                                // safeVault
-         USDC_ADDRESS,                                           // token
+         selectedTokenAddress,                                   // token (subscriber choice)
          amountRaw,                                              // amount
          introAmountRaw,                                         // introAmount
          isYearly ? 0n : BigInt(product.intro_pulls || 0),       // introPulls
@@ -462,7 +484,7 @@ export default function PayPage() {
                 <span style={{ fontSize: 32, fontWeight: 800, color: "var(--green)", fontFamily: "monospace", letterSpacing: "-0.03em" }}>
                   ${activeAmount?.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · USDC</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {paymentMethod === "crypto" ? selectedTokenMeta.label : "USDC"}</span>
               </div>
 
               {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>${(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
@@ -549,9 +571,53 @@ export default function PayPage() {
               </button>
             )}
 
-            {/* Crypto — wallet connect (idle) */}
+            {/* Crypto — token selector + wallet connect (idle) */}
             {flowStatus === "idle" && paymentMethod === "crypto" && (
               <div style={{ textAlign: "center" }}>
+                {/* Token selector */}
+                {(() => {
+                  // Filter to tokens the product accepts, intersected with selectable stablecoins
+                  const productTokens = product?.payment_methods
+                    ? SELECTABLE_TOKENS.filter(t =>
+                        product.payment_methods.includes(t) || product.payment_methods.includes("crypto")
+                      )
+                    : SELECTABLE_TOKENS;
+                  const tokensToShow = productTokens.length > 0 ? productTokens : ["usdc"];
+
+                  return tokensToShow.length > 1 ? (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+                        Pay with token
+                      </div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                        {tokensToShow.map(tokenId => {
+                          const meta = TOKEN_META[tokenId];
+                          const sel  = selectedToken === tokenId;
+                          return (
+                            <button
+                              key={tokenId}
+                              onClick={() => setSelectedToken(tokenId)}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 6,
+                                padding: "8px 14px", borderRadius: 10, cursor: "pointer",
+                                border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                                background: sel ? "rgba(29,158,117,0.08)" : "var(--bg-tag)",
+                                fontFamily: "inherit",
+                              }}
+                            >
+                              <span style={{ fontSize: 15 }}>{meta.icon}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>
+                                {meta.label}
+                              </span>
+                              {sel && <span style={{ fontSize: 10, color: "var(--green)" }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>Connect your wallet to subscribe</div>
                 <div style={{ display: "flex", justifyContent: "center" }}>
                   <ConnectButton />
@@ -589,16 +655,48 @@ export default function PayPage() {
                   </button>
                 </div>
 
+                {/* Token selector — show when connected but not yet approving */}
+                {flowStatus === "connected" && (() => {
+                  const productTokens = product?.payment_methods
+                    ? SELECTABLE_TOKENS.filter(t =>
+                        product.payment_methods.includes(t) || product.payment_methods.includes("crypto")
+                      )
+                    : SELECTABLE_TOKENS;
+                  const tokensToShow = productTokens.length > 0 ? productTokens : ["usdc"];
+                  return tokensToShow.length > 1 ? (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Pay with token</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {tokensToShow.map(tokenId => {
+                          const meta = TOKEN_META[tokenId];
+                          const sel  = selectedToken === tokenId;
+                          return (
+                            <button key={tokenId} onClick={() => setSelectedToken(tokenId)} style={{
+                              display: "flex", alignItems: "center", gap: 6, padding: "7px 12px",
+                              borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                              border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                              background: sel ? "rgba(29,158,117,0.08)" : "var(--bg-tag)",
+                            }}>
+                              <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{meta.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* Transaction steps */}
                 <div style={{ marginBottom: 18 }}>
-                  <Step n={1} label={`Approve ${activeAmount?.toFixed(2)} USDC`} active={stepApprove} done={approvedDone} />
+                  <Step n={1} label={`Approve ${activeAmount?.toFixed(2)} ${selectedTokenMeta.label}`} active={stepApprove} done={approvedDone} />
                   <Step n={2} label="Create subscription on-chain" active={stepSubscribe} done={subscribedDone} />
                 </div>
 
                 {/* Trust signals */}
                 {flowStatus === "connected" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, padding: "14px 16px", background: "var(--bg-tag)", borderRadius: 10, border: "0.5px solid var(--border)" }}>
-                    <TrustRow icon="⚡" text="Two transactions — approve USDC, then subscribe" />
+                    <TrustRow icon="⚡" text={`Two transactions — approve ${selectedTokenMeta.label}, then subscribe`} />
                     {isYearly && <TrustRow icon="📅" text={`Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`} />}
                     {hasTrial && <TrustRow icon="🎁" text={`${trialDays}-day free trial — first payment after trial ends`} />}
                     {hasIntro && !hasTrial && !isYearly && <TrustRow icon="🎁" text={`Intro $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalPlural}, then $${product.amount?.toFixed(2)}`} />}

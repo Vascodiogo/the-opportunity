@@ -320,11 +320,28 @@ async function run() {
   console.log("=".repeat(60));
   console.log("");
 
+  // ─── ETH balance alert ───────────────────────────────────────────────────────
+  const KEEPER_ETH_WARN_THRESHOLD = ethers.parseEther("0.005");
+
+  async function checkKeeperBalance(provider, address) {
+    try {
+      const balance = await provider.getBalance(address);
+      if (balance < KEEPER_ETH_WARN_THRESHOLD) {
+        console.error(`⚠️  KEEPER WALLET LOW ON ETH — Balance: ${ethers.formatEther(balance)} ETH (threshold: 0.005 ETH)`);
+        console.error(`⚠️  Top up ${address} to avoid missed pulls.`);
+      }
+    } catch (err) {
+      console.error(`  Could not fetch keeper ETH balance: ${err.message}`);
+    }
+  }
+
   async function tick() {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] Keeper cycle...`);
 
     try {
+      await checkKeeperBalance(provider, wallet.address);
+
       const ids = await getSubscriptionIds(vault);
       console.log(`  Found ${ids.length} subscription(s).`);
 
