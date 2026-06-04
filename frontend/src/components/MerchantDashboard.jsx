@@ -1416,7 +1416,7 @@ export default function MerchantDashboard({ address }) {
           const sub = await client.readContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "subscriptions", args: [BigInt(id)] });
           if (sub[0] === "0x0000000000000000000000000000000000000000") break;
           if (sub[2].toLowerCase() === address.toLowerCase()) {
-            subs.push({ id, owner: sub[0], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[8]), lastPulledAt: sub[9], status: Number(sub[14]) });
+            subs.push({ id, owner: sub[0], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[8]), lastPulledAt: Number(sub[9]), status: Number(sub[14]) });
           }
           id++;
         } catch { break; }
@@ -1441,10 +1441,10 @@ export default function MerchantDashboard({ address }) {
 
   const activeSubs   = subscribers.filter(s => s.status === 0);
   const totalMRR     = activeSubs.reduce((acc, s) => {
-    const amt = Number(s.amount) / 1e6;
+    const amt = Number(BigInt(s.amount) / 1000000n) + Number(BigInt(s.amount) % 1000000n) / 1e6;
     return acc + (s.interval === 0 ? amt * 4.33 : s.interval === 1 ? amt : amt / 12);
   }, 0);
-  const totalRevenue = subscribers.reduce((acc, s) => acc + Number(s.amount) / 1e6, 0);
+  const totalRevenue = subscribers.reduce((acc, s) => acc + Number(BigInt(s.amount) / 1000000n) + Number(BigInt(s.amount) % 1000000n) / 1e6, 0);
   const protocolFee  = totalRevenue * 0.005;
   const netRevenue   = totalRevenue - protocolFee;
 
@@ -1657,7 +1657,11 @@ export default function MerchantDashboard({ address }) {
                     <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[{ weekly: 0, monthly: 1, yearly: 2 }[sub.interval]] || sub.interval}</span>
                     <StatusBadge status={{ active: 0, paused: 1, cancelled: 2, expired: 3 }[sub.status] ?? sub.status} />
                     <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                      {sub.last_pulled_at ? new Date(sub.last_pulled_at).toLocaleDateString() : "Never"}
+                      {sub.lastPulledAt && sub.lastPulledAt > 0
+                        ? new Date(sub.lastPulledAt * 1000).toLocaleDateString()
+                        : sub.last_pulled_at
+                          ? new Date(sub.last_pulled_at).toLocaleDateString()
+                          : "Never"}
                     </span>
                   </div>
                 ))}
