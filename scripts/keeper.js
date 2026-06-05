@@ -308,7 +308,7 @@ async function expireGracePeriodSubscriptions(vault, ids) {
 
 // ─── Main loop ────────────────────────────────────────────────────────────────
 async function run() {
-  const { wallet, vault } = setup();
+  const { provider, wallet, vault } = setup();
 
   console.log("=".repeat(60));
   console.log("  AuthOnce — Keeper Bot v6");
