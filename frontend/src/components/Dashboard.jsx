@@ -6,9 +6,38 @@ import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
   VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, USDC_ABI, REGISTRY_ADDRESS, REGISTRY_ABI, RPC_URLS,
-  INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS,
+  INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS, TOKEN_ADDRESSES,
   shortAddress, formatUSDC,
 } from "../config.js";
+
+// ─── Token-aware amount formatting ───────────────────────────────────────────
+const NETWORK = import.meta.env.VITE_NETWORK || "base-sepolia";
+const NETWORK_TOKENS = TOKEN_ADDRESSES[NETWORK] || TOKEN_ADDRESSES["base-sepolia"];
+// Map token address (lowercase) → decimals
+const TOKEN_DECIMALS = Object.fromEntries(
+  Object.entries(NETWORK_TOKENS).map(([id, addr]) => [
+    addr.toLowerCase(),
+    id === "dai" ? 18 : 6,  // DAI = 18, all others = 6
+  ])
+);
+const TOKEN_LABELS = Object.fromEntries(
+  Object.entries(NETWORK_TOKENS).map(([id, addr]) => [
+    addr.toLowerCase(),
+    id.toUpperCase(),
+  ])
+);
+
+function formatTokenAmount(amountRaw, tokenAddr) {
+  const addr     = (tokenAddr || "").toLowerCase();
+  const decimals = TOKEN_DECIMALS[addr] ?? 6;
+  const divisor  = BigInt(10 ** decimals);
+  const raw      = BigInt(amountRaw || 0);
+  return Number(raw / divisor) + Number(raw % divisor) / Number(divisor);
+}
+
+function tokenLabel(tokenAddr) {
+  return TOKEN_LABELS[(tokenAddr || "").toLowerCase()] || "USDC";
+}
 
 const client = createPublicClient({
   chain: baseSepolia,
@@ -192,8 +221,8 @@ export default function Dashboard({ address, isAdmin }) {
           if (sub[0].toLowerCase() === address.toLowerCase()) {
             subs.push({
               id, owner: sub[0], guardian: sub[1], merchant: sub[2],
-              safeVault: sub[3], amount: sub[4], interval: Number(sub[8]),
-              lastPulledAt: sub[9], pausedAt: sub[10], status: Number(sub[14]),
+              safeVault: sub[3], token: sub[4], amount: sub[5], interval: Number(sub[9]),
+              lastPulledAt: Number(sub[10]), pausedAt: Number(sub[12]), status: Number(sub[17]),
             });
           }
           id++;
@@ -231,7 +260,7 @@ export default function Dashboard({ address, isAdmin }) {
 
   const activeSubs    = subscriptions.filter(s => s.status === 0);
   const totalMonthly  = activeSubs.reduce((acc, s) => {
-    const amt = Number(BigInt(s.amount) / 1000000n) + Number(BigInt(s.amount) % 1000000n) / 1e6;
+    const amt = formatTokenAmount(s.amount, s.token);
     if (s.interval === 0) return acc + amt * 4.33;
     if (s.interval === 1) return acc + amt;
     return acc + amt / 12;
@@ -289,7 +318,7 @@ export default function Dashboard({ address, isAdmin }) {
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Sub #{sub.id}</div>
                 </div>
                 <span style={{ color: "var(--green)", fontWeight: 600, fontFamily: "monospace" }}>
-                  {formatUSDC(sub.amount)}
+                  ${formatTokenAmount(sub.amount, sub.token).toFixed(2)} {tokenLabel(sub.token)}
                 </span>
                 <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[sub.interval]}</span>
                 <StatusBadge status={sub.status} />

@@ -11,9 +11,32 @@ import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
   VAULT_ADDRESS, VAULT_ABI, REGISTRY_ADDRESS, REGISTRY_ABI, RPC_URLS,
-  INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS,
+  INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS, TOKEN_ADDRESSES,
   shortAddress, formatUSDC,
 } from "../config.js";
+
+// ─── Token-aware amount formatting ───────────────────────────────────────────
+const _NETWORK        = import.meta.env.VITE_NETWORK || "base-sepolia";
+const _NETWORK_TOKENS = TOKEN_ADDRESSES[_NETWORK] || TOKEN_ADDRESSES["base-sepolia"];
+const _TOKEN_DECIMALS = Object.fromEntries(
+  Object.entries(_NETWORK_TOKENS).map(([id, addr]) => [
+    addr.toLowerCase(), id === "dai" ? 18 : 6,
+  ])
+);
+const _TOKEN_LABELS = Object.fromEntries(
+  Object.entries(_NETWORK_TOKENS).map(([id, addr]) => [
+    addr.toLowerCase(), id.toUpperCase(),
+  ])
+);
+function formatTokenAmount(amountRaw, tokenAddr) {
+  const decimals = _TOKEN_DECIMALS[(tokenAddr || "").toLowerCase()] ?? 6;
+  const divisor  = BigInt(10 ** decimals);
+  const raw      = BigInt(amountRaw || 0);
+  return Number(raw / divisor) + Number(raw % divisor) / Number(divisor);
+}
+function tokenLabel(tokenAddr) {
+  return _TOKEN_LABELS[(tokenAddr || "").toLowerCase()] || "USDC";
+}
 
 const client = createPublicClient({
   chain: baseSepolia,
@@ -552,9 +575,9 @@ function PriceChangeModal({ product, address, onClose }) {
           if (sub[0] === "0x0000000000000000000000000000000000000000") break;
           if (
             sub[2].toLowerCase() === address.toLowerCase() &&
-            Number(sub[4]) === productAmountRaw &&
-            Number(sub[8]) === productInterval &&
-            Number(sub[14]) === 0
+            Number(sub[5]) === productAmountRaw &&
+            Number(sub[9]) === productInterval &&
+            Number(sub[17]) === 0
           ) { subs.push(id); }
           id++;
         } catch { break; }
@@ -1451,7 +1474,7 @@ export default function MerchantDashboard({ address }) {
           const sub = await client.readContract({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "subscriptions", args: [BigInt(id)] });
           if (sub[0] === "0x0000000000000000000000000000000000000000") break;
           if (sub[2].toLowerCase() === address.toLowerCase()) {
-            subs.push({ id, owner: sub[0], merchant: sub[2], safeVault: sub[3], amount: sub[4], interval: Number(sub[8]), lastPulledAt: Number(sub[9]), status: Number(sub[14]) });
+            subs.push({ id, owner: sub[0], merchant: sub[2], safeVault: sub[3], token: sub[4], amount: sub[5], interval: Number(sub[9]), lastPulledAt: Number(sub[10]), status: Number(sub[17]) });
           }
           id++;
         } catch { break; }
@@ -1476,10 +1499,10 @@ export default function MerchantDashboard({ address }) {
 
   const activeSubs   = subscribers.filter(s => s.status === 0);
   const totalMRR     = activeSubs.reduce((acc, s) => {
-    const amt = Number(BigInt(s.amount) / 1000000n) + Number(BigInt(s.amount) % 1000000n) / 1e6;
+    const amt = formatTokenAmount(s.amount, s.token);
     return acc + (s.interval === 0 ? amt * 4.33 : s.interval === 1 ? amt : amt / 12);
   }, 0);
-  const totalRevenue = subscribers.reduce((acc, s) => acc + Number(BigInt(s.amount) / 1000000n) + Number(BigInt(s.amount) % 1000000n) / 1e6, 0);
+  const totalRevenue = subscribers.reduce((acc, s) => acc + formatTokenAmount(s.amount, s.token), 0);
   const protocolFee  = totalRevenue * 0.005;
   const netRevenue   = totalRevenue - protocolFee;
 
