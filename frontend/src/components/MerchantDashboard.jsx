@@ -286,11 +286,13 @@ function AnalyticsPanel({ address }) {
   // Build chart data — label every month for short ranges, every other for long
   const chartData = (data?.months || []).map((m, i, arr) => ({
     ...m,
-    label: arr.length <= 6 ? fmtMonth(m.month, true) : (i % 2 === 0 ? fmtMonth(m.month) : ""),
+    label:        arr.length <= 6 ? fmtMonth(m.month, true) : (i % 2 === 0 ? fmtMonth(m.month) : ""),
     mrr_display:  parseFloat(m.mrr_usdc   || 0),
     gtv_display:  parseFloat(m.gtv_usdc   || 0),
     net_display:  parseFloat(m.net_usdc   || 0),
     fee_display:  parseFloat(m.fee_usdc   || 0),
+    new_subs:     parseInt(m.new_subs     || 0),
+    churned:      parseInt(m.churned      || 0),
   }));
 
   const s = data?.summary;
@@ -329,6 +331,23 @@ function AnalyticsPanel({ address }) {
             value={s?.active_subs ?? "—"}
             sub={s?.churn_rate_pct != null ? `${s.churn_rate_pct}% churn rate` : ""}
           />
+          <AnalyticsStat
+            label="ARPU"
+            value={s?.arpu != null ? `$${parseFloat(s.arpu).toFixed(2)}` : "—"}
+            sub="avg revenue per user"
+          />
+          <AnalyticsStat
+            label="LTV"
+            value={s?.ltv != null ? `$${parseFloat(s.ltv).toFixed(2)}` : s?.ltv === null ? "∞" : "—"}
+            sub="lifetime value est."
+            color={GREEN}
+          />
+          <AnalyticsStat
+            label="Churn rate"
+            value={s?.churn_rate_pct != null ? `${s.churn_rate_pct}%` : "—"}
+            sub="cancelled + expired"
+            color={s?.churn_rate_pct > 10 ? RED : undefined}
+          />
         </div>
 
         {/* Range toggle */}
@@ -353,8 +372,9 @@ function AnalyticsPanel({ address }) {
       {/* Chart type tabs */}
       <div style={{ display: "flex", gap: 0, borderBottom: "0.5px solid var(--border)", marginBottom: 20 }}>
         {[
-          { id: "mrr", label: "MRR over time" },
-          { id: "gtv", label: "GTV & revenue" },
+          { id: "mrr",     label: "MRR over time" },
+          { id: "gtv",     label: "GTV & revenue" },
+          { id: "cohort",  label: "New vs churned" },
         ].map(t => (
           <button
             key={t.id}
@@ -414,6 +434,21 @@ function AnalyticsPanel({ address }) {
             />
             <Bar dataKey="gtv_display" name="GTV"         fill={BLUE}  fillOpacity={0.7} radius={[3,3,0,0]} maxBarSize={28} />
             <Bar dataKey="net_display" name="Net revenue" fill={GREEN} fillOpacity={0.85} radius={[3,3,0,0]} maxBarSize={28} />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : activeChart === "cohort" ? (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--text-muted)", fontFamily: "inherit" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--text-muted)", fontFamily: "inherit" }} axisLine={false} tickLine={false} allowDecimals={false} width={36} />
+            <Tooltip content={<ChartTooltip />} />
+            <Legend
+              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value) => <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{value}</span>}
+            />
+            <Bar dataKey="new_subs" name="New"     fill={GREEN} fillOpacity={0.85} radius={[3,3,0,0]} maxBarSize={28} />
+            <Bar dataKey="churned"  name="Churned" fill={RED}   fillOpacity={0.7}  radius={[3,3,0,0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       )}

@@ -231,7 +231,7 @@ export default function Dashboard({ address, isAdmin }) {
 
   const activeSubs    = subscriptions.filter(s => s.status === 0);
   const totalMonthly  = activeSubs.reduce((acc, s) => {
-    const amt = Number(s.amount) / 1e6;
+    const amt = Number(BigInt(s.amount) / 1000000n) + Number(BigInt(s.amount) % 1000000n) / 1e6;
     if (s.interval === 0) return acc + amt * 4.33;
     if (s.interval === 1) return acc + amt;
     return acc + amt / 12;

@@ -525,6 +525,18 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
       ORDER BY m.month_start ASC
     `, [address, months]);
 
+    // ── New subscriptions per month ────────────────────────────────────────
+    const newSubsResult = await db.pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+        COUNT(*)::int AS new_subs
+      FROM subscriptions
+      WHERE LOWER(merchant_address) = $1
+        AND created_at >= NOW() - ($2 || ' months')::interval
+      GROUP BY month
+      ORDER BY month ASC
+    `, [address, months]);
+
     // ── Churn events per month ─────────────────────────────────────────────
     const churnResult = await db.pool.query(`
       SELECT
@@ -563,6 +575,7 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
     const mrrByMonth   = Object.fromEntries(mrrResult.rows.map(r => [r.month, r]));
     const gtvByMonth   = Object.fromEntries(gtvResult.rows.map(r => [r.month, r]));
     const churnByMonth = Object.fromEntries(churnResult.rows.map(r => [r.month, r.churned]));
+    const newSubsByMonth = Object.fromEntries(newSubsResult.rows.map(r => [r.month, r.new_subs]));
 
     // Build complete month list for the range (fill gaps with zeros)
     const allMonths = [];
@@ -580,6 +593,7 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
         fee_usdc:      parseFloat(gtvByMonth[key]?.fee_usdc || 0),
         payment_count: parseInt(gtvByMonth[key]?.payment_count || 0),
         churned:       parseInt(churnByMonth[key] || 0),
+        new_subs:      parseInt(newSubsByMonth[key] || 0),
       });
     }
 
@@ -589,6 +603,16 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
     const churnRate = summary.active_subs + summary.churned_total > 0
       ? (summary.churned_total / (summary.active_subs + summary.churned_total) * 100).toFixed(1)
       : "0.0";
+
+    // ARPU = total GTV / total unique subscribers (active + churned)
+    const totalUniqueSubscribers = summary.total_subs || 1;
+    const arpu = (parseFloat(paySum.total_gtv) / totalUniqueSubscribers).toFixed(2);
+
+    // LTV = ARPU / churn_rate (as decimal). Guard divide-by-zero.
+    const churnDecimal = parseFloat(churnRate) / 100;
+    const ltv = churnDecimal > 0
+      ? (parseFloat(arpu) / churnDecimal).toFixed(2)
+      : null; // infinite LTV — no churn yet
 
     res.json({
       range,
@@ -604,6 +628,8 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
         total_net:      parseFloat(paySum.total_net).toFixed(2),
         total_fees:     parseFloat(paySum.total_fees).toFixed(4),
         total_payments: paySum.total_payments,
+        arpu:           arpu,
+        ltv:            ltv,
       },
     });
   } catch (err) {
@@ -1340,7 +1366,7 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
       eps:        ["eps"],
       klarna:     ["klarna"],
       blik:       ["blik"],
-      mbway:      ["card"], // MB Way goes through card flow on Stripe
+      mbway:      ["mb_way"],      // MB Way — Stripe identifier is mb_way
       multibanco: ["multibanco"],
     };
     const stripePaymentMethods = stripeMethodMap[payment_method] || ["card"];
@@ -1353,6 +1379,14 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
     // Create Stripe Checkout session on merchant's connected account
     const session = await stripe.checkout.sessions.create({
       payment_method_types: stripePaymentMethods,
+      // SEPA debit note: mode="payment" collects one-time payment only.
+      // On-chain subscription handles recurrence — vault funded manually (Phase A).
+      // Phase B: switch SEPA to mode="setup" + setup_future_usage for mandate.
+      ...(stripePaymentMethods.includes("sepa_debit") ? {
+        payment_method_options: {
+          sepa_debit: { mandate_options: {} },
+        },
+      } : {}),
       line_items: [{
         price_data: {
           currency: stripeCurrency,
