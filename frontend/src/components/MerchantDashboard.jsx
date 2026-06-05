@@ -444,7 +444,7 @@ function AnalyticsPanel({ address }) {
             <Area type="monotone" dataKey="mrr_display" name="MRR" stroke={GREEN} strokeWidth={2} fill="url(#mrrGrad)" dot={false} activeDot={{ r: 4, fill: GREEN, strokeWidth: 0 }} />
           </AreaChart>
         </ResponsiveContainer>
-      ) : (
+      ) : activeChart === "gtv" ? (
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
