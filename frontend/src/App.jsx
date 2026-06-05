@@ -11,6 +11,7 @@ import { shortAddress, ADMIN_ADDRESS } from "./config.js";
 import Dashboard from "./components/Dashboard.jsx";
 import MerchantDashboard from "./components/MerchantDashboard.jsx";
 import LandingPage from "./LandingPage.jsx";
+import Status from "./components/Status.jsx";
 import { detectLang, t } from "./i18n.js";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
   const isMySubscriptionsRoute = window.location.pathname.startsWith("/my-subscriptions");
   const isPayRoute             = window.location.pathname.startsWith("/pay");
   const isPricingRoute         = window.location.pathname.startsWith("/pricing");
+  const isStatusRoute          = window.location.pathname.startsWith("/status");
   const [view, setView] = useState("subscriber");
   const [showApp, setShowApp] = useState(false);
 
@@ -126,6 +128,11 @@ export default function App() {
         }}
       />
     );
+  }
+
+  // Status page — public, no auth required
+  if (isStatusRoute) {
+    return <Status />;
   }
 
   // ── Main app ────────────────────────────────────────────────────────────────

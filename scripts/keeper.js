@@ -17,6 +17,9 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
 const { Pool }   = require("pg");
+const { upsertKeeperHeartbeat } = process.env.DATABASE_URL
+  ? require("./db.js")
+  : { upsertKeeperHeartbeat: async () => {} }; // no-op if DB not configured
 
 if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
 const VAULT_ADDRESS   = process.env.VAULT_ADDRESS;
@@ -370,7 +373,10 @@ async function run() {
 
   async function tick() {
     const timestamp = new Date().toISOString();
+    const cycleStart = Date.now();
     console.log(`[${timestamp}] Keeper cycle...`);
+
+    let pulled = 0, expired = 0, skipped = 0, cycleError = null;
 
     try {
       await checkKeeperBalance(provider, wallet.address);
@@ -381,17 +387,25 @@ async function run() {
       if (ids.length === 0) {
         console.log("  Nothing to do.");
         console.log("");
-        return;
+      } else {
+        ({ pulled, skipped } = await processDueSubscriptions(vault, ids));
+        expired = await expireGracePeriodSubscriptions(vault, ids);
+        console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due / skipped.`);
       }
-
-      const { pulled, skipped } = await processDueSubscriptions(vault, ids);
-      const expired = await expireGracePeriodSubscriptions(vault, ids);
-
-      console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due / skipped.`);
-      console.log("");
     } catch (err) {
+      cycleError = err.message;
       console.error(`  Keeper error: ${err.message}`);
-      console.log("");
+    }
+
+    const cycleMs = Date.now() - cycleStart;
+    console.log(`  Cycle time: ${cycleMs}ms`);
+    console.log("");
+
+    // Write heartbeat to DB
+    try {
+      await upsertKeeperHeartbeat({ cycleMs, pulled, expired, skipped, error: cycleError });
+    } catch (err) {
+      console.error(`  Heartbeat write failed: ${err.message}`);
     }
   }
 

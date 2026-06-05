@@ -509,6 +509,8 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   const [payments, setPayments]         = useState([]);
   const [webhooks, setWebhooks]         = useState([]);
   const [auditLog, setAuditLog]         = useState([]);
+  const [systemHealth, setSystemHealth] = useState(null);
+  const [systemLoading, setSystemLoading] = useState(false);
   const [tab, setTab]                   = useState("overview");
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState("");
@@ -564,6 +566,16 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     catch { console.error("Could not load audit log."); }
   }, [apiFetch]);
 
+  const fetchSystemHealth = useCallback(async () => {
+    setSystemLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/status`);
+      const d   = await res.json();
+      setSystemHealth(d);
+    } catch { console.error("Could not load system health."); }
+    finally { setSystemLoading(false); }
+  }, []);
+
   useEffect(() => {
     fetchStats();
     fetchMerchants();
@@ -577,6 +589,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     if (tab === "analytics"     && payments.length === 0)       fetchPayments();
     if (tab === "webhooks"      && webhooks.length === 0)       fetchWebhooks();
     if (tab === "audit"         && auditLog.length === 0)       fetchAuditLog();
+    if (tab === "system")                                        fetchSystemHealth();
   }, [tab]);
 
   const pendingCount  = merchants.filter(m => !m.approved_at).length;
@@ -629,6 +642,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     ["tax",            "Tax"],
     ["audit",          "Audit log"],
     ["contracts",      "Contracts"],
+    ["system",         "System ⚙"],
   ];
 
   return (
@@ -1117,6 +1131,69 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
             </div>
           </div>
         )}
+
+        {/* ── System ── */}
+        {tab === "system" && (() => {
+          const s   = systemHealth;
+          const k   = s?.services?.keeper;
+          const dbS = s?.services?.database;
+          const apiS = s?.services?.api;
+
+          function SysRow({ label, status, detail }) {
+            const color = status === "operational" ? "var(--green)"
+              : status === "degraded" ? "var(--amber)"
+              : status === "outage"   ? "var(--red)"
+              : "var(--text-muted)";
+            const dot = status === "operational" ? "●" : status === "degraded" ? "◐" : "○";
+            return (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "0.5px solid var(--border)" }}>
+                <div>
+                  <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>{label}</span>
+                  {detail && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{detail}</div>}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color }}>{dot} {status || "unknown"}</span>
+              </div>
+            );
+          }
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{
+                ...S.card, padding: "16px 20px",
+                background: s?.status === "operational" ? "rgba(29,158,117,0.06)" : "rgba(251,191,36,0.06)",
+                border: `0.5px solid ${s?.status === "operational" ? "rgba(29,158,117,0.2)" : "rgba(251,191,36,0.2)"}`,
+              }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: s?.status === "operational" ? "var(--green)" : "var(--amber)", letterSpacing: "-0.01em" }}>
+                  {systemLoading ? "Loading…" : s?.status === "operational" ? "● All Systems Operational" : s ? "◐ Partial Disruption" : "System status unavailable"}
+                </div>
+                {s?.timestamp && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Last checked {new Date(s.timestamp).toLocaleTimeString()}</div>}
+              </div>
+              <div style={{ ...S.card, padding: "4px 20px" }}>
+                <SysRow label="API"             status={apiS?.status} detail="REST API · Railway" />
+                <SysRow label="Database"        status={dbS?.status}  detail="PostgreSQL · Railway" />
+                <SysRow label="Keeper Bot"      status={k?.status}
+                  detail={k?.last_run_at
+                    ? `Last run ${Math.floor((Date.now() - new Date(k.last_run_at).getTime()) / 1000)}s ago · ${k.last_cycle_ms}ms cycle`
+                    : "No heartbeat yet"} />
+                <SysRow label="Smart Contracts" status="operational"  detail={`Base Network · ${VAULT_ADDRESS}`} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 12 }}>
+                <StatCard label="Keeper cycle"       value={k?.last_cycle_ms ? `${k.last_cycle_ms}ms` : "—"} color="var(--text-secondary)" />
+                <StatCard label="Keeper age"         value={k?.age_seconds != null ? `${k.age_seconds}s` : "—"} color={k?.age_seconds > 120 ? "var(--amber)" : "var(--green)"} />
+                <StatCard label="Webhook rate (24h)" value={s ? `${s.metrics?.webhook_success_rate_24h ?? 100}%` : "—"} color="var(--green)" />
+                <StatCard label="Failed webhooks"    value={s?.metrics?.failed_webhooks_24h ?? "—"} color={s?.metrics?.failed_webhooks_24h > 0 ? "var(--red)" : "var(--text-secondary)"} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={fetchSystemHealth} style={S.btn.ghost}>↻ Refresh</button>
+                <a href="/status" target="_blank" rel="noopener noreferrer"
+                  style={{ ...S.btn.ghost, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                  Public status page ↗
+                </a>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
     </div>
   );

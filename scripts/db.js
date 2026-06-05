@@ -280,6 +280,21 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_merchant ON stripe_checkout_sessions(merchant_address)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_subscriber ON stripe_checkout_sessions(subscriber_email)`);
 
+  // System health — keeper heartbeat and service monitoring
+  await query(`
+    CREATE TABLE IF NOT EXISTS system_health (
+      service             TEXT PRIMARY KEY,
+      last_run_at         TIMESTAMPTZ,
+      last_cycle_ms       INTEGER,
+      last_pulled         INTEGER DEFAULT 0,
+      last_expired        INTEGER DEFAULT 0,
+      last_skipped        INTEGER DEFAULT 0,
+      last_error          TEXT,
+      total_cycles        BIGINT DEFAULT 0,
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // v5 migrations — add new columns if upgrading from v4
   await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS token_address      TEXT`);
   await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS token_symbol       TEXT DEFAULT 'USDC'`);
@@ -301,6 +316,31 @@ async function initSchema() {
   await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiat_currency     TEXT DEFAULT 'eur'`);
 
   console.log("[DB] Schema ready ✓");
+}
+
+// -----------------------------------------------------------------------------
+// System health helpers
+// -----------------------------------------------------------------------------
+
+async function upsertKeeperHeartbeat({ cycleMs, pulled, expired, skipped, error }) {
+  await query(`
+    INSERT INTO system_health (service, last_run_at, last_cycle_ms, last_pulled, last_expired, last_skipped, last_error, total_cycles, updated_at)
+    VALUES ('keeper', NOW(), $1, $2, $3, $4, $5, 1, NOW())
+    ON CONFLICT (service) DO UPDATE SET
+      last_run_at   = NOW(),
+      last_cycle_ms = $1,
+      last_pulled   = $2,
+      last_expired  = $3,
+      last_skipped  = $4,
+      last_error    = $5,
+      total_cycles  = system_health.total_cycles + 1,
+      updated_at    = NOW()
+  `, [cycleMs, pulled, expired, skipped, error || null]);
+}
+
+async function getSystemHealth() {
+  const res = await query(`SELECT * FROM system_health`);
+  return res.rows;
 }
 
 // -----------------------------------------------------------------------------
@@ -695,6 +735,8 @@ async function getAdminAuditLog({ limit = 50, offset = 0 } = {}) {
 module.exports = {
   query,
   pool,
+  upsertKeeperHeartbeat,
+  getSystemHealth,
   initSchema,
   encrypt,
   decrypt,

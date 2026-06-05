@@ -214,13 +214,94 @@ function generateWebhookSecret() {
 // Health check
 app.get("/api/health", async (req, res) => {
   const dbOk = await db.healthCheck();
+  const health = await db.getSystemHealth().catch(() => []);
+  const keeper = health.find(h => h.service === "keeper");
+  const keeperAge = keeper?.last_run_at
+    ? Math.floor((Date.now() - new Date(keeper.last_run_at).getTime()) / 1000)
+    : null;
+  const keeperOk = keeperAge !== null && keeperAge < 180; // stale if >3 min
+
   res.json({
-    status: dbOk ? "ok" : "degraded",
-    service: "AuthOnce API",
-    version: "1.0.0",
+    status:   dbOk && keeperOk ? "ok" : "degraded",
+    service:  "AuthOnce API",
+    version:  "1.0.0",
     timestamp: new Date().toISOString(),
     database: dbOk ? "connected" : "disconnected",
+    keeper: {
+      status:       keeperOk ? "ok" : keeper ? "stale" : "unknown",
+      last_run_at:  keeper?.last_run_at || null,
+      last_cycle_ms: keeper?.last_cycle_ms || null,
+      age_seconds:  keeperAge,
+      total_cycles: keeper?.total_cycles || 0,
+      last_error:   keeper?.last_error || null,
+    },
   });
+});
+
+// ─── GET /api/status — public status page endpoint ───────────────────────────
+app.get("/api/status", async (req, res) => {
+  try {
+    const dbOk   = await db.healthCheck();
+    const health = await db.getSystemHealth().catch(() => []);
+    const keeper = health.find(h => h.service === "keeper");
+    const keeperAge = keeper?.last_run_at
+      ? Math.floor((Date.now() - new Date(keeper.last_run_at).getTime()) / 1000)
+      : null;
+    const keeperOk = keeperAge !== null && keeperAge < 180;
+
+    // Failed pulls in last 24h
+    const failedResult = await db.pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM webhook_deliveries
+      WHERE status = 'failed'
+        AND created_at > NOW() - INTERVAL '24 hours'
+    `).catch(() => ({ rows: [{ count: 0 }] }));
+
+    // Webhook success rate last 24h
+    const webhookResult = await db.pool.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'delivered')::int AS delivered
+      FROM webhook_deliveries
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+    `).catch(() => ({ rows: [{ total: 0, delivered: 0 }] }));
+
+    const wh = webhookResult.rows[0];
+    const webhookRate = wh.total > 0
+      ? Math.round((wh.delivered / wh.total) * 100)
+      : 100;
+
+    res.json({
+      status:    dbOk && keeperOk ? "operational" : "degraded",
+      timestamp: new Date().toISOString(),
+      services: {
+        api: {
+          status:  "operational",
+          latency: null,
+        },
+        database: {
+          status: dbOk ? "operational" : "outage",
+        },
+        keeper: {
+          status:       keeperOk ? "operational" : keeper ? "degraded" : "unknown",
+          last_run_at:  keeper?.last_run_at || null,
+          last_cycle_ms: keeper?.last_cycle_ms || null,
+          age_seconds:  keeperAge,
+        },
+        contracts: {
+          status:  "operational",
+          network: process.env.NETWORK || "base-sepolia",
+          vault:   process.env.VAULT_ADDRESS || null,
+        },
+      },
+      metrics: {
+        webhook_success_rate_24h: webhookRate,
+        failed_webhooks_24h:      failedResult.rows[0].count,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
 });
 
 // -----------------------------------------------------------------------------
@@ -525,18 +606,6 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
       ORDER BY m.month_start ASC
     `, [address, months]);
 
-    // ── New subscriptions per month ────────────────────────────────────────
-    const newSubsResult = await db.pool.query(`
-      SELECT
-        TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
-        COUNT(*)::int AS new_subs
-      FROM subscriptions
-      WHERE LOWER(merchant_address) = $1
-        AND created_at >= NOW() - ($2 || ' months')::interval
-      GROUP BY month
-      ORDER BY month ASC
-    `, [address, months]);
-
     // ── Churn events per month ─────────────────────────────────────────────
     const churnResult = await db.pool.query(`
       SELECT
@@ -575,7 +644,6 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
     const mrrByMonth   = Object.fromEntries(mrrResult.rows.map(r => [r.month, r]));
     const gtvByMonth   = Object.fromEntries(gtvResult.rows.map(r => [r.month, r]));
     const churnByMonth = Object.fromEntries(churnResult.rows.map(r => [r.month, r.churned]));
-    const newSubsByMonth = Object.fromEntries(newSubsResult.rows.map(r => [r.month, r.new_subs]));
 
     // Build complete month list for the range (fill gaps with zeros)
     const allMonths = [];
@@ -593,7 +661,6 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
         fee_usdc:      parseFloat(gtvByMonth[key]?.fee_usdc || 0),
         payment_count: parseInt(gtvByMonth[key]?.payment_count || 0),
         churned:       parseInt(churnByMonth[key] || 0),
-        new_subs:      parseInt(newSubsByMonth[key] || 0),
       });
     }
 
@@ -603,16 +670,6 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
     const churnRate = summary.active_subs + summary.churned_total > 0
       ? (summary.churned_total / (summary.active_subs + summary.churned_total) * 100).toFixed(1)
       : "0.0";
-
-    // ARPU = total GTV / total unique subscribers (active + churned)
-    const totalUniqueSubscribers = summary.total_subs || 1;
-    const arpu = (parseFloat(paySum.total_gtv) / totalUniqueSubscribers).toFixed(2);
-
-    // LTV = ARPU / churn_rate (as decimal). Guard divide-by-zero.
-    const churnDecimal = parseFloat(churnRate) / 100;
-    const ltv = churnDecimal > 0
-      ? (parseFloat(arpu) / churnDecimal).toFixed(2)
-      : null; // infinite LTV — no churn yet
 
     res.json({
       range,
@@ -628,8 +685,6 @@ app.get("/api/merchants/:address/analytics", requireMerchantAuth, async (req, re
         total_net:      parseFloat(paySum.total_net).toFixed(2),
         total_fees:     parseFloat(paySum.total_fees).toFixed(4),
         total_payments: paySum.total_payments,
-        arpu:           arpu,
-        ltv:            ltv,
       },
     });
   } catch (err) {
@@ -1366,7 +1421,7 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
       eps:        ["eps"],
       klarna:     ["klarna"],
       blik:       ["blik"],
-      mbway:      ["mb_way"],      // MB Way — Stripe identifier is mb_way
+      mbway:      ["card"], // MB Way goes through card flow on Stripe
       multibanco: ["multibanco"],
     };
     const stripePaymentMethods = stripeMethodMap[payment_method] || ["card"];
@@ -1379,14 +1434,6 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
     // Create Stripe Checkout session on merchant's connected account
     const session = await stripe.checkout.sessions.create({
       payment_method_types: stripePaymentMethods,
-      // SEPA debit note: mode="payment" collects one-time payment only.
-      // On-chain subscription handles recurrence — vault funded manually (Phase A).
-      // Phase B: switch SEPA to mode="setup" + setup_future_usage for mandate.
-      ...(stripePaymentMethods.includes("sepa_debit") ? {
-        payment_method_options: {
-          sepa_debit: { mandate_options: {} },
-        },
-      } : {}),
       line_items: [{
         price_data: {
           currency: stripeCurrency,
