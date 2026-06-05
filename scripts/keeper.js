@@ -16,12 +16,25 @@
 
 require("dotenv").config();
 const { ethers } = require("ethers");
+const { Pool }   = require("pg");
 
 if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
 const VAULT_ADDRESS   = process.env.VAULT_ADDRESS;
 const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const KEEPER_PRIVKEY  = process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY;
 const RUN_INTERVAL_MS = 60_000;
+
+// ─── DB pool (optional — falls back to on-chain scan if DATABASE_URL not set) ─
+const db = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, max: 3 })
+  : null;
+
+if (db) {
+  db.on("error", err => console.error("[KEEPER-DB] Pool error:", err.message));
+  console.log("  DB: connected — using DB-driven subscription scan");
+} else {
+  console.log("  DB: DATABASE_URL not set — falling back to on-chain sequential scan");
+}
 
 // ─── ABI — v6 ───────────────────────────────────────────────────────────────
 // Key changes from v5:
@@ -154,10 +167,30 @@ function setup() {
   return { provider, wallet, vault };
 }
 
-// ─── Scan all subscription IDs ───────────────────────────────────────────────
-// TODO v6.1: replace with DB-driven query for scale.
-// Current approach scans from 0 until ZeroAddress owner — works for testnet.
+// ─── Get subscription IDs ─────────────────────────────────────────────────────
+// DB-driven: queries subscriptions table for active/paused IDs.
+// Falls back to sequential on-chain scan if DB unavailable.
+// DB is the source of truth — notifier writes to it on SubscriptionCreated events.
 async function getSubscriptionIds(vault) {
+  // ── DB path (preferred) ──────────────────────────────────────────────────
+  if (db) {
+    try {
+      const result = await db.query(
+        `SELECT id FROM subscriptions
+         WHERE status IN ('active', 'paused')
+         ORDER BY id ASC`
+      );
+      const ids = result.rows.map(r => Number(r.id));
+      console.log(`  DB scan: ${ids.length} active/paused subscription(s).`);
+      return ids;
+    } catch (err) {
+      console.error(`  DB scan failed (${err.message}) — falling back to on-chain scan.`);
+      // Fall through to on-chain scan
+    }
+  }
+
+  // ── On-chain fallback ────────────────────────────────────────────────────
+  console.log("  On-chain scan (sequential)...");
   const ids = [];
   let id = 0;
   while (true) {
