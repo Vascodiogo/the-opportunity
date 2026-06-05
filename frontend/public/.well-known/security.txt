@@ -1,0 +1,5 @@
+Contact: mailto:security@authonce.io
+Expires: 2027-06-05T00:00:00Z
+Preferred-Languages: en, pt
+Policy: https://authonce.io/privacy
+Canonical: https://authonce.io/.well-known/security.txt
