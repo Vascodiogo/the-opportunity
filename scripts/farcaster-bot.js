@@ -360,16 +360,55 @@ async function post() {
 }
 
 // ─── Scheduler — daily at 12:00 UTC ──────────────────────────────────────────
+let posting = false;
+
+async function getLastPostedDate() {
+  try {
+    const res = await pool.query("SELECT value FROM bot_state WHERE key = 'farcaster-last-date'");
+    if (res.rows.length > 0) return res.rows[0].value; // 'YYYY-MM-DD'
+  } catch (e) {
+    console.error('[farcaster-bot] DB last-date read failed:', e.message);
+  }
+  return null;
+}
+
+async function saveLastPostedDate(dateStr) {
+  try {
+    await pool.query(
+      "INSERT INTO bot_state (key, value) VALUES ('farcaster-last-date', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+      [dateStr]
+    );
+  } catch (e) {
+    console.error('[farcaster-bot] DB last-date save failed:', e.message);
+  }
+}
+
+function todayUTC() {
+  return new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+}
+
 function shouldPostNow() {
-  const now  = new Date();
-  const hour = now.getUTCHours();
-  const min  = now.getUTCMinutes();
-  return hour === 12 && min === 0;
+  const now = new Date();
+  return now.getUTCHours() === 12 && now.getUTCMinutes() === 0;
 }
 
 setInterval(async () => {
-  if (shouldPostNow()) {
+  if (!shouldPostNow()) return;
+  if (posting) return; // in-process concurrent execution guard
+
+  const today    = todayUTC();
+  const lastDate = await getLastPostedDate();
+  if (lastDate === today) {
+    console.log(`[farcaster-bot] Already posted today (${today}), skipping.`);
+    return;
+  }
+
+  posting = true;
+  try {
     await post();
+    await saveLastPostedDate(today);
+  } finally {
+    posting = false;
   }
 }, 60 * 1000);
 
