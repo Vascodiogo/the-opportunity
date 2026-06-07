@@ -19,15 +19,16 @@
 | Layer | Technology | Status |
 |---|---|---|
 | Smart Contracts | Solidity 0.8.24 via **Hardhat** | ✅ Base Sepolia v6 (all audit fixes applied May 31) |
-| Keeper Bot | Node.js v6 on Railway | ✅ Running 24/7 |
-| Notifier | Node.js v6 on Railway | ✅ Running |
-| Backend API | Express.js on Railway | ✅ Built |
+| Keeper Bot | Node.js v6 on Railway | ✅ Dedicated service — authonce-keeper |
+| Notifier | Node.js v6 on Railway | ✅ Dedicated service — authonce-notifier |
+| X Bot | Node.js on Railway | ✅ Dedicated service — authonce-x-bot |
+| Backend API | Express.js on Railway | ✅ Dedicated service — the-opportunity (API only) |
 | Database | PostgreSQL on Railway | ✅ Schema live |
-| Frontend | React + Vite on Cloudflare Pages | ✅ Live at authonce.io (recharts + react-is added Jun 3) |
+| Frontend | React + Vite on Cloudflare Pages | ✅ Live at authonce.io |
 | Auth (subscriber) | Google OAuth via Passport.js | ✅ Verified + Published May 17 2026 |
 | Auth (merchant/admin) | MetaMask / RainbowKit + JWT | ✅ Working |
 | Admin security | Cloudflare Access + rate limiting | ✅ May 24 2026 |
-| Fiat Onramp | Stripe Checkout (card/MB Way/Multibanco/SEPA) | ✅ Phase A built May 24 |
+| Fiat Onramp | Stripe Checkout (card/MB Way/Multibanco/SEPA) | ✅ Phase A built May 24. SEPA mandate options + MB Way fix Jun 7 |
 | Stripe Connect | Merchant OAuth flow | ✅ Built in api.js |
 | Notifications | Resend (notifications@authonce.io) + webhooks | ✅ Branded HTML templates v5 |
 | Custom Sender Domains | Resend domain API (Business+ tier) | ✅ Built in resend-domains.js |
@@ -55,7 +56,12 @@
   - Signer 2: MetaMask `0x00df2Dbb2455C372204EdD901894E27281fA02C0`
   - Threshold: 2/2 — upgrade to 2/3 when sister added
 
-✅ **Security:** Deployer key replaced May 30. Keeper wallet confirmed May 31 (`0xdCEa737...`). Railway env vars all updated.
+✅ **Security:** Deployer key replaced May 30. Keeper wallet confirmed May 31. DEPLOYER_PRIVATE_KEY corrected in Railway Jun 7. STRIPE_SECRET_KEY confirmed sk_live_ Jun 7.
+
+⚠️ **Mainnet wallet balances (Jun 7):**
+- Keeper `0xdCEa737...` — 0 ETH on Base Mainnet (testnet topped up Jun 7)
+- Safe multisig `0x737D4...` — 0.0009 ETH on Base Mainnet
+- Both need top-up to 0.05 ETH before September mainnet
 
 ---
 
@@ -108,18 +114,26 @@ scripts/
   email-templates.js  — Branded HTML email templates (all notification types, whitelabel)
   resend-domains.js   — Merchant custom sender domain management via Resend API
   deploy.js           — Hardhat deployment script (MerchantRegistry → SubscriptionVault → tokens)
+  x-bot.js            — X/Twitter bot (Mon/Wed/Fri 12:00 UTC)
 ```
 
-**Stripe Checkout (Phase A — built May 24):**
+**Stripe Checkout (Phase A — built May 24, SEPA + MB Way fixed Jun 7):**
 - `POST /api/stripe/checkout` — creates session with live CoinGecko fiat rate
 - `checkout.session.completed` → subscriber wallet auto-created + admin vault funding email
 - `payment_intent.payment_failed` → grace period + subscriber email
+- `charge.dispute.created` → pauses subscription, notifies merchant, logs to audit_log ✅ Jun 7
+- `charge.dispute.closed` → logs outcome to audit_log ✅ Jun 7
+- SEPA mandate options + `setup_future_usage: "off_session"` ✅ Jun 7
+- MB Way fixed: `mb_way` (was wrongly `card`) ✅ Jun 7
 - Admin receives: exact USDC amount, vault address, treasury address, exchange rate
 - Phase B (post-audit): automate treasury → vault USDC transfer
 
-**Admin API routes (built May 24):**
+**Admin API routes (built):**
 - `GET /api/admin/subscriptions` — searchable, filterable
 - `GET /api/admin/subscribers` — email/wallet lookup
+- `DELETE /api/admin/subscribers/:email` — GDPR right to erasure ✅ Jun 7
+- `GET /api/admin/gdpr/pending` — pending on-chain cancellations ✅ Jun 7
+- `POST /api/admin/gdpr/pending/:id/resolve` — mark resolved ✅ Jun 7
 - `GET /api/admin/payments` — full history with token + fiat
 - `GET /api/admin/webhooks` — delivery log
 - `GET /api/admin/audit-log` — admin action history
@@ -133,12 +147,6 @@ scripts/
 - `POST /api/merchant/email-domain/verify` — verify DNS with Resend
 - `GET/DELETE /api/merchant/email-domain` — manage domain
 
-**Key metrics to add to admin/merchant dashboard (post-mainnet):**
-- GTV (Gross Transaction Volume)
-- MRR (Monthly Recurring Revenue)
-- Active subscriptions count
-- Active merchants count
-
 ---
 
 ## 5. Frontend File Map
@@ -150,11 +158,11 @@ frontend/src/
   config.js                     — v6 ABI, contract addresses, VITE_ALCHEMY_KEY
   components/
     Dashboard.jsx               — subscriber view
-    MerchantDashboard.jsx       — merchant portal + price type toggle + 15 currencies
+    MerchantDashboard.jsx       — merchant portal + VAT/country/billing fields ✅ Jun 7
     PayPage.jsx                 — pay link page (Google OAuth ✅, Stripe Phase A ✅)
     MySubscriptions.jsx         — subscriber portal ✅
-    AdminDashboard.jsx          — admin portal v2 (10 tabs)
-    Pricing.jsx                 — pricing page (isDark default fixed to false May 30)
+    AdminDashboard.jsx          — admin portal v2 (10 tabs + GDPR pending + wallet balances) ✅ Jun 7
+    Pricing.jsx                 — pricing page
 ```
 - Pay link URL: `authonce.io/pay/:merchantAddress/:productSlug` ✅
 - Subscriber portal: `authonce.io/my-subscriptions` ✅
@@ -178,12 +186,14 @@ frontend/src/
 | 8 | Smart contract audit | 🔄 Cyfrin proposal received ($12K, 3 days, August) — awaiting funds |
 | 9 | Safe multisig + Ledger | ✅ Complete May 30 — Safe confirmed on Base Mainnet |
 | 10 | Subscriber portal | ✅ Built May 17 |
-| 11 | MB Way + Multibanco + SEPA | ⬜ Enabled on Stripe, not wired |
+| 11 | SEPA bank transfer | ✅ Wired Jun 7 — mandate options + dispute handlers |
 | 12 | Security fixes applied to contracts | ✅ Complete May 30 |
 | 13 | Contracts redeployed to Base Sepolia | ✅ Complete May 30 |
 | 14 | Landing page v3 | ✅ Complete May 30 |
 | 15 | Pitch deck v2 | ✅ Complete May 30 |
-| 16 | Mainnet deployment | ⬜ Blocked by audit |
+| 16 | GDPR right to erasure | ✅ Complete Jun 7 |
+| 17 | Railway service separation | ✅ Complete Jun 7 |
+| 18 | Mainnet deployment | ⬜ Blocked by audit |
 
 ---
 
@@ -216,20 +226,20 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 
 ---
 
-## 8. Audit Outreach Status (May 30)
+## 8. Audit Outreach Status (Jun 7)
 
 | Firm | Contact | Status |
 |---|---|---|
-| Cyfrin | will@cyfrin.io | ✅ Proposal received: $12K, 3 days, August. Awaiting funds to confirm. |
-| Hashlock | fletcher@hashlock.com.au | ✅ Call done May 30. $5-10K range. Deck sent. Deferred payment asked. |
-| Hacken | p.bhowmick@hacken.io | 🔄 Call to book via Calendly |
+| Cyfrin | will@cyfrin.io | ✅ Proposal received: $12K, 3 days, August. Awaiting funds to confirm. Replied "what did you have in mind?" — awaiting Will's response. |
+| Hashlock | fletcher@hashlock.com.au | ✅ Call done May 30. $5-10K range. Deck sent. Deferred payment declined. |
+| Hacken | prusela.andrade@hacken.io | 🔄 João no-show — Prusela Andrade covering — email sent Jun 5 |
 | Guardian | audits@guardianaudits.com | 🔄 Awaiting reply |
 
 **Decision:** Will not commit to Cyfrin until funds secured. Proposal is live and available.
 
 ---
 
-## 9. Investment & Fundraising Status (May 30)
+## 9. Investment & Fundraising Status (Jun 7)
 
 **Raising:** €150,000 pre-seed · 10-15% equity
 **Use of funds:** 40% audit · 35% business co-founder · 15% legal · 10% operations
@@ -241,21 +251,23 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 | RR² Capital (investments@rr2.capital) | ✅ Email sent with deck |
 | Nuno Correia / SumCap | ✅ LinkedIn connection request sent |
 | Colin Armstrong / Paragraph | ✅ Email sent Jun 2 — colin@armstr.ng |
-| Afonso S. Monteiro / Subvisual BD | ✅ LinkedIn message sent Jun 2 |
 | Subvisual intro call | ✅ Booked June 9th 13:30 |
 | João Andrade / Hacken Portugal | ✅ Replied Jun 2 — personal contact established |
-| Roberto Machado / Subvisual | ✅ LinkedIn connection request sent |
 | Cyfrin (Will) — VC intro asked | 🔄 Pending |
 | Hashlock (Fletcher) — VC intro asked | 🔄 Pending |
 | Jesse Pollak (@jessepollak) | ✅ Two X replies posted |
-| Aruneesh Salhotra | 🔄 Liked LinkedIn post — connection request sent |
+| Cuatrecasas Acelera (11th edition) | ✅ Application submitted Jun 7 — deadline June 26 |
+| JoynIgnite | ⬜ Post-July — after PME Certification (FinTech focus, max €375K) |
+| Shilling Capital Partners II | ⬜ Post-July — rjacinto@shillingcapital.com |
+| BrainCapital | ⬜ Post-July — tiago.morais.santos@braintrust.pt |
 
 **Pitch deck:** `AuthOnce-PitchDeck-v2-2026.pptx` — 12 slides including GTM + Competition
+**Business Plan:** `AuthOnce_BusinessPlan_2026_Updated.pdf` — updated Jun 7 ✅
 **Investor Q&A:** `AuthOnce-InvestorQA-2026.docx` — 30 Q&A for founder preparation (not to share)
 
 ---
 
-## 10. Regulatory & Legal Status (May 30)
+## 10. Regulatory & Legal Status (Jun 7)
 
 | Item | Status |
 |---|---|
@@ -264,19 +276,28 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 | Fio Legal — Patent Box | 🔄 Offer €1,200+VAT pending decision |
 | Fio Legal — MiCA | ❌ Out of scope at current budget |
 | Portugal FinLab | ❌ Edition 7 closed — next edition late 2026 |
-| Company incorporation | ⬜ Not yet — Portugal or Switzerland TBD |
+| Company incorporation | ⬜ July 2026 — Empresa Online ~€180 |
+| Cuatrecasas Acelera | ✅ Application submitted Jun 7 |
+| PME Certification | ⬜ Post-incorporation — free, 2-4 weeks, required for Business Angels funds |
+
+**Post-incorporation sequence:**
+1. Incorporate July 2026 (~€180)
+2. Apply PME Certification (free, 2-4 weeks)
+3. Approach JoynIgnite, Shilling, BrainCapital
+4. Flag to Fio Legal: BSL 1.1 must be assigned to Lda, supports commercial licensing
 
 ---
 
-## 11. Social & Community (May 30)
+## 11. Social & Community (Jun 7)
 
 | Channel | Status |
 |---|---|
 | authonce.io | ✅ Live — Landing page v3 deployed |
-| @AuthOnce on X | ✅ Active |
+| @VascoAlgoTrader on X | ✅ Handle change to @VascoBuilds pending X approval. Bio updated Jun 7. Birthday set to private. |
+| @AuthOnce on X | ✅ Pinned post live. X bot running Mon/Wed/Fri 12:00 UTC. |
 | @authonce on Warpcast (FID: 3324301) | ✅ Farcaster bot posting daily 12:00 UTC — 21 posts, 3-week rotation |
 | LinkedIn company page | ✅ Created May 30 — linkedin.com/company/authonce |
-| X bot | ✅ Running Mon/Wed/Fri 12:00 UTC — 12 posts, 4-week rotation, text+banner mix |
+| builders.to | ⬜ Register after mainnet — do-follow backlinks + build-in-public audience |
 
 ---
 
@@ -296,7 +317,8 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 ## 13. Pre-Mainnet Checklist (Code)
 - [x] Stripe Checkout Phase A — manual USDC bridge ✅ May 24
 - [ ] Stripe Checkout Phase B — automate USDC transfer (post-audit)
-- [ ] SEPA bank transfer — enabled on Stripe, needs wiring
+- [x] SEPA bank transfer — mandate options + dispute handlers ✅ Jun 7
+- [x] MB Way Stripe identifier fixed (card → mb_way) ✅ Jun 7
 - [x] Geofencing — HTTP 451 OFAC ✅
 - [x] Subscriber portal ✅
 - [x] 3-day pre-payment notification ✅
@@ -308,14 +330,16 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 - [x] Stablecoin restriction — WETH/cbBTC blocked ✅
 - [x] Subscriber import DB schema ✅
 - [ ] Subscriber import UI — CSV upload (post-mainnet ready)
-- [ ] MRR chart + GTV analytics in Merchant Dashboard and Admin
-- [ ] Separate keeper/notifier Railway services
+- [x] MRR + GTV charts — AdminDashboard + MerchantDashboard Analytics ✅ Jun 4-5
+- [x] ARPU, LTV, churn rate, new vs churned — MerchantDashboard Analytics ✅ Jun 5
+- [x] Separate keeper/notifier/x-bot Railway services ✅ Jun 7
 - [x] New deployer + keeper wallets ✅ May 30
+- [x] DEPLOYER_PRIVATE_KEY corrected in Railway ✅ Jun 7
+- [x] STRIPE_SECRET_KEY confirmed sk_live_ ✅ Jun 7
 - [x] Cloudflare Access on /admin ✅ May 24
 - [x] Rate limiting on admin login ✅ May 24
 - [x] Basescan API key ✅ Etherscan V2
 - [x] Update local .env RESEND_API_KEY ✅
-- [x] Update Railway DEPLOYER_PRIVATE_KEY to new deployer ✅ May 31
 - [ ] Smart contract audit — Cyfrin $12K proposal on table, awaiting funds
 - [x] PostgreSQL session store — MemoryStore warning fixed ✅ May 31
 - [x] Merchant webhook route POST /api/merchants/:address/webhook added ✅ May 31
@@ -324,22 +348,32 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 - [ ] Pay link dark/light mode toggle (post-mainnet)
 - [x] Stripe application_fee_amount 0.5% wired ✅ Jun 3
 - [x] Multi-token product creation fixed ✅ Jun 3
-- [x] Product form bulletproof validation ✅ Jun 3
-- [x] Edit Product — crypto token selection (USDC/USDT/DAI/EURC) ✅ Jun 3
 - [x] Railway PORT fix — API on port 8080 ✅ Jun 3
-- [ ] Subscriber token selector on pay page — choose USDC/EURC/USDT at subscription time
-- [ ] Netlify — confirm fully decommissioned (paused, not serving anything)
+- [x] Keeper DB-driven subscription scan + on-chain fallback ✅ Jun 5
+- [x] Keeper cycle timer + heartbeat to DB (system_health table) ✅ Jun 5
+- [x] /api/status public endpoint ✅ Jun 5
+- [x] Status.jsx — public status page at authonce.io/status ✅ Jun 5
+- [x] AdminDashboard System ⚙ tab ✅ Jun 5
+- [x] DM Sans self-hosted — Google Fonts removed ✅ Jun 5
+- [x] Cloudflare Bot Fight Mode + AI crawler blocking ✅ Jun 5
+- [x] security@authonce.io Zoho group + security.txt ✅ Jun 5
+- [x] Netlify fully decommissioned — Git unlinked, domains removed ✅ Jun 7
 - [x] Google OAuth app publishing ✅
 - [x] Cloudflare Pages SPA routing ✅
 - [x] Legal pages live ✅
 - [x] v6 contracts — all ChainShield audit fixes applied ✅ May 31
 - [x] v6 contracts redeployed + verified Base Sepolia ✅ May 31
-- [x] config.js v6 ABI updated ✅ May 31
-- [x] VITE_ALCHEMY_KEY set ✅
 - [x] Safe multisig confirmed on Base Mainnet ✅ May 30
 - [x] Landing page v3 deployed ✅ May 30
 - [x] End-to-end Sepolia subscriber flow test ✅ May 31 — all 10 flows passed
-- [x] [H1] guard — solved via _isMainnet bool in MerchantRegistry v3 constructor ✅
+- [x] GDPR delete endpoint + auto on-chain cancellation ✅ Jun 7
+- [x] GDPR pending on-chain dashboard ✅ Jun 7
+- [x] Keeper/Safe/Deployer/Treasury wallet balance monitoring ✅ Jun 7
+- [x] ETH balance email alerts — 24h cooldown ✅ Jun 7
+- [x] Merchant VAT number + country + billing address ✅ Jun 7
+- [ ] Keeper + Safe ETH top-up on Base Mainnet (both at 0 — do before September)
+- [ ] MerchantRegistry H1 guard — uncomment before mainnet deploy
+- [ ] Stripe webhook events: charge.dispute.created + charge.dispute.closed registered ✅ Jun 7
 
 ---
 
@@ -380,7 +414,18 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
   Team: frosty-lake-d608.cloudflareaccess.com
 
 **Railway project:** supportive-prosperity (Hobby $5/month)
-  Services: the-opportunity (keeper + notifier + api), postgres, monitor, farcaster-bot
+  Services (Jun 7 — fully separated):
+  - the-opportunity → `node scripts/api.js` (public port 8080)
+  - authonce-keeper → `node scripts/keeper.js` (no public port)
+  - authonce-notifier → `node scripts/notifier.js` (no public port)
+  - authonce-x-bot → `node scripts/x-bot.js` (no public port)
+  - farcaster-bot → separate service (existing)
+  - monitor → separate service (existing)
+  - postgres → database
+
+  Build command for all services: `echo "build done"` (prevents Nixpacks build-time script execution)
+  nixpacks.toml in repo root: `[phases.build] cmds = []`
+
   Key env vars: VAULT_ADDRESS, KEEPER_PRIVATE_KEY, DEPLOYER_PRIVATE_KEY, DATABASE_URL,
                 RESEND_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
                 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET, ENCRYPTION_KEY,
@@ -403,18 +448,29 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 
 ## 16. Next Session Priorities
 
-1. **Subvisual call** — June 9th 13:30 — prepare deck, demo link, €150K raise story
-2. **Secure audit funding** — follow up RR², Mission Fund, Nuno Correia, Fletcher VC intro responses
-3. **Confirm Cyfrin** — once funds secured, reply to Will and book August slot
-4. **Subscriber token selector on pay page** — choose USDC/EURC/USDT at subscription time
-5. **MRR chart + GTV analytics** — Merchant Dashboard + Admin Dashboard
-6. **MB Way + Multibanco + SEPA** — wire in API payment method mapping
-7. **keeper.js** — update `getSubscriptionIds()` to DB-driven query (scale prep)
-8. **Keeper wallet ETH monitoring** — alert when `0xdCEa737...` balance drops below 0.005 ETH
+1. **Subvisual call** — June 9th 13:30 — call structure ready in PT + EN
+2. **Subvisual follow-up email** — draft and send within 2 hours after the call
+3. **Prusela @ Hacken** — follow up if no reply by Mon Jun 8
+4. **Will @ Cyfrin** — awaiting reply on "what did you have in mind"
+5. **Keeper + Safe ETH top-up** — both wallets at 0 ETH on Base Mainnet — send 0.05 ETH each via bridge.base.org
+6. **@VascoBuilds handle** — check if X approved the change
+7. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
+8. **Coinbase Onramp case 01559408** — parked, follow up January 2027
+
+**Audit outreach status:**
+- Cyfrin: replied "what did you have in mind?" — awaiting Will's response
+- Hacken: João no-show — Prusela Andrade covering — email sent Jun 5
+- Hashlock: deferred payment declined — $5-10K proposal on table
+- Guardian: awaiting reply
+
+**Stripe webhook events registered (13 total — Jun 7):**
+checkout.session.completed, payment_intent.succeeded, payment_intent.payment_failed,
+invoice.paid, invoice.payment_failed, customer.subscription.deleted/created/updated/paused/resumed,
+charge.refunded, charge.dispute.created, charge.dispute.closed
 
 **Session file protocol:** Upload CLAUDE-CORE.md every session. Upload specific files being touched (max 2-3). Never upload CLAUDE-REFERENCE.md unless specifically needed.
 
 **CLAUDE-REFERENCE.md** contains: decisions log, fee analysis, competitive landscape, legal notes,
 marketing strategy, DataOnce, social media. Upload only when needed.
 
-*Last updated: 2026-06-03*
+*Last updated: 2026-06-07*
