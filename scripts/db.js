@@ -107,6 +107,9 @@ async function initSchema() {
       iban_encrypted        TEXT,
       bic                   TEXT,
       account_holder        TEXT,
+      country_code          TEXT DEFAULT 'PT',
+      vat_number            TEXT,
+      billing_address       TEXT,
       approved_at           TIMESTAMPTZ,
       created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -331,6 +334,11 @@ async function initSchema() {
   await query(`ALTER TABLE system_health ADD COLUMN IF NOT EXISTS safe_eth_warn    BOOLEAN DEFAULT FALSE`);
   await query(`ALTER TABLE system_health ADD COLUMN IF NOT EXISTS treasury_usdc    NUMERIC(18,6)`);
 
+  // v6 migrations — merchant VAT and billing fields
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS country_code    TEXT DEFAULT 'PT'`);
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS vat_number      TEXT`);
+  await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS billing_address TEXT`);
+
   // GDPR pending on-chain cancellations — crypto-native subscribers
   await query(`
     CREATE TABLE IF NOT EXISTS gdpr_pending_onchain (
@@ -530,7 +538,8 @@ async function getPaymentsByMerchant(merchantAddress, limit = 50) {
 async function upsertMerchant(walletAddress, data = {}) {
   const {
     businessName, email, webhookUrl, webhookSecret,
-    settlementPreference, ibanPlaintext, bic, accountHolder
+    settlementPreference, ibanPlaintext, bic, accountHolder,
+    countryCode, vatNumber, billingAddress,
   } = data;
 
   const ibanEncrypted = ibanPlaintext ? encrypt(ibanPlaintext) : null;
@@ -539,8 +548,9 @@ async function upsertMerchant(walletAddress, data = {}) {
     INSERT INTO merchants
       (wallet_address, business_name, email, webhook_url, webhook_secret,
        settlement_preference, iban_encrypted, bic, account_holder,
+       country_code, vat_number, billing_address,
        approved_at, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW(),NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW(),NOW())
     ON CONFLICT (wallet_address) DO UPDATE SET
       business_name         = COALESCE(EXCLUDED.business_name, merchants.business_name),
       email                 = COALESCE(EXCLUDED.email, merchants.email),
@@ -550,10 +560,14 @@ async function upsertMerchant(walletAddress, data = {}) {
       iban_encrypted        = COALESCE(EXCLUDED.iban_encrypted, merchants.iban_encrypted),
       bic                   = COALESCE(EXCLUDED.bic, merchants.bic),
       account_holder        = COALESCE(EXCLUDED.account_holder, merchants.account_holder),
+      country_code          = COALESCE(EXCLUDED.country_code, merchants.country_code),
+      vat_number            = COALESCE(EXCLUDED.vat_number, merchants.vat_number),
+      billing_address       = COALESCE(EXCLUDED.billing_address, merchants.billing_address),
       updated_at            = NOW()
   `, [walletAddress, businessName || null, email || null, webhookUrl || null,
       webhookSecret || null, settlementPreference || "usdc",
-      ibanEncrypted, bic || null, accountHolder || null]);
+      ibanEncrypted, bic || null, accountHolder || null,
+      countryCode || "PT", vatNumber || null, billingAddress || null]);
 }
 
 async function getMerchant(walletAddress) {

@@ -470,6 +470,7 @@ app.post("/api/merchants/register", async (req, res) => {
     const {
       wallet_address, business_name, email, webhook_url,
       settlement_preference, iban, bic, account_holder,
+      country_code, vat_number, billing_address,
     } = req.body;
 
     if (!wallet_address || !wallet_address.startsWith("0x") || wallet_address.length !== 42) {
@@ -484,12 +485,21 @@ app.post("/api/merchants/register", async (req, res) => {
       return res.status(400).json({ error: "missing_bank_details", message: "IBAN and BIC required for fiat settlement" });
     }
 
+    // Validate VAT number format if provided
+    // EU VAT numbers: 2-letter country code + alphanumeric (e.g. PT123456789, DE123456789)
+    if (vat_number && !/^[A-Z]{2}[A-Z0-9]{2,12}$/.test(vat_number.replace(/\s/g, "").toUpperCase())) {
+      return res.status(400).json({ error: "invalid_vat", message: "VAT number must start with 2-letter country code (e.g. PT123456789)" });
+    }
+
     const webhookSecret = webhook_url ? generateWebhookSecret() : null;
 
     await db.upsertMerchant(wallet_address.toLowerCase(), {
       businessName: business_name, email, webhookUrl: webhook_url,
       webhookSecret, settlementPreference: settlement_preference || "usdc",
       ibanPlaintext: iban || null, bic: bic || null, accountHolder: account_holder || null,
+      countryCode: country_code || "PT",
+      vatNumber: vat_number ? vat_number.replace(/\s/g, "").toUpperCase() : null,
+      billingAddress: billing_address || null,
     });
 
     const response = {
@@ -533,6 +543,9 @@ app.get("/api/merchants/:address", async (req, res) => {
       webhook_configured: !!merchant.webhook_url,
       settlement_preference: merchant.settlement_preference,
       bank_account_configured: !!merchant.iban_encrypted || !!merchant.iban_decrypted,
+      country_code: merchant.country_code || "PT",
+      vat_number: merchant.vat_number || null,
+      billing_address: merchant.billing_address || null,
       approved_at: merchant.approved_at,
       created_at: merchant.created_at,
     });
@@ -715,13 +728,17 @@ app.put("/api/merchants/:address", async (req, res) => {
       return res.status(403).json({ error: "forbidden" });
     }
 
-    const { business_name, email, webhook_url, settlement_preference, iban, bic, account_holder } = req.body;
+    const { business_name, email, webhook_url, settlement_preference, iban, bic, account_holder,
+            country_code, vat_number, billing_address } = req.body;
     const webhookSecret = webhook_url ? generateWebhookSecret() : undefined;
 
     await db.upsertMerchant(address, {
       businessName: business_name, email, webhookUrl: webhook_url,
       webhookSecret, settlementPreference: settlement_preference,
       ibanPlaintext: iban, bic, accountHolder: account_holder,
+      countryCode: country_code,
+      vatNumber: vat_number ? vat_number.replace(/\s/g, "").toUpperCase() : undefined,
+      billingAddress: billing_address,
     });
 
     const response = { success: true, message: "Merchant profile updated" };

@@ -389,6 +389,10 @@ function MerchantDetail({ merchant, token, onClose }) {
               ["Registered", formatDate(merchant.created_at)],
               ["Approved",  formatDate(merchant.approved_at)],
               ["Brand",     merchant.brand_name || "—"],
+              ["Country",   merchant.country_code || "PT"],
+              ["VAT Number", merchant.vat_number
+                ? <span style={{ fontFamily: "monospace", color: "var(--green)" }}>{merchant.vat_number} ✓</span>
+                : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Not provided</span>],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "var(--bg-tag)", borderRadius: 8, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
@@ -506,7 +510,6 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   const [merchants, setMerchants]       = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscribers, setSubscribers]   = useState([]);
-  const [gdprPending, setGdprPending]   = useState([]);
   const [payments, setPayments]         = useState([]);
   const [webhooks, setWebhooks]         = useState([]);
   const [auditLog, setAuditLog]         = useState([]);
@@ -552,11 +555,6 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     catch { console.error("Could not load subscribers."); }
   }, [apiFetch]);
 
-  const fetchGdprPending = useCallback(async () => {
-    try { const d = await apiFetch("/api/admin/gdpr/pending"); setGdprPending(d.pending || []); }
-    catch { console.error("Could not load GDPR pending."); }
-  }, [apiFetch]);
-
   const fetchPayments     = useCallback(async () => {
     try { const d = await apiFetch("/api/admin/payments?limit=200"); setPayments(d.payments || []); }
     catch { console.error("Could not load payments."); }
@@ -590,7 +588,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   // Lazy load tabs
   useEffect(() => {
     if (tab === "subscriptions" && subscriptions.length === 0) fetchSubscriptions();
-    if (tab === "subscribers"   && subscribers.length === 0)   { fetchSubscribers(); fetchGdprPending(); }
+    if (tab === "subscribers"   && subscribers.length === 0)   fetchSubscribers();
     if (tab === "payments"      && payments.length === 0)       fetchPayments();
     if (tab === "analytics"     && payments.length === 0)       fetchPayments();
     if (tab === "webhooks"      && webhooks.length === 0)       fetchWebhooks();
@@ -833,70 +831,31 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
 
         {/* ── Subscribers ── */}
         {tab === "subscribers" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* GDPR pending on-chain cancellations */}
-            {gdprPending.length > 0 && (
-              <div style={{ background: "rgba(220,38,38,0.08)", border: "0.5px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "14px 18px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 16 }}>⚠️</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>
-                    {gdprPending.length} GDPR deletion{gdprPending.length > 1 ? "s" : ""} require on-chain cancellation
-                  </span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>Crypto-native subscribers — no private key stored</span>
-                </div>
-                {gdprPending.map(g => (
-                  <div key={g.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "0.5px solid rgba(220,38,38,0.2)", fontSize: 12 }}>
-                    <div>
-                      <span style={{ color: "var(--text-muted)", fontFamily: "monospace" }}>hash:{g.subscriber_hash}</span>
-                      <span style={{ color: "var(--text-muted)", marginLeft: 12 }}>
-                        Subscription IDs: <strong style={{ color: "var(--text-primary)" }}>{g.subscription_ids?.join(", ")}</strong>
-                      </span>
-                      <span style={{ color: "var(--text-muted)", marginLeft: 12 }}>{formatDate(g.requested_at)}</span>
-                    </div>
-                    <button
-                      style={{ ...S.btn.ghost, fontSize: 11, padding: "4px 10px", color: "var(--green)", borderColor: "var(--green)" }}
-                      onClick={async () => {
-                        try {
-                          await apiFetch(`/api/admin/gdpr/pending/${g.id}/resolve`, { method: "POST", body: JSON.stringify({ notes: "Cancelled via Safe multisig" }) });
-                          fetchGdprPending();
-                        } catch { alert("Could not resolve — check console."); }
-                      }}
-                    >
-                      ✓ Mark resolved
-                    </button>
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{filteredSubscribers.length} subscribers</span>
+              <button onClick={fetchSubscribers} style={S.btn.ghost}>↻ Refresh</button>
+            </div>
+            <div style={{ ...S.card, overflow: "hidden" }}>
+              <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr" }}>
+                <span>Email</span><span>Wallet</span><span>Auth</span><span>Joined</span>
+              </div>
+              {filteredSubscribers.length === 0 ? <EmptyState message="No subscribers found." /> :
+                filteredSubscribers.map((s, i) => (
+                  <div key={s.email} style={{
+                    display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr",
+                    alignItems: "center", padding: "10px 20px",
+                    borderBottom: i === filteredSubscribers.length - 1 ? "none" : "0.5px solid var(--border)",
+                    fontSize: 12,
+                  }}>
+                    <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{s.email}</span>
+                    <span style={{ fontFamily: "monospace", color: "var(--text-muted)", cursor: "pointer" }}
+                      onClick={() => copyToClipboard(s.wallet_address)}>{shortAddr(s.wallet_address)} ⧉</span>
+                    <span style={{ color: "var(--text-muted)" }}>{s.google_id ? "Google" : "Wallet"}</span>
+                    <span style={{ color: "var(--text-muted)" }}>{formatDate(s.created_at)}</span>
                   </div>
-                ))}
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-                  Cancel each subscription ID via <strong>Safe multisig → Basescan → Write Contract → cancelSubscription(id)</strong>, then mark resolved.
-                </div>
-              </div>
-            )}
-            <div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{filteredSubscribers.length} subscribers</span>
-                <button onClick={() => { fetchSubscribers(); fetchGdprPending(); }} style={S.btn.ghost}>↻ Refresh</button>
-              </div>
-              <div style={{ ...S.card, overflow: "hidden" }}>
-                <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr" }}>
-                  <span>Email</span><span>Wallet</span><span>Auth</span><span>Joined</span>
-                </div>
-                {filteredSubscribers.length === 0 ? <EmptyState message="No subscribers found." /> :
-                  filteredSubscribers.map((s, i) => (
-                    <div key={s.email} style={{
-                      display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr",
-                      alignItems: "center", padding: "10px 20px",
-                      borderBottom: i === filteredSubscribers.length - 1 ? "none" : "0.5px solid var(--border)",
-                      fontSize: 12,
-                    }}>
-                      <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{s.email}</span>
-                      <span style={{ fontFamily: "monospace", color: "var(--text-muted)", cursor: "pointer" }}
-                        onClick={() => copyToClipboard(s.wallet_address)}>{shortAddr(s.wallet_address)} ⧉</span>
-                      <span style={{ color: "var(--text-muted)" }}>{s.google_id ? "Google" : "Wallet"}</span>
-                      <span style={{ color: "var(--text-muted)" }}>{formatDate(s.created_at)}</span>
-                    </div>
-                  ))
-                }
-              </div>
+                ))
+              }
             </div>
           </div>
         )}
@@ -1225,34 +1184,9 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 12 }}>
                 <StatCard label="Keeper cycle"       value={k?.last_cycle_ms ? `${k.last_cycle_ms}ms` : "—"} color="var(--text-secondary)" />
                 <StatCard label="Keeper age"         value={k?.age_seconds != null ? `${k.age_seconds}s` : "—"} color={k?.age_seconds > 120 ? "var(--amber)" : "var(--green)"} />
-                <StatCard label="Keeper ETH"         value={k?.eth_balance != null ? `${parseFloat(k.eth_balance).toFixed(5)} ETH` : "—"} color={k?.eth_balance_warn ? "var(--red)" : k?.eth_balance != null ? "var(--green)" : "var(--text-secondary)"} />
-                <StatCard label="Safe ETH"           value={k?.safe_eth != null ? `${parseFloat(k.safe_eth).toFixed(5)} ETH` : "—"} color={k?.safe_eth_warn ? "var(--red)" : k?.safe_eth != null ? "var(--green)" : "var(--text-secondary)"} />
-                <StatCard label="Treasury USDC"      value={k?.treasury_usdc != null ? `$${parseFloat(k.treasury_usdc).toFixed(2)}` : "—"} color="var(--teal)" />
                 <StatCard label="Webhook rate (24h)" value={s ? `${s.metrics?.webhook_success_rate_24h ?? 100}%` : "—"} color="var(--green)" />
                 <StatCard label="Failed webhooks"    value={s?.metrics?.failed_webhooks_24h ?? "—"} color={s?.metrics?.failed_webhooks_24h > 0 ? "var(--red)" : "var(--text-secondary)"} />
               </div>
-              {k?.eth_balance_warn && (
-                <div style={{ background: "rgba(220,38,38,0.08)", border: "0.5px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 18 }}>⚠️</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>Keeper wallet low on ETH</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                      Balance: {k.eth_balance != null ? parseFloat(k.eth_balance).toFixed(5) : "—"} ETH · Threshold: 0.005 ETH · Top up <code style={{ fontSize: 10 }}>0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151</code> on Base Network
-                    </div>
-                  </div>
-                </div>
-              )}
-              {k?.safe_eth_warn && (
-                <div style={{ background: "rgba(220,38,38,0.08)", border: "0.5px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 18 }}>⚠️</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>Safe multisig low on ETH</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                      Balance: {k.safe_eth != null ? parseFloat(k.safe_eth).toFixed(5) : "—"} ETH · Threshold: 0.01 ETH · Top up <code style={{ fontSize: 10 }}>0x737D4EeAEF67f776724482a29367615703A2DEB1</code> — merchant approvals will fail
-                    </div>
-                  </div>
-                </div>
-              )}
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={fetchSystemHealth} style={S.btn.ghost}>↻ Refresh</button>
                 <a href="/status" target="_blank" rel="noopener noreferrer"

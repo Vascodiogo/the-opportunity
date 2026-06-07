@@ -1365,7 +1365,8 @@ export default function MerchantDashboard({ address }) {
   const [isApproved, setIsApproved]                 = useState(null);
   const [settings, setSettings]                     = useState(() =>
     JSON.parse(localStorage.getItem("merchant_settings_" + address) ||
-    JSON.stringify({ businessName: "", email: "", notifications: "email" }))
+    JSON.stringify({ businessName: "", email: "", notifications: "email",
+                     countryCode: "PT", vatNumber: "", billingAddress: "" }))
   );
   const [showAddProduct, setShowAddProduct]         = useState(false);
   const [showAddWebhook, setShowAddWebhook]         = useState(false);
@@ -1886,6 +1887,56 @@ export default function MerchantDashboard({ address }) {
                 ))}
               </div>
 
+              {/* VAT & Billing — required for EU invoicing compliance */}
+              <div style={{ ...S.card }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>🧾 VAT & Billing Details</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+                  Required for EU invoicing. If you have a VAT number, SaaS tier fees are invoiced without IVA (reverse charge applies).
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <label style={S.label}>Country</label>
+                    <select
+                      value={settings.countryCode || "PT"}
+                      onChange={e => setSettings(s => ({ ...s, countryCode: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "0.5px solid var(--border)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: 13 }}
+                    >
+                      {[
+                        ["PT","Portugal"],["DE","Germany"],["FR","France"],["ES","Spain"],
+                        ["IT","Italy"],["NL","Netherlands"],["BE","Belgium"],["AT","Austria"],
+                        ["SE","Sweden"],["DK","Denmark"],["FI","Finland"],["PL","Poland"],
+                        ["GB","United Kingdom"],["CH","Switzerland"],["US","United States"],
+                        ["BR","Brazil"],["SG","Singapore"],["OTHER","Other"],
+                      ].map(([code, name]) => (
+                        <option key={code} value={code}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={S.label}>VAT Number <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span></label>
+                    <input
+                      value={settings.vatNumber || ""}
+                      onChange={e => setSettings(s => ({ ...s, vatNumber: e.target.value.toUpperCase() }))}
+                      placeholder="e.g. PT123456789 or DE123456789"
+                      style={{ fontFamily: "monospace" }}
+                    />
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                      EU format: 2-letter country code + number. Enables reverse charge on invoices.
+                    </div>
+                  </div>
+                  <div>
+                    <label style={S.label}>Billing Address <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span></label>
+                    <textarea
+                      value={settings.billingAddress || ""}
+                      onChange={e => setSettings(s => ({ ...s, billingAddress: e.target.value }))}
+                      placeholder={"Company Name\nStreet Address\nCity, Postcode\nCountry"}
+                      rows={4}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "0.5px solid var(--border)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: 12, fontFamily: "inherit", resize: "vertical" }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Stripe Connect */}
               <div style={{ ...S.card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
@@ -1970,7 +2021,15 @@ export default function MerchantDashboard({ address }) {
                   try {
                     const res = await fetch(`${API_BASE}/api/merchants/register`, {
                       method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ wallet_address: address, business_name: settings.businessName, email: settings.notifyEmail || settings.email, settlement_preference: "usdc" }),
+                      body: JSON.stringify({
+                        wallet_address: address,
+                        business_name: settings.businessName,
+                        email: settings.notifyEmail || settings.email,
+                        settlement_preference: "usdc",
+                        country_code: settings.countryCode || "PT",
+                        vat_number: settings.vatNumber || null,
+                        billing_address: settings.billingAddress || null,
+                      }),
                     });
                     if (res.ok) alert("Settings saved!"); else alert("Saved locally. Could not sync to server.");
                   } catch { alert("Saved locally. Could not reach server."); }
