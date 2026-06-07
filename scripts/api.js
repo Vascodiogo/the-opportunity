@@ -228,12 +228,14 @@ app.get("/api/health", async (req, res) => {
     timestamp: new Date().toISOString(),
     database: dbOk ? "connected" : "disconnected",
     keeper: {
-      status:       keeperOk ? "ok" : keeper ? "stale" : "unknown",
-      last_run_at:  keeper?.last_run_at || null,
-      last_cycle_ms: keeper?.last_cycle_ms || null,
-      age_seconds:  keeperAge,
-      total_cycles: keeper?.total_cycles || 0,
-      last_error:   keeper?.last_error || null,
+      status:           keeperOk ? "ok" : keeper ? "stale" : "unknown",
+      last_run_at:      keeper?.last_run_at || null,
+      last_cycle_ms:    keeper?.last_cycle_ms || null,
+      age_seconds:      keeperAge,
+      total_cycles:     keeper?.total_cycles || 0,
+      last_error:       keeper?.last_error || null,
+      eth_balance:      keeper?.eth_balance ? parseFloat(keeper.eth_balance) : null,
+      eth_balance_warn: keeper?.eth_balance_warn || false,
     },
   });
 });
@@ -283,10 +285,12 @@ app.get("/api/status", async (req, res) => {
           status: dbOk ? "operational" : "outage",
         },
         keeper: {
-          status:       keeperOk ? "operational" : keeper ? "degraded" : "unknown",
-          last_run_at:  keeper?.last_run_at || null,
-          last_cycle_ms: keeper?.last_cycle_ms || null,
-          age_seconds:  keeperAge,
+          status:           keeperOk ? "operational" : keeper ? "degraded" : "unknown",
+          last_run_at:      keeper?.last_run_at || null,
+          last_cycle_ms:    keeper?.last_cycle_ms || null,
+          age_seconds:      keeperAge,
+          eth_balance:      keeper?.eth_balance ? parseFloat(keeper.eth_balance) : null,
+          eth_balance_warn: keeper?.eth_balance_warn || false,
         },
         contracts: {
           status:  "operational",

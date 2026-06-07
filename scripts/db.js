@@ -291,6 +291,8 @@ async function initSchema() {
       last_skipped        INTEGER DEFAULT 0,
       last_error          TEXT,
       total_cycles        BIGINT DEFAULT 0,
+      eth_balance         NUMERIC(18,8),
+      eth_balance_warn    BOOLEAN DEFAULT FALSE,
       updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -315,6 +317,10 @@ async function initSchema() {
   await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS brand_color       TEXT`);
   await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiat_currency     TEXT DEFAULT 'eur'`);
 
+  // v6 migrations — keeper ETH balance tracking
+  await query(`ALTER TABLE system_health ADD COLUMN IF NOT EXISTS eth_balance      NUMERIC(18,8)`);
+  await query(`ALTER TABLE system_health ADD COLUMN IF NOT EXISTS eth_balance_warn BOOLEAN DEFAULT FALSE`);
+
   console.log("[DB] Schema ready ✓");
 }
 
@@ -322,20 +328,22 @@ async function initSchema() {
 // System health helpers
 // -----------------------------------------------------------------------------
 
-async function upsertKeeperHeartbeat({ cycleMs, pulled, expired, skipped, error }) {
+async function upsertKeeperHeartbeat({ cycleMs, pulled, expired, skipped, error, ethBalance, ethBalanceWarn }) {
   await query(`
-    INSERT INTO system_health (service, last_run_at, last_cycle_ms, last_pulled, last_expired, last_skipped, last_error, total_cycles, updated_at)
-    VALUES ('keeper', NOW(), $1, $2, $3, $4, $5, 1, NOW())
+    INSERT INTO system_health (service, last_run_at, last_cycle_ms, last_pulled, last_expired, last_skipped, last_error, total_cycles, eth_balance, eth_balance_warn, updated_at)
+    VALUES ('keeper', NOW(), $1, $2, $3, $4, $5, 1, $6, $7, NOW())
     ON CONFLICT (service) DO UPDATE SET
-      last_run_at   = NOW(),
-      last_cycle_ms = $1,
-      last_pulled   = $2,
-      last_expired  = $3,
-      last_skipped  = $4,
-      last_error    = $5,
-      total_cycles  = system_health.total_cycles + 1,
-      updated_at    = NOW()
-  `, [cycleMs, pulled, expired, skipped, error || null]);
+      last_run_at      = NOW(),
+      last_cycle_ms    = $1,
+      last_pulled      = $2,
+      last_expired     = $3,
+      last_skipped     = $4,
+      last_error       = $5,
+      total_cycles     = system_health.total_cycles + 1,
+      eth_balance      = $6,
+      eth_balance_warn = $7,
+      updated_at       = NOW()
+  `, [cycleMs, pulled, expired, skipped, error || null, ethBalance || null, ethBalanceWarn || false]);
 }
 
 async function getSystemHealth() {
