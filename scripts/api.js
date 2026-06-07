@@ -2638,6 +2638,13 @@ app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) =
       // Crypto-native subscriber — no private key stored, cannot auto-cancel on-chain
       onChainSkipped = cancelledSubs;
       console.log(`[GDPR] Crypto-native subscriber — ${cancelledSubs} on-chain subscription(s) require manual cancellation via Safe multisig`);
+
+      // Log pending on-chain cancellations to DB for dashboard visibility
+      const subscriberHash = require("crypto").createHash("sha256").update(email).digest("hex").slice(0, 16);
+      await db.createGdprPendingOnchain({
+        subscriberHash,
+        subscriptionIds: subResult.rows.map(s => s.id),
+      }).catch(e => console.error("[GDPR] Could not log pending onchain:", e.message));
     }
 
     // 2. Anonymise payment records — retain for tax/audit, remove PII linkage
@@ -2701,6 +2708,32 @@ app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) =
   } catch (err) {
     console.error("[GDPR] Delete error:", err.message);
     res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
+// GET /api/admin/gdpr/pending — list pending on-chain cancellations
+app.get("/api/admin/gdpr/pending", requireAdminAuth, async (req, res) => {
+  try {
+    const pending = await db.getGdprPendingOnchain();
+    res.json({ pending, total: pending.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/gdpr/pending/:id/resolve — mark on-chain cancellation as resolved
+app.post("/api/admin/gdpr/pending/:id/resolve", requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+    await db.resolveGdprPendingOnchain({ id: parseInt(id), resolvedBy: req.admin?.email || "admin", notes });
+    await db.query(
+      `INSERT INTO admin_audit_log (admin_email, action, target, details, created_at) VALUES ($1, $2, $3, $4, NOW())`,
+      [req.admin?.email || "admin", "gdpr_onchain_resolved", `pending_id:${id}`, JSON.stringify({ notes })]
+    ).catch(() => {});
+    res.json({ success: true, message: `GDPR pending item #${id} marked as resolved.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

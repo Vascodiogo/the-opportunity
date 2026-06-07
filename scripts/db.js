@@ -331,7 +331,47 @@ async function initSchema() {
   await query(`ALTER TABLE system_health ADD COLUMN IF NOT EXISTS safe_eth_warn    BOOLEAN DEFAULT FALSE`);
   await query(`ALTER TABLE system_health ADD COLUMN IF NOT EXISTS treasury_usdc    NUMERIC(18,6)`);
 
+  // GDPR pending on-chain cancellations — crypto-native subscribers
+  await query(`
+    CREATE TABLE IF NOT EXISTS gdpr_pending_onchain (
+      id                  SERIAL PRIMARY KEY,
+      subscriber_hash     TEXT NOT NULL,
+      subscription_ids    INTEGER[] NOT NULL,
+      requested_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved            BOOLEAN DEFAULT FALSE,
+      resolved_at         TIMESTAMPTZ,
+      resolved_by         TEXT,
+      notes               TEXT
+    )
+  `);
+
   console.log("[DB] Schema ready ✓");
+}
+
+// -----------------------------------------------------------------------------
+// GDPR pending on-chain cancellation helpers
+// -----------------------------------------------------------------------------
+
+async function createGdprPendingOnchain({ subscriberHash, subscriptionIds }) {
+  await query(
+    `INSERT INTO gdpr_pending_onchain (subscriber_hash, subscription_ids, requested_at)
+     VALUES ($1, $2, NOW())`,
+    [subscriberHash, subscriptionIds]
+  );
+}
+
+async function getGdprPendingOnchain() {
+  const res = await query(
+    `SELECT * FROM gdpr_pending_onchain WHERE resolved = FALSE ORDER BY requested_at ASC`
+  );
+  return res.rows;
+}
+
+async function resolveGdprPendingOnchain({ id, resolvedBy, notes }) {
+  await query(
+    `UPDATE gdpr_pending_onchain SET resolved = TRUE, resolved_at = NOW(), resolved_by = $1, notes = $2 WHERE id = $3`,
+    [resolvedBy, notes || null, id]
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -803,4 +843,8 @@ module.exports = {
   // Admin audit log
   logAdminAction,
   getAdminAuditLog,
+  // GDPR pending on-chain cancellations
+  createGdprPendingOnchain,
+  getGdprPendingOnchain,
+  resolveGdprPendingOnchain,
 };

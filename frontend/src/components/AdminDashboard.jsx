@@ -506,6 +506,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   const [merchants, setMerchants]       = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscribers, setSubscribers]   = useState([]);
+  const [gdprPending, setGdprPending]   = useState([]);
   const [payments, setPayments]         = useState([]);
   const [webhooks, setWebhooks]         = useState([]);
   const [auditLog, setAuditLog]         = useState([]);
@@ -551,6 +552,11 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     catch { console.error("Could not load subscribers."); }
   }, [apiFetch]);
 
+  const fetchGdprPending = useCallback(async () => {
+    try { const d = await apiFetch("/api/admin/gdpr/pending"); setGdprPending(d.pending || []); }
+    catch { console.error("Could not load GDPR pending."); }
+  }, [apiFetch]);
+
   const fetchPayments     = useCallback(async () => {
     try { const d = await apiFetch("/api/admin/payments?limit=200"); setPayments(d.payments || []); }
     catch { console.error("Could not load payments."); }
@@ -584,7 +590,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   // Lazy load tabs
   useEffect(() => {
     if (tab === "subscriptions" && subscriptions.length === 0) fetchSubscriptions();
-    if (tab === "subscribers"   && subscribers.length === 0)   fetchSubscribers();
+    if (tab === "subscribers"   && subscribers.length === 0)   { fetchSubscribers(); fetchGdprPending(); }
     if (tab === "payments"      && payments.length === 0)       fetchPayments();
     if (tab === "analytics"     && payments.length === 0)       fetchPayments();
     if (tab === "webhooks"      && webhooks.length === 0)       fetchWebhooks();
@@ -827,31 +833,70 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
 
         {/* ── Subscribers ── */}
         {tab === "subscribers" && (
-          <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{filteredSubscribers.length} subscribers</span>
-              <button onClick={fetchSubscribers} style={S.btn.ghost}>↻ Refresh</button>
-            </div>
-            <div style={{ ...S.card, overflow: "hidden" }}>
-              <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr" }}>
-                <span>Email</span><span>Wallet</span><span>Auth</span><span>Joined</span>
-              </div>
-              {filteredSubscribers.length === 0 ? <EmptyState message="No subscribers found." /> :
-                filteredSubscribers.map((s, i) => (
-                  <div key={s.email} style={{
-                    display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr",
-                    alignItems: "center", padding: "10px 20px",
-                    borderBottom: i === filteredSubscribers.length - 1 ? "none" : "0.5px solid var(--border)",
-                    fontSize: 12,
-                  }}>
-                    <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{s.email}</span>
-                    <span style={{ fontFamily: "monospace", color: "var(--text-muted)", cursor: "pointer" }}
-                      onClick={() => copyToClipboard(s.wallet_address)}>{shortAddr(s.wallet_address)} ⧉</span>
-                    <span style={{ color: "var(--text-muted)" }}>{s.google_id ? "Google" : "Wallet"}</span>
-                    <span style={{ color: "var(--text-muted)" }}>{formatDate(s.created_at)}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* GDPR pending on-chain cancellations */}
+            {gdprPending.length > 0 && (
+              <div style={{ background: "rgba(220,38,38,0.08)", border: "0.5px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "14px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 16 }}>⚠️</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>
+                    {gdprPending.length} GDPR deletion{gdprPending.length > 1 ? "s" : ""} require on-chain cancellation
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>Crypto-native subscribers — no private key stored</span>
+                </div>
+                {gdprPending.map(g => (
+                  <div key={g.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "0.5px solid rgba(220,38,38,0.2)", fontSize: 12 }}>
+                    <div>
+                      <span style={{ color: "var(--text-muted)", fontFamily: "monospace" }}>hash:{g.subscriber_hash}</span>
+                      <span style={{ color: "var(--text-muted)", marginLeft: 12 }}>
+                        Subscription IDs: <strong style={{ color: "var(--text-primary)" }}>{g.subscription_ids?.join(", ")}</strong>
+                      </span>
+                      <span style={{ color: "var(--text-muted)", marginLeft: 12 }}>{formatDate(g.requested_at)}</span>
+                    </div>
+                    <button
+                      style={{ ...S.btn.ghost, fontSize: 11, padding: "4px 10px", color: "var(--green)", borderColor: "var(--green)" }}
+                      onClick={async () => {
+                        try {
+                          await apiFetch(`/api/admin/gdpr/pending/${g.id}/resolve`, { method: "POST", body: JSON.stringify({ notes: "Cancelled via Safe multisig" }) });
+                          fetchGdprPending();
+                        } catch { alert("Could not resolve — check console."); }
+                      }}
+                    >
+                      ✓ Mark resolved
+                    </button>
                   </div>
-                ))
-              }
+                ))}
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+                  Cancel each subscription ID via <strong>Safe multisig → Basescan → Write Contract → cancelSubscription(id)</strong>, then mark resolved.
+                </div>
+              </div>
+            )}
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{filteredSubscribers.length} subscribers</span>
+                <button onClick={() => { fetchSubscribers(); fetchGdprPending(); }} style={S.btn.ghost}>↻ Refresh</button>
+              </div>
+              <div style={{ ...S.card, overflow: "hidden" }}>
+                <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr" }}>
+                  <span>Email</span><span>Wallet</span><span>Auth</span><span>Joined</span>
+                </div>
+                {filteredSubscribers.length === 0 ? <EmptyState message="No subscribers found." /> :
+                  filteredSubscribers.map((s, i) => (
+                    <div key={s.email} style={{
+                      display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr",
+                      alignItems: "center", padding: "10px 20px",
+                      borderBottom: i === filteredSubscribers.length - 1 ? "none" : "0.5px solid var(--border)",
+                      fontSize: 12,
+                    }}>
+                      <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{s.email}</span>
+                      <span style={{ fontFamily: "monospace", color: "var(--text-muted)", cursor: "pointer" }}
+                        onClick={() => copyToClipboard(s.wallet_address)}>{shortAddr(s.wallet_address)} ⧉</span>
+                      <span style={{ color: "var(--text-muted)" }}>{s.google_id ? "Google" : "Wallet"}</span>
+                      <span style={{ color: "var(--text-muted)" }}>{formatDate(s.created_at)}</span>
+                    </div>
+                  ))
+                }
+              </div>
             </div>
           </div>
         )}
