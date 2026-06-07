@@ -937,16 +937,42 @@
   </div>
 </section>
 
-<!-- CTA -->
-<div class="cta-section" id="acesso-antecipado">
-  <h2>Pronto para aceitar<br>pagamentos mais inteligentes?</h2>
-  <p>Junte-se como comerciante piloto. Zero comissão de protocolo durante os primeiros 3 meses — cada pagamento vai para si na totalidade. Pedimos apenas feedback honesto e um testemunho.</p>
+<!-- CTA / FOUNDING MERCHANT FORM -->
+<div class="cta-section" id="acesso-antecipado" style="max-width:700px;margin:0 auto;text-align:left;">
+  <h2 style="text-align:center;">Torne-se um comerciante<br><em>fundador.</em></h2>
+  <p style="text-align:center;margin-bottom:32px;">Analisamos cada candidatura pessoalmente. Os primeiros 10 comerciantes aprovados pagam 0% de comissão durante 3 meses — cada pagamento vai para si na totalidade.</p>
 
-  <form class="waitlist-form" id="waitlistForm">
-    <input type="email" id="emailInput" placeholder="o-seu@email.com" required>
-    <button type="submit" class="btn-primary">Entrar na lista</button>
+  <form id="merchantForm" action="https://formspree.io/f/mwvjlyyy" method="POST" style="display:flex;flex-direction:column;gap:20px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);font-family:monospace;">Nome da empresa</label>
+        <input type="text" name="business_name" placeholder="Acme Lda." required style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--light);font-size:14px;outline:none;" />
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);font-family:monospace;">Email da empresa</label>
+        <input type="email" name="email" placeholder="voce@empresa.com" required style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--light);font-size:14px;outline:none;" />
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);font-family:monospace;">Endereço de carteira <span style="opacity:0.5;">(opcional)</span></label>
+        <input type="text" name="wallet_address" placeholder="0x..." style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--light);font-family:monospace;font-size:13px;outline:none;" />
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);font-family:monospace;">Website <span style="opacity:0.5;">(opcional)</span></label>
+        <input type="url" name="website" placeholder="https://seusite.com" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--light);font-size:14px;outline:none;" />
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);font-family:monospace;">Como vai usar a AuthOnce?</label>
+      <textarea name="use_case" rows="4" placeholder="Fale-nos do seu negócio e como planeia usar pagamentos recorrentes em cripto..." required style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 16px;color:var(--light);font-size:14px;outline:none;resize:vertical;"></textarea>
+    </div>
+    <input type="hidden" name="source" value="pt-landing" />
+    <button type="submit" id="merchantSubmitBtn" style="background:var(--brand);border:none;border-radius:12px;padding:16px 36px;color:#fff;font-size:15px;font-weight:500;cursor:pointer;">Candidatar-me como comerciante fundador →</button>
+    <p style="font-size:12px;color:var(--mid);text-align:center;margin-top:-8px;">Analisamos cada candidatura pessoalmente. Receberá resposta em 48 horas.</p>
+    <div id="merchantSuccess" style="display:none;font-size:14px;color:#10b981;font-weight:500;padding:12px 20px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:8px;text-align:center;">✓ Candidatura recebida. Entraremos em contacto em 48 horas.</div>
+    <div id="merchantError" style="display:none;font-size:14px;color:#f87171;padding:12px 20px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.25);border-radius:8px;text-align:center;">Algo correu mal. Por favor contacte vasco@authonce.io diretamente.</div>
   </form>
-  <div class="success-msg" id="successMsg">✓ Está na lista. Entraremos em contacto antes do lançamento na mainnet.</div>
 </div>
 
 <!-- FOOTER -->
@@ -962,18 +988,32 @@
 </footer>
 
 <script>
-  document.getElementById('waitlistForm').addEventListener('submit', async function(e) {
+  // Founding merchant form — Formspree AJAX
+  document.getElementById('merchantForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const email = document.getElementById('emailInput').value;
+    const btn = document.getElementById('merchantSubmitBtn');
+    const success = document.getElementById('merchantSuccess');
+    const error = document.getElementById('merchantError');
+    btn.disabled = true;
+    btn.textContent = 'A enviar...';
+    error.style.display = 'none';
     try {
-      await fetch('https://formspree.io/f/mjgjrwwl', {
+      const res = await fetch('https://formspree.io/f/mwvjlyyy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ email, source: 'pt-landing' })
+        headers: { 'Accept': 'application/json' },
+        body: new FormData(this)
       });
-    } catch(err) {}
-    document.getElementById('waitlistForm').style.display = 'none';
-    document.getElementById('successMsg').style.display = 'block';
+      if (res.ok) {
+        this.style.display = 'none';
+        success.style.display = 'block';
+      } else {
+        throw new Error('Server error');
+      }
+    } catch(err) {
+      btn.disabled = false;
+      btn.textContent = 'Candidatar-me como comerciante fundador →';
+      error.style.display = 'block';
+    }
   });
 
   // Smooth reveal on scroll
