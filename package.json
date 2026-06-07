@@ -4,7 +4,11 @@
   "description": "The Opportunity — Smart Intent Vault. Recurring USDC subscriptions via Safe Smart Accounts on Base.",
   "private": true,
   "scripts": {
-    "start": "node start.js",
+    "start": "node scripts/api.js",
+    "start:api": "node scripts/api.js",
+    "start:keeper": "node scripts/keeper.js",
+    "start:notifier": "node scripts/notifier.js",
+    "start:xbot": "node scripts/x-bot.js",
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:coverage": "hardhat coverage",
