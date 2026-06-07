@@ -1421,10 +1421,11 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
       eps:        ["eps"],
       klarna:     ["klarna"],
       blik:       ["blik"],
-      mbway:      ["card"], // MB Way goes through card flow on Stripe
+      mbway:      ["mb_way"],  // MB Way uses its own Stripe type — not "card"
       multibanco: ["multibanco"],
     };
     const stripePaymentMethods = stripeMethodMap[payment_method] || ["card"];
+    const isSepa = payment_method === "sepa";
 
     // AuthOnce 0.5% protocol fee collected via Stripe application_fee_amount
     // Routes automatically to AuthOnce Stripe platform account on every fiat payment
@@ -1432,6 +1433,7 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
     const applicationFeeAmount = Math.max(1, Math.round(stripeAmount * 0.005));
 
     // Create Stripe Checkout session on merchant's connected account
+    // SEPA Direct Debit requires setup_future_usage + mandate_options for recurring pulls
     const session = await stripe.checkout.sessions.create({
       payment_method_types: stripePaymentMethods,
       line_items: [{
@@ -1448,6 +1450,18 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
       mode: "payment",
       payment_intent_data: {
         application_fee_amount: applicationFeeAmount,
+        // SEPA mandate — required for recurring pull authorisation
+        // setup_future_usage stores the payment method for future off-session pulls
+        ...(isSepa && {
+          setup_future_usage: "off_session",
+          payment_method_options: {
+            sepa_debit: {
+              mandate_options: {
+                interval_description: `Recurring ${product.interval} subscription — AuthOnce Protocol`,
+              },
+            },
+          },
+        }),
       },
       success_url: success_url || `${process.env.FRONTEND_URL || "https://authonce.io"}/pay/${address}/${product_slug}?checkout=success`,
       cancel_url:  cancel_url  || `${process.env.FRONTEND_URL || "https://authonce.io"}/pay/${address}/${product_slug}`,
@@ -1999,6 +2013,71 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
         console.log(`[WEBHOOK] Stripe subscription resumed: ${event.data.object.id}`); break;
       case "charge.refunded":
         console.log(`[WEBHOOK] Charge refunded: ${event.data.object.id}`); break;
+
+      // ── SEPA Direct Debit dispute ─────────────────────────────────────────
+      // SEPA disputes carry a €15 fee to the merchant. Log immediately and
+      // pause the subscription so no further pulls are attempted.
+      // Merchant is notified via webhook + email fallback.
+      case "charge.dispute.created": {
+        const dispute = event.data.object;
+        console.warn(`[WEBHOOK] SEPA dispute created: ${dispute.id} — charge: ${dispute.charge} — reason: ${dispute.reason}`);
+
+        // Find checkout session linked to disputed charge
+        const disputeResult = await db.query(
+          "SELECT * FROM stripe_checkout_sessions WHERE stripe_payment_intent = $1",
+          [dispute.payment_intent]
+        );
+        const disputeSession = disputeResult.rows[0];
+
+        if (disputeSession) {
+          // Pause subscription to prevent further pulls during dispute
+          const subResult = await db.query(
+            "SELECT * FROM subscriptions WHERE owner_address = $1 AND merchant_address = $2 AND status = 'active' ORDER BY created_at DESC LIMIT 1",
+            [disputeSession.subscriber_wallet, disputeSession.merchant_address]
+          );
+          const sub = subResult.rows[0];
+          if (sub) {
+            await db.updateSubscriptionStatus(sub.id, "paused", { pausedAt: new Date() });
+            console.log(`[WEBHOOK] Subscription #${sub.id} paused due to SEPA dispute`);
+          }
+
+          // Notify merchant
+          const { dispatchWebhook } = require("./webhook");
+          await dispatchWebhook(disputeSession.merchant_address, "payment.failed", {
+            subscription_id:       sub?.id,
+            subscriber_email:      disputeSession.subscriber_email,
+            subscriber_wallet:     disputeSession.subscriber_wallet,
+            reason:                `sepa_dispute — ${dispute.reason}`,
+            dispute_id:            dispute.id,
+            dispute_amount:        dispute.amount / 100,
+            dispute_currency:      dispute.currency.toUpperCase(),
+            stripe_charge:         dispute.charge,
+            status:                "paused",
+          }).catch(e => console.error("[WEBHOOK] Dispute webhook error:", e.message));
+        }
+
+        // Log dispute to audit log
+        await db.query(
+          `INSERT INTO audit_log (action, details, created_at) VALUES ($1, $2, NOW())`,
+          ["sepa_dispute_created", JSON.stringify({ dispute_id: dispute.id, reason: dispute.reason, amount: dispute.amount })]
+        ).catch(() => {});
+
+        break;
+      }
+
+      // ── SEPA dispute closed (won or lost) ────────────────────────────────
+      case "charge.dispute.closed": {
+        const dispute = event.data.object;
+        console.log(`[WEBHOOK] SEPA dispute closed: ${dispute.id} — status: ${dispute.status}`);
+        // dispute.status = "won" | "lost" | "warning_closed"
+        // Log for merchant records — no automated action needed
+        await db.query(
+          `INSERT INTO audit_log (action, details, created_at) VALUES ($1, $2, NOW())`,
+          ["sepa_dispute_closed", JSON.stringify({ dispute_id: dispute.id, status: dispute.status })]
+        ).catch(() => {});
+        break;
+      }
+
       default:
         console.log(`[WEBHOOK] Unhandled: ${event.type}`);
     }
