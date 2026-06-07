@@ -362,6 +362,9 @@ async function run() {
   const SAFE_ETH_WARN_THRESHOLD      = ethers.parseEther("0.01");
 
   // Generic wallet ETH balance checker — returns { ethBalance, warn }
+  // Email alert fires at most once every 24 hours per wallet to avoid spam
+  const alertCooldowns = {}; // in-memory cooldown tracker per address
+
   async function checkWalletEthBalance(provider, address, threshold, label) {
     try {
       const balance    = await provider.getBalance(address);
@@ -370,29 +373,39 @@ async function run() {
 
       if (warn) {
         console.error(`⚠️  ${label} LOW ON ETH — Balance: ${ethBalance.toFixed(6)} ETH`);
-        const RESEND_API_KEY = process.env.RESEND_API_KEY;
-        const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || "vasco@authonce.io";
-        if (RESEND_API_KEY) {
-          await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              from: "AuthOnce <notifications@authonce.io>",
-              to:   [ADMIN_EMAIL],
-              subject: `⚠️ ${label} low on ETH — ${ethBalance.toFixed(6)} ETH remaining`,
-              html: `<!DOCTYPE html><html><body style="font-family:monospace;background:#0f172a;color:#f1f5f9;padding:24px;">
-                <h2 style="color:#f59e0b;">⚠️ ${label} Low on ETH</h2>
-                <table style="border-collapse:collapse;width:100%;margin:16px 0;">
-                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Wallet</td><td style="padding:8px;font-family:monospace;">${address}</td></tr>
-                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Balance</td><td style="padding:8px;color:#f59e0b;font-weight:bold;">${ethBalance.toFixed(6)} ETH</td></tr>
-                  <tr><td style="padding:8px;color:#94a3b8;">Action</td><td style="padding:8px;color:#34d399;">Top up with at least 0.05 ETH on Base Network</td></tr>
-                </table>
-                <p style="color:#475569;font-size:12px;">AuthOnce Keeper Bot · Auto-alert</p>
-              </body></html>`,
-              text: `${label} LOW ON ETH\n\nWallet: ${address}\nBalance: ${ethBalance.toFixed(6)} ETH\n\nTop up on Base Network.`,
-            }),
-          }).catch(e => console.error(`  ETH alert email failed: ${e.message}`));
-          console.log(`  ETH low-balance alert sent for ${label}`);
+
+        // Cooldown — only email once per 24 hours per wallet
+        const lastAlerted = alertCooldowns[address] || 0;
+        const hoursSince  = (Date.now() - lastAlerted) / (1000 * 60 * 60);
+
+        if (hoursSince >= 24) {
+          alertCooldowns[address] = Date.now();
+          const RESEND_API_KEY = process.env.RESEND_API_KEY;
+          const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || "vasco@authonce.io";
+          if (RESEND_API_KEY) {
+            await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                from: "AuthOnce <notifications@authonce.io>",
+                to:   [ADMIN_EMAIL],
+                subject: `⚠️ ${label} low on ETH — ${ethBalance.toFixed(6)} ETH remaining`,
+                html: `<!DOCTYPE html><html><body style="font-family:monospace;background:#0f172a;color:#f1f5f9;padding:24px;">
+                  <h2 style="color:#f59e0b;">⚠️ ${label} Low on ETH</h2>
+                  <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+                    <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Wallet</td><td style="padding:8px;font-family:monospace;">${address}</td></tr>
+                    <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Balance</td><td style="padding:8px;color:#f59e0b;font-weight:bold;">${ethBalance.toFixed(6)} ETH</td></tr>
+                    <tr><td style="padding:8px;color:#94a3b8;">Action</td><td style="padding:8px;color:#34d399;">Top up with at least 0.05 ETH on Base Network</td></tr>
+                  </table>
+                  <p style="color:#475569;font-size:12px;">AuthOnce Keeper Bot · Next alert in 24 hours if not resolved</p>
+                </body></html>`,
+                text: `${label} LOW ON ETH\n\nWallet: ${address}\nBalance: ${ethBalance.toFixed(6)} ETH\n\nTop up on Base Network. Next alert in 24 hours.`,
+              }),
+            }).catch(e => console.error(`  ETH alert email failed: ${e.message}`));
+            console.log(`  ETH low-balance alert sent for ${label} (next alert in 24h)`);
+          }
+        } else {
+          console.warn(`  ${label} still low on ETH — alert cooldown active (${(24 - hoursSince).toFixed(1)}h remaining)`);
         }
       }
       return { ethBalance, warn };
