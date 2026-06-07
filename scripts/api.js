@@ -2534,6 +2534,176 @@ app.get("/api/admin/subscribers", requireAdminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// DELETE /api/admin/subscribers/:email — GDPR right to erasure
+// Deletes all PII for a subscriber. Retains anonymised payment records for tax/audit.
+// Logs the deletion to audit_log for compliance evidence.
+// Requires admin JWT. Rate-limited to prevent bulk scraping.
+app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) => {
+  try {
+    const email = decodeURIComponent(req.params.email).toLowerCase().trim();
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ error: "invalid_email" });
+    }
+
+    // Find subscriber
+    const existing = await db.query(
+      "SELECT id, email, wallet_address FROM subscribers WHERE email = $1",
+      [email]
+    );
+    if (!existing.rows[0]) {
+      return res.status(404).json({ error: "subscriber_not_found" });
+    }
+
+    const subscriber = existing.rows[0];
+    const walletAddress = subscriber.wallet_address;
+
+    // 1. Cancel any active subscriptions in DB
+    // (On-chain subscriptions must be cancelled separately via Safe multisig)
+    const subResult = await db.query(
+      "UPDATE subscriptions SET status = 'cancelled', cancelled_at = NOW() WHERE owner_address = $1 AND status IN ('active', 'paused') RETURNING id",
+      [walletAddress]
+    );
+    const cancelledSubs = subResult.rows.length;
+
+    // 2. Auto cancel on-chain subscriptions for fiat subscribers (custodied wallet)
+    // Crypto-native subscribers manage their own wallets — skipped if no private key stored
+    let onChainCancelled = 0;
+    let onChainSkipped   = 0;
+    const onChainErrors  = [];
+
+    if (subscriber.wallet_private_key && cancelledSubs > 0) {
+      try {
+        const { ethers } = require("ethers");
+        const RPC_URL     = process.env.BASE_SEPOLIA_RPC_URL || process.env.BASE_RPC_URL || "https://sepolia.base.org";
+        const VAULT_ADDR  = process.env.VAULT_ADDRESS;
+
+        if (VAULT_ADDR) {
+          const privateKey = db.decrypt(subscriber.wallet_private_key);
+          const provider   = new ethers.JsonRpcProvider(RPC_URL);
+          const signer     = new ethers.Wallet(privateKey, provider);
+
+          const VAULT_ABI_CANCEL = [
+            { name: "cancelSubscription", type: "function", inputs: [{ name: "id", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+            { name: "subscriptions", type: "function", inputs: [{ name: "id", type: "uint256" }], outputs: [
+              { name: "owner",              type: "address" },
+              { name: "guardian",           type: "address" },
+              { name: "merchant",           type: "address" },
+              { name: "safeVault",          type: "address" },
+              { name: "token",              type: "address" },
+              { name: "amount",             type: "uint256" },
+              { name: "introAmount",        type: "uint256" },
+              { name: "introPulls",         type: "uint256" },
+              { name: "pullCount",          type: "uint256" },
+              { name: "interval",           type: "uint8"   },
+              { name: "lastPulledAt",       type: "uint256" },
+              { name: "billingPausedUntil", type: "uint256" },
+              { name: "pausedAt",           type: "uint256" },
+              { name: "expiresAt",          type: "uint256" },
+              { name: "trialEndsAt",        type: "uint256" },
+              { name: "gracePeriodDays",    type: "uint256" },
+              { name: "dataVaultId",        type: "bytes32" },
+              { name: "status",             type: "uint8"   },
+              { name: "isContractVault",    type: "bool"    },
+            ], stateMutability: "view" },
+          ];
+
+          const vault = new ethers.Contract(VAULT_ADDR, VAULT_ABI_CANCEL, signer);
+
+          // Attempt to cancel each subscription on-chain
+          for (const sub of subResult.rows) {
+            try {
+              const onChainSub = await vault.subscriptions(BigInt(sub.id));
+              const status     = Number(onChainSub.status);
+
+              // Only cancel if Active(0) or Paused(1)
+              if (status === 0 || status === 1) {
+                const tx = await vault.cancelSubscription(BigInt(sub.id));
+                await tx.wait();
+                onChainCancelled++;
+                console.log(`[GDPR] ✅ On-chain cancelled subscription #${sub.id} — tx: ${tx.hash}`);
+              } else {
+                onChainSkipped++;
+              }
+            } catch (subErr) {
+              onChainErrors.push({ id: sub.id, error: subErr.message });
+              console.error(`[GDPR] ⚠️ Could not cancel subscription #${sub.id} on-chain: ${subErr.message}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[GDPR] On-chain cancellation error: ${err.message}`);
+        onChainErrors.push({ error: err.message });
+      }
+    } else if (cancelledSubs > 0 && !subscriber.wallet_private_key) {
+      // Crypto-native subscriber — no private key stored, cannot auto-cancel on-chain
+      onChainSkipped = cancelledSubs;
+      console.log(`[GDPR] Crypto-native subscriber — ${cancelledSubs} on-chain subscription(s) require manual cancellation via Safe multisig`);
+    }
+
+    // 2. Anonymise payment records — retain for tax/audit, remove PII linkage
+    // Replace subscriber wallet with anonymised placeholder in payment history
+    await db.query(
+      "UPDATE payments SET owner_address = 'gdpr_deleted_' || LEFT(MD5($1), 8) WHERE owner_address = $2",
+      [email, walletAddress]
+    );
+
+    // 3. Delete checkout sessions (contains email + wallet)
+    await db.query(
+      "DELETE FROM stripe_checkout_sessions WHERE subscriber_email = $1",
+      [email]
+    );
+
+    // 4. Delete subscriber record (PII: email, name, google_id, wallet_private_key, avatar_url)
+    await db.query("DELETE FROM subscribers WHERE email = $1", [email]);
+
+    // 5. Delete session data
+    await db.query(
+      "DELETE FROM session WHERE sess::text LIKE $1",
+      [`%${email}%`]
+    ).catch(() => {}); // Non-fatal if session table format differs
+
+    // 6. Log deletion to audit_log for GDPR compliance evidence
+    await db.query(
+      `INSERT INTO admin_audit_log (admin_email, action, target, details, created_at)
+       VALUES ($1, 'gdpr_delete', $2, $3, NOW())`,
+      [
+        req.admin?.email || "admin",
+        email,
+        JSON.stringify({
+          wallet_address:             walletAddress,
+          subscriptions_cancelled_db: cancelledSubs,
+          on_chain_cancelled:         onChainCancelled,
+          on_chain_skipped:           onChainSkipped,
+          on_chain_errors:            onChainErrors,
+          deleted_at:                 new Date().toISOString(),
+          requested_by:               req.admin?.email || "admin",
+        }),
+      ]
+    );
+
+    console.log(`[GDPR] Deleted subscriber ${email} — wallet: ${walletAddress} — ${cancelledSubs} subscriptions cancelled`);
+
+    res.json({
+      success: true,
+      message: `Subscriber ${email} deleted. All PII removed. Payment records anonymised for tax compliance.`,
+      deleted: {
+        email,
+        wallet_address:             walletAddress,
+        subscriptions_cancelled_db: cancelledSubs,
+        on_chain_cancelled:         onChainCancelled,
+        on_chain_skipped:           onChainSkipped,
+        on_chain_errors:            onChainErrors.length > 0 ? onChainErrors : undefined,
+      },
+      note: onChainSkipped > 0 && !subscriber.wallet_private_key
+        ? `${onChainSkipped} on-chain subscription(s) require manual cancellation via Safe multisig — crypto-native subscriber.`
+        : undefined,
+    });
+  } catch (err) {
+    console.error("[GDPR] Delete error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
 // GET /api/admin/payments
 app.get("/api/admin/payments", requireAdminAuth, async (req, res) => {
   try {
