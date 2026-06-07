@@ -357,19 +357,19 @@ async function run() {
   console.log("");
 
   // ─── ETH balance alert ───────────────────────────────────────────────────────
-  const KEEPER_ETH_WARN_THRESHOLD = ethers.parseEther("0.005");
+  const KEEPER_ETH_WARN_THRESHOLD    = ethers.parseEther("0.005");
+  const DEPLOYER_ETH_WARN_THRESHOLD  = ethers.parseEther("0.005");
+  const SAFE_ETH_WARN_THRESHOLD      = ethers.parseEther("0.01");
 
-  async function checkKeeperBalance(provider, address) {
+  // Generic wallet ETH balance checker — returns { ethBalance, warn }
+  async function checkWalletEthBalance(provider, address, threshold, label) {
     try {
-      const balance = await provider.getBalance(address);
+      const balance    = await provider.getBalance(address);
       const ethBalance = parseFloat(ethers.formatEther(balance));
-      const warn = balance < KEEPER_ETH_WARN_THRESHOLD;
+      const warn       = balance < threshold;
 
       if (warn) {
-        console.error(`⚠️  KEEPER WALLET LOW ON ETH — Balance: ${ethBalance} ETH (threshold: 0.005 ETH)`);
-        console.error(`⚠️  Top up ${address} to avoid missed pulls.`);
-
-        // Email alert to admin
+        console.error(`⚠️  ${label} LOW ON ETH — Balance: ${ethBalance.toFixed(6)} ETH`);
         const RESEND_API_KEY = process.env.RESEND_API_KEY;
         const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || "vasco@authonce.io";
         if (RESEND_API_KEY) {
@@ -379,29 +379,50 @@ async function run() {
             body: JSON.stringify({
               from: "AuthOnce <notifications@authonce.io>",
               to:   [ADMIN_EMAIL],
-              subject: `⚠️ Keeper wallet low on ETH — ${ethBalance.toFixed(6)} ETH remaining`,
+              subject: `⚠️ ${label} low on ETH — ${ethBalance.toFixed(6)} ETH remaining`,
               html: `<!DOCTYPE html><html><body style="font-family:monospace;background:#0f172a;color:#f1f5f9;padding:24px;">
-                <h2 style="color:#f59e0b;">⚠️ Keeper Wallet Low on ETH</h2>
-                <p style="color:#f1f5f9;">The keeper wallet is running low on ETH and may miss subscription pulls.</p>
+                <h2 style="color:#f59e0b;">⚠️ ${label} Low on ETH</h2>
                 <table style="border-collapse:collapse;width:100%;margin:16px 0;">
-                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Keeper wallet</td><td style="padding:8px;font-family:monospace;">${address}</td></tr>
-                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Current balance</td><td style="padding:8px;color:#f59e0b;font-weight:bold;">${ethBalance.toFixed(6)} ETH</td></tr>
-                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Warning threshold</td><td style="padding:8px;">0.005 ETH</td></tr>
-                  <tr><td style="padding:8px;color:#94a3b8;">Action required</td><td style="padding:8px;color:#34d399;">Top up keeper wallet with at least 0.05 ETH on Base Network</td></tr>
+                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Wallet</td><td style="padding:8px;font-family:monospace;">${address}</td></tr>
+                  <tr><td style="padding:8px;color:#94a3b8;border-bottom:1px solid #1e293b;">Balance</td><td style="padding:8px;color:#f59e0b;font-weight:bold;">${ethBalance.toFixed(6)} ETH</td></tr>
+                  <tr><td style="padding:8px;color:#94a3b8;">Action</td><td style="padding:8px;color:#34d399;">Top up with at least 0.05 ETH on Base Network</td></tr>
                 </table>
                 <p style="color:#475569;font-size:12px;">AuthOnce Keeper Bot · Auto-alert</p>
               </body></html>`,
-              text: `KEEPER WALLET LOW ON ETH\n\nWallet: ${address}\nBalance: ${ethBalance.toFixed(6)} ETH\nThreshold: 0.005 ETH\n\nTop up with at least 0.05 ETH on Base Network.`,
+              text: `${label} LOW ON ETH\n\nWallet: ${address}\nBalance: ${ethBalance.toFixed(6)} ETH\n\nTop up on Base Network.`,
             }),
           }).catch(e => console.error(`  ETH alert email failed: ${e.message}`));
-          console.log(`  ETH low-balance alert email sent to ${ADMIN_EMAIL}`);
+          console.log(`  ETH low-balance alert sent for ${label}`);
         }
       }
-
-      return { ethBalance, ethBalanceWarn: warn };
+      return { ethBalance, warn };
     } catch (err) {
-      console.error(`  Could not fetch keeper ETH balance: ${err.message}`);
-      return { ethBalance: null, ethBalanceWarn: false };
+      console.error(`  Could not fetch ETH balance for ${label}: ${err.message}`);
+      return { ethBalance: null, warn: false };
+    }
+  }
+
+  async function checkKeeperBalance(provider, address) {
+    const result = await checkWalletEthBalance(provider, address, KEEPER_ETH_WARN_THRESHOLD, "Keeper wallet");
+    return { ethBalance: result.ethBalance, ethBalanceWarn: result.warn };
+  }
+
+  // ─── Treasury USDC balance check ─────────────────────────────────────────────
+  // Reads accumulated protocol fees — display only, no alert needed
+  const USDC_ABI = ["function balanceOf(address) view returns (uint256)"];
+  const USDC_ADDRESS = process.env.NETWORK === "base-mainnet"
+    ? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    : "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Base Sepolia
+
+  async function checkTreasuryUsdc(provider) {
+    try {
+      const TREASURY = process.env.PROTOCOL_TREASURY_ADDRESS || "0x737D4EeAEF67f776724482a29367615703A2DEB1";
+      const usdc     = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
+      const balance  = await usdc.balanceOf(TREASURY);
+      return parseFloat(ethers.formatUnits(balance, 6)); // USDC has 6 decimals
+    } catch (err) {
+      console.error(`  Could not fetch treasury USDC balance: ${err.message}`);
+      return null;
     }
   }
 
@@ -412,9 +433,25 @@ async function run() {
 
     let pulled = 0, expired = 0, skipped = 0, cycleError = null;
     let ethBalance = null, ethBalanceWarn = false;
+    let deployerEthBalance = null, deployerEthWarn = false;
+    let safeEthBalance = null, safeEthWarn = false;
+    let treasuryUsdc = null;
 
     try {
       ({ ethBalance, ethBalanceWarn } = await checkKeeperBalance(provider, wallet.address));
+
+      // Deployer ETH — alert only
+      const DEPLOYER_ADDRESS = process.env.DEPLOYER_ADDRESS || "0xbb6d960b8671713bb92be92d03BE8d8165EE7782";
+      ({ ethBalance: deployerEthBalance, warn: deployerEthWarn } =
+        await checkWalletEthBalance(provider, DEPLOYER_ADDRESS, DEPLOYER_ETH_WARN_THRESHOLD, "Deployer wallet"));
+
+      // Safe multisig ETH — alert + dashboard
+      const SAFE_ADDRESS = process.env.PROTOCOL_TREASURY_ADDRESS || "0x737D4EeAEF67f776724482a29367615703A2DEB1";
+      ({ ethBalance: safeEthBalance, warn: safeEthWarn } =
+        await checkWalletEthBalance(provider, SAFE_ADDRESS, SAFE_ETH_WARN_THRESHOLD, "Safe multisig"));
+
+      // Treasury USDC — dashboard only
+      treasuryUsdc = await checkTreasuryUsdc(provider);
 
       const ids = await getSubscriptionIds(vault);
       console.log(`  Found ${ids.length} subscription(s).`);
@@ -438,7 +475,7 @@ async function run() {
 
     // Write heartbeat to DB
     try {
-      await upsertKeeperHeartbeat({ cycleMs, pulled, expired, skipped, error: cycleError, ethBalance, ethBalanceWarn });
+      await upsertKeeperHeartbeat({ cycleMs, pulled, expired, skipped, error: cycleError, ethBalance, ethBalanceWarn, deployerEthBalance, deployerEthWarn, safeEthBalance, safeEthWarn, treasuryUsdc });
     } catch (err) {
       console.error(`  Heartbeat write failed: ${err.message}`);
     }

@@ -1180,7 +1180,9 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 12 }}>
                 <StatCard label="Keeper cycle"       value={k?.last_cycle_ms ? `${k.last_cycle_ms}ms` : "—"} color="var(--text-secondary)" />
                 <StatCard label="Keeper age"         value={k?.age_seconds != null ? `${k.age_seconds}s` : "—"} color={k?.age_seconds > 120 ? "var(--amber)" : "var(--green)"} />
-                <StatCard label="Keeper ETH balance" value={k?.eth_balance != null ? `${parseFloat(k.eth_balance).toFixed(5)} ETH` : "—"} color={k?.eth_balance_warn ? "var(--red)" : k?.eth_balance != null ? "var(--green)" : "var(--text-secondary)"} />
+                <StatCard label="Keeper ETH"         value={k?.eth_balance != null ? `${parseFloat(k.eth_balance).toFixed(5)} ETH` : "—"} color={k?.eth_balance_warn ? "var(--red)" : k?.eth_balance != null ? "var(--green)" : "var(--text-secondary)"} />
+                <StatCard label="Safe ETH"           value={k?.safe_eth != null ? `${parseFloat(k.safe_eth).toFixed(5)} ETH` : "—"} color={k?.safe_eth_warn ? "var(--red)" : k?.safe_eth != null ? "var(--green)" : "var(--text-secondary)"} />
+                <StatCard label="Treasury USDC"      value={k?.treasury_usdc != null ? `$${parseFloat(k.treasury_usdc).toFixed(2)}` : "—"} color="var(--teal)" />
                 <StatCard label="Webhook rate (24h)" value={s ? `${s.metrics?.webhook_success_rate_24h ?? 100}%` : "—"} color="var(--green)" />
                 <StatCard label="Failed webhooks"    value={s?.metrics?.failed_webhooks_24h ?? "—"} color={s?.metrics?.failed_webhooks_24h > 0 ? "var(--red)" : "var(--text-secondary)"} />
               </div>
@@ -1191,6 +1193,17 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>Keeper wallet low on ETH</div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
                       Balance: {k.eth_balance != null ? parseFloat(k.eth_balance).toFixed(5) : "—"} ETH · Threshold: 0.005 ETH · Top up <code style={{ fontSize: 10 }}>0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151</code> on Base Network
+                    </div>
+                  </div>
+                </div>
+              )}
+              {k?.safe_eth_warn && (
+                <div style={{ background: "rgba(220,38,38,0.08)", border: "0.5px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>Safe multisig low on ETH</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                      Balance: {k.safe_eth != null ? parseFloat(k.safe_eth).toFixed(5) : "—"} ETH · Threshold: 0.01 ETH · Top up <code style={{ fontSize: 10 }}>0x737D4EeAEF67f776724482a29367615703A2DEB1</code> — merchant approvals will fail
                     </div>
                   </div>
                 </div>
