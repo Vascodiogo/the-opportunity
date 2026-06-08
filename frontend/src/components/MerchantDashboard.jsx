@@ -474,7 +474,7 @@ function AnalyticsPanel({ address }) {
             <Bar dataKey="churned"  name="Churned" fill={RED}   fillOpacity={0.7}  radius={[3,3,0,0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
-      ) : null}
+      ) : (<></>)}
 
       {/* Active subscriber trend below charts */}
       {!loading && !error && chartData.some(d => d.active_count > 0) && (
