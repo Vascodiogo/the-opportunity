@@ -1,16 +1,21 @@
 # AuthOnce Protocol
 
+![Base Network](https://img.shields.io/badge/Base-Network-0052FF?style=flat&logo=coinbase&logoColor=white)
+![License](https://img.shields.io/badge/License-BUSL--1.1-orange?style=flat)
+![Mainnet](https://img.shields.io/badge/Mainnet-Q3%202026-34d399?style=flat)
+![Testnet](https://img.shields.io/badge/Testnet-Live%20on%20Base%20Sepolia-blue?style=flat)
+
 **Non-custodial recurring payments on Base. Authorize once. Pay forever.**
 
-AuthOnce is an on-chain subscription protocol built on Base Network. Merchants create subscription products. Subscribers authorize once and are billed automatically — in USDC, USDT, ETH, or any whitelisted token — without ever giving up custody of their funds.
+AuthOnce is an on-chain subscription protocol built on Base Network. Merchants create subscription products. Subscribers authorize once using an **EIP-2612 gasless permit signature** and are billed automatically — in USDC, USDT, DAI, or EURC — without ever giving up custody of their funds.
 
 ---
 
 ## How it works
 
-1. **Merchant** registers and creates a subscription product with a price, interval, and accepted tokens.
-2. **Subscriber** authorizes the vault contract once via a standard token approval.
-3. **Keeper bot** executes pulls automatically on each billing date.
+1. **Merchant** registers and creates a subscription product with a price, interval, and accepted token.
+2. **Subscriber** signs a single EIP-2612 permit off-chain — no gas required, no on-chain approval transaction.
+3. **Keeper bot** executes pulls automatically on each billing date using the stored permit.
 4. **Protocol** collects 0.5% atomically on every payment. Merchant receives the rest instantly.
 
 No funds are ever held by the protocol. The subscriber's wallet is never drained beyond the exact subscription amount per cycle.
@@ -19,7 +24,8 @@ No funds are ever held by the protocol. The subscriber's wallet is never drained
 
 ## Key features
 
-- **Multi-token** — USDC, USDT, DAI, EURC, WETH, cbBTC. Admin-controlled whitelist.
+- **EIP-2612 gasless authorization** — Subscribers sign once off-chain. No approval transaction, no gas cost at signup.
+- **Multi-token** — USDC, USDT, DAI, EURC. Admin-controlled whitelist.
 - **EIP-712 + ERC-1271** — Standard wallet-native authorization. Compatible with MetaMask, Ledger, Coinbase Wallet, Gnosis Safe, and AI agent wallets.
 - **Programmable grace period** — 1–30 day configurable dunning window. Keeper retries daily before expiring.
 - **Intro pricing** — Up to 12 pulls at a reduced introductory rate before switching to full price.
@@ -48,20 +54,20 @@ frontend/                 — React + Vite merchant and subscriber portal.
 
 ## Smart contracts
 
-### Base Sepolia (testnet)
+### Base Sepolia (testnet — live)
 
 | Contract | Address |
 |---|---|
-| SubscriptionVault v5 | `0x9ce26F5d8C4cc7942022FFCa9D4D574D8c497662` |
-| MerchantRegistry v2 | `0xBa8071912Ce59cD9D3D153120C59516fBae10A5C` |
+| SubscriptionVault | `0x2ED847da7f88231Ac6907196868adF4840A97f49` |
+| MerchantRegistry | `0xE62aF1DcADeF946ecC08978dec565344A63B8f9b` |
 | USDC (test) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 
 ### Base Mainnet
 
 | Contract | Address |
 |---|---|
-| SubscriptionVault v5 | `[deploy pending — Q3 2026]` |
-| MerchantRegistry v2 | `[deploy pending — Q3 2026]` |
+| SubscriptionVault | `[deploy pending — Q3 2026]` |
+| MerchantRegistry | `[deploy pending — Q3 2026]` |
 | USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Protocol Treasury | `0x737D4EeAEF67f776724482a29367615703A2DEB1` |
 
@@ -79,7 +85,13 @@ frontend/                 — React + Vite merchant and subscriber portal.
 
 ---
 
-## EIP-712 pull authorization
+## EIP-2612 permit authorization (EOA subscribers)
+
+EOA subscribers (MetaMask, Ledger, Coinbase Wallet) authorize via EIP-2612 permit — a gasless off-chain signature that grants the vault a one-time pull allowance per billing cycle. No on-chain approval transaction required at signup.
+
+The permit is signed once and stored. The keeper bot presents it on each billing date. If the permit is expired or revoked, the pull fails gracefully and the grace period begins.
+
+## EIP-712 pull authorization (smart wallet subscribers)
 
 Contract wallet subscribers (AI agents, Gnosis Safe, smart wallets) authorize pulls via EIP-712 structured signatures.
 
@@ -103,8 +115,6 @@ PullAuthorisation(
 ```
 
 `pullCount` acts as a nonce — each pull has a unique hash. `deadline` enforces a tight 24-hour TTL per pull signature.
-
-EOA subscribers (MetaMask, Ledger) are unaffected — standard `transferFrom` approval, no signature required.
 
 ---
 
@@ -233,5 +243,6 @@ Production use requires a commercial licence. Contact: vasco@authonce.io
 - Website: [authonce.io](https://authonce.io)
 - App: [app.authonce.io](https://authonce.io)
 - X: [@AuthOnce](https://x.com/AuthOnce)
+- X: [@VascoBuilds](https://x.com/VascoBuilds)
 - Farcaster: [@authonce](https://warpcast.com/authonce)
 - Contact: vasco@authonce.io
