@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /my-subscriptions
+Disallow: /pay/
+
+Sitemap: https://authonce.io/sitemap.xml
