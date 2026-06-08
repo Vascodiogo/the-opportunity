@@ -1,30 +1,81 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta property="og:title" content="AuthOnce — Non-custodial USDC Subscriptions" />
-    <meta property="og:description" content="Authorize once. Pay forever. Stay in control." />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Primary SEO -->
+    <title>AuthOnce — Non-Custodial USDC Subscription Payments on Base Network</title>
+    <meta name="description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Accept gasless USDC recurring payments using EIP-2612 permits — no chargebacks, no custody, 0.5% flat fee. Mainnet Q3 2026." />
+    <meta name="keywords" content="non-custodial crypto subscriptions, USDC subscription payments, gasless crypto subscriptions, on-chain subscription billing, Base Network recurring payments, Web3 subscriptions, EIP-2612 recurring payments" />
+    <meta name="author" content="Vasco Diogo" />
+    <meta name="robots" content="index, follow" />
+    <meta name="application-name" content="AuthOnce" />
+    <link rel="canonical" href="https://authonce.io" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="AuthOnce — Non-Custodial USDC Subscription Payments on Base" />
+    <meta property="og:description" content="Accept gasless USDC recurring payments on Base Network. Non-custodial, no chargebacks, 0.5% flat fee. Authorize once. Pay forever." />
     <meta property="og:image" content="https://authonce.io/og-image.png" />
     <meta property="og:url" content="https://authonce.io" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AuthOnce" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter/X -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="AuthOnce — Non-custodial USDC Subscriptions" />
-    <meta name="twitter:description" content="Authorize once. Pay forever. Stay in control." />
+    <meta name="twitter:site" content="@AuthOnce" />
+    <meta name="twitter:creator" content="@VascoBuilds" />
+    <meta name="twitter:title" content="AuthOnce — Non-Custodial USDC Subscription Payments on Base" />
+    <meta name="twitter:description" content="Accept gasless USDC recurring payments on Base Network. Non-custodial, no chargebacks, 0.5% flat fee." />
     <meta name="twitter:image" content="https://authonce.io/og-image.png" />
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AuthOnce - Non-custodial USDC Subscription Protocol on Base</title>
-    <meta name="description" content="AuthOnce enables recurring USDC subscription payments on Base Network. Merchants accept crypto subscriptions with a single pay link. Subscribers authorize once and stay in control." />
-    <meta name="application-name" content="AuthOnce" />
-    <meta property="og:title" content="AuthOnce - Non-custodial USDC Subscription Protocol" />
-    <meta property="og:description" content="Recurring crypto subscription payments on Base Network. Authorize once. Pay forever. Stay in control." />
-    <meta property="og:url" content="https://authonce.io" />
-    <meta property="og:type" content="website" />
-    <link rel="canonical" href="https://authonce.io" />
+
+    <!-- Bing -->
+    <meta name="msapplication-TileColor" content="#10B981" />
+
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "AuthOnce",
+      "url": "https://authonce.io",
+      "description": "Non-custodial crypto subscription protocol on Base Network. Accept gasless USDC recurring payments using EIP-2612 permits. No chargebacks, no custody, 0.5% flat fee.",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "0.5% protocol fee per transaction"
+      },
+      "creator": {
+        "@type": "Person",
+        "name": "Vasco Diogo",
+        "url": "https://x.com/VascoBuilds"
+      },
+      "sameAs": [
+        "https://x.com/AuthOnce",
+        "https://github.com/Vascodiogo/the-opportunity",
+        "https://warpcast.com/authonce"
+      ]
+    }
+    </script>
   </head>
   <body>
     <noscript>
-      <p>AuthOnce - Non-custodial USDC subscription payments on Base Network. <a href="https://authonce.io/privacy">Privacy Policy</a>. <a href="https://authonce.io/terms">Terms of Service</a>.</p>
+      <style>body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; line-height: 1.7; }</style>
+      <h1>AuthOnce — Non-Custodial USDC Subscription Payments on Base Network</h1>
+      <p>AuthOnce is a non-custodial crypto subscription protocol built on Base Network. Merchants accept gasless USDC recurring payments using EIP-2612 permit-based authorization. Subscribers authorize once — funds are pulled automatically every billing cycle, straight to the merchant's wallet. No custody. No chargebacks. 0.5% flat protocol fee.</p>
+      <h2>Non-Custodial On-Chain Subscription Billing</h2>
+      <p>Unlike custodial crypto payment processors, AuthOnce never holds funds. Every payment is a single atomic transaction from subscriber wallet to merchant wallet.</p>
+      <h2>Gasless USDC Subscriptions on Base</h2>
+      <p>Subscribers sign a single EIP-2612 permit off-chain — no gas, no on-chain approval transaction. The AuthOnce keeper executes recurring pulls on each billing date.</p>
+      <h2>Programmable Grace Period and Dunning</h2>
+      <p>Configurable 1–30 day grace period built into the smart contract. Failed payments trigger automatic retries before a subscription expires.</p>
+      <p>Mainnet launch Q3 2026. <a href="https://authonce.io/#contact">Apply as a founding merchant</a>. Read our <a href="https://blog.authonce.io">founder's blog</a>.</p>
+      <p><a href="https://authonce.io/privacy">Privacy Policy</a> · <a href="https://authonce.io/terms">Terms of Service</a>.</p>
     </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

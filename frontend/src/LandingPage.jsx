@@ -305,6 +305,9 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           <a className="ao-nav-text" href="#how-it-works" style={{ fontSize: 13, fontWeight: 500, color: muted, textDecoration: "none" }}>
             {lang === "en" ? "How it works" : "Como funciona"}
           </a>
+          <a className="ao-nav-text" href="https://blog.authonce.io" style={{ fontSize: 13, fontWeight: 500, color: muted, textDecoration: "none" }}>
+            Blog
+          </a>
           <button onClick={() => {
             const target = lang === "en" ? "pt" : "en";
             localStorage.setItem("ao_lang", target);
