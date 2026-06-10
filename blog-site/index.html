@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Why On-Chain Recurring Payments Are Broken — And How We Fixed It | AuthOnce</title>
-  <meta name="description" content="Every Web3 subscription protocol I've seen has the same fatal flaw. Here's what we built instead — and why the architecture matters." />
-  <meta property="og:title" content="Why On-Chain Recurring Payments Are Broken — And How We Fixed It" />
-  <meta property="og:description" content="Every Web3 subscription protocol I've seen has the same fatal flaw. Here's what we built instead — and why the architecture matters." />
-  <meta property="og:url" content="https://authonce.io/blog/why-onchain-recurring-payments-are-broken" />
+  <title>Non-Custodial Crypto Subscriptions on Base — How AuthOnce Fixed On-Chain Recurring Payments</title>
+  <meta name="description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Gasless USDC recurring payments using EIP-2612 permits — no custody, no chargebacks, 0.5% flat fee. Mainnet Q3 2026." />
+  <meta name="keywords" content="non-custodial crypto subscriptions, USDC subscription payments Base, gasless crypto subscriptions, EIP-2612 recurring payments, on-chain subscription billing Base, Web3 recurring payments" />
+  <meta property="og:title" content="Non-Custodial Crypto Subscriptions on Base — AuthOnce" />
+  <meta property="og:description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Gasless USDC recurring payments using EIP-2612 permits — no custody, no chargebacks, 0.5% flat fee." />
+  <meta property="og:url" content="https://blog.authonce.io" />
   <meta property="og:type" content="article" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@AuthOnce" />
   <meta name="author" content="Vasco Diogo" />
   <meta name="article:published_time" content="2026-06-08" />
-
-  <link rel="canonical" href="https://authonce.io/blog/why-onchain-recurring-payments-are-broken" />
+  <link rel="canonical" href="https://blog.authonce.io" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
@@ -42,12 +42,11 @@
       font-family: 'DM Sans', sans-serif;
       background: var(--white);
       color: var(--ink);
-      line-height: 1.7;
+      line-height: 1.75;
       font-size: 17px;
       font-weight: 300;
     }
 
-    /* NAV */
     nav {
       position: sticky;
       top: 0;
@@ -77,7 +76,6 @@
       text-decoration: none;
       color: var(--mist);
       font-size: 13px;
-      font-weight: 400;
       transition: color 0.2s;
     }
     .nav-links a:hover { color: var(--ink); }
@@ -89,7 +87,6 @@
       font-weight: 500 !important;
     }
 
-    /* HERO */
     .hero {
       max-width: 720px;
       margin: 80px auto 0;
@@ -114,17 +111,15 @@
     }
     h1 {
       font-family: 'DM Serif Display', serif;
-      font-size: clamp(32px, 5vw, 48px);
+      font-size: clamp(30px, 5vw, 46px);
       line-height: 1.15;
       letter-spacing: -0.02em;
       color: var(--ink);
       margin-bottom: 24px;
       font-weight: 400;
     }
-    h1 em {
-      font-style: italic;
-      color: var(--green);
-    }
+    h1 em { font-style: italic; color: var(--green); }
+
     .byline {
       display: flex;
       align-items: center;
@@ -146,12 +141,10 @@
       color: white;
       flex-shrink: 0;
     }
-    .byline-meta { font-size: 13px; color: var(--mist); }
     .byline-name { font-weight: 500; color: var(--ink-2); font-size: 14px; }
+    .byline-meta { font-size: 13px; color: var(--mist); }
 
-    /* CONTENT */
     .content { max-width: 720px; margin: 0 auto; padding: 0 24px; }
-
     .content p { margin-bottom: 24px; color: var(--ink-3); }
 
     .content h2 {
@@ -162,16 +155,6 @@
       margin: 56px 0 20px;
       letter-spacing: -0.01em;
       line-height: 1.25;
-    }
-
-    .content h3 {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--ink);
-      letter-spacing: 0.02em;
-      margin: 32px 0 12px;
-      text-transform: uppercase;
-      font-family: 'DM Mono', monospace;
     }
 
     .pullquote {
@@ -191,22 +174,6 @@
       margin: 0;
     }
 
-    .code-block {
-      background: var(--ink);
-      border-radius: 10px;
-      padding: 20px 24px;
-      margin: 24px 0;
-      overflow-x: auto;
-    }
-    .code-block code {
-      font-family: 'DM Mono', monospace;
-      font-size: 13px;
-      color: var(--green-lt);
-      line-height: 1.7;
-      white-space: pre;
-    }
-    .code-comment { color: #4B5563; }
-
     .comparison {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -217,14 +184,8 @@
       border-radius: 12px;
       padding: 20px 22px;
     }
-    .comparison-card.bad {
-      background: #FEF2F2;
-      border: 0.5px solid #FCA5A5;
-    }
-    .comparison-card.good {
-      background: #F0FDF8;
-      border: 0.5px solid #6EE7B7;
-    }
+    .comparison-card.bad { background: #FEF2F2; border: 0.5px solid #FCA5A5; }
+    .comparison-card.good { background: #F0FDF8; border: 0.5px solid #6EE7B7; }
     .comparison-label {
       font-family: 'DM Mono', monospace;
       font-size: 10px;
@@ -235,12 +196,7 @@
     }
     .bad .comparison-label { color: var(--red); }
     .good .comparison-label { color: var(--green); }
-    .comparison-card ul {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
+    .comparison-card ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
     .comparison-card li {
       font-size: 13px;
       color: var(--ink-3);
@@ -258,19 +214,11 @@
       margin: 40px 0;
       color: var(--white);
     }
-    .highlight-box p {
-      color: rgba(255,255,255,0.75);
-      margin-bottom: 16px;
-    }
+    .highlight-box p { color: rgba(255,255,255,0.75); margin-bottom: 16px; }
     .highlight-box p:last-child { margin-bottom: 0; }
     .highlight-box strong { color: var(--green-lt); font-weight: 500; }
 
-    .stat-row {
-      display: flex;
-      gap: 24px;
-      margin: 32px 0;
-      flex-wrap: wrap;
-    }
+    .stat-row { display: flex; gap: 24px; margin: 32px 0; flex-wrap: wrap; }
     .stat {
       flex: 1;
       min-width: 140px;
@@ -288,7 +236,25 @@
     }
     .stat-label { font-size: 12px; color: var(--mist); }
 
-    /* CTA */
+    .fee-compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 32px 0;
+    }
+    .fee-card {
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    .fee-card.stripe { background: var(--paper); border: 0.5px solid var(--fog); }
+    .fee-card.authonce { background: #F0FDF8; border: 0.5px solid #6EE7B7; }
+    .fee-name { font-size: 12px; color: var(--mist); font-family: 'DM Mono', monospace; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .fee-amount { font-family: 'DM Serif Display', serif; font-size: 36px; line-height: 1; margin-bottom: 8px; }
+    .fee-card.stripe .fee-amount { color: var(--red); }
+    .fee-card.authonce .fee-amount { color: var(--green); }
+    .fee-detail { font-size: 12px; color: var(--mist); line-height: 1.5; }
+
     .cta-section {
       margin: 80px 0 0;
       padding: 48px 40px;
@@ -303,11 +269,7 @@
       font-weight: 400;
       margin-bottom: 16px;
     }
-    .cta-section p {
-      color: rgba(255,255,255,0.6);
-      font-size: 15px;
-      margin-bottom: 28px;
-    }
+    .cta-section p { color: rgba(255,255,255,0.6); font-size: 15px; margin-bottom: 28px; }
     .cta-btn {
       display: inline-block;
       background: var(--green);
@@ -321,7 +283,6 @@
     }
     .cta-btn:hover { opacity: 0.9; }
 
-    /* FOOTER */
     footer {
       margin-top: 80px;
       padding: 32px 40px;
@@ -339,7 +300,7 @@
       nav { padding: 0 20px; }
       .hero { padding: 0 20px 48px; margin-top: 48px; }
       .content { padding: 0 20px; }
-      .comparison { grid-template-columns: 1fr; }
+      .comparison, .fee-compare { grid-template-columns: 1fr; }
       .cta-section { padding: 32px 24px; margin: 48px 0 0; }
       footer { flex-direction: column; gap: 12px; text-align: center; }
     }
@@ -358,7 +319,7 @@
 <article>
   <header class="hero">
     <div class="hero-tag">Founder's note · June 2026</div>
-    <h1>Why on-chain recurring payments are broken — <em>and how we fixed it.</em></h1>
+    <h1>Non-custodial crypto subscriptions on Base — <em>how we built what didn't exist.</em></h1>
     <div class="byline">
       <div class="byline-avatar">VD</div>
       <div>
@@ -372,15 +333,15 @@
 
     <p>Six months ago I didn't know Solidity. I had a day job in Switzerland, evenings and weekends, and a problem I couldn't stop thinking about: <strong>why is it still impossible to accept a recurring crypto payment without building custom infrastructure from scratch?</strong></p>
 
-    <p>Stripe solved this for fiat in 2011. It's 2026. The stablecoin economy is real — Circle just reported $250B in USDC circulation, Meta is routing $3B a year in creator payouts through USDC. And yet if you're a SaaS founder who wants to accept monthly USDC subscriptions from your users, you have two options: build it yourself, or don't.</p>
+    <p>Stripe solved this for fiat in 2011. It's 2026. The stablecoin economy is real — Circle reported $250B in USDC circulation. Meta is routing $3B a year in creator payouts through USDC across 160+ countries. And yet if you're a SaaS founder who wants to accept monthly USDC subscriptions from your users, you have two options: build it yourself, or don't.</p>
 
     <p>I chose a third option. I built AuthOnce. Here's what I learned along the way — and why the architecture of recurring payments matters more than most people realise.</p>
 
-    <h2>The fundamental problem with push payments</h2>
+    <h2>Why on-chain subscription billing has been broken</h2>
 
-    <p>Every crypto payment you've ever made is a <em>push</em> payment. You initiate it. You sign a transaction. You send. That's the entire model — and it works perfectly for one-time payments.</p>
+    <p>Every crypto payment you've ever made is a <em>push</em> payment. You initiate it. You sign a transaction. You send. That works perfectly for one-time payments.</p>
 
-    <p>Subscriptions are <em>pull</em> payments. The merchant initiates the charge on a schedule. The customer doesn't need to do anything after the initial setup. This is how Stripe, your bank, your electricity company — every recurring billing system in the world — operates.</p>
+    <p>Subscriptions are <em>pull</em> payments. The merchant initiates the charge on a schedule. The customer doesn't need to do anything after the initial authorisation. This is how Stripe, your bank, your electricity company — every recurring billing system in the world — works.</p>
 
     <p>Blockchain, by design, doesn't have a native pull mechanism. Wallets can't be charged without the owner's active participation. This creates an enormous gap: the entire recurring revenue model of the modern software economy simply doesn't exist on-chain.</p>
 
@@ -388,71 +349,56 @@
       <p>"The entire recurring revenue model of the modern software economy simply doesn't exist on-chain."</p>
     </div>
 
-    <p>Every protocol that's tried to solve this has made the same mistake: they ask subscribers to lock funds into a custodial vault upfront. The protocol holds your money and releases it to merchants on schedule. It works — until it doesn't. Until a contract gets exploited. Until a regulatory change makes custody legally untenable. Until a merchant goes rogue and the protocol can't distinguish a legitimate charge from theft.</p>
+    <p>Every protocol that's tried to solve this has made the same mistake: they ask subscribers to lock funds into a custodial vault upfront. The protocol holds your money and releases it to merchants on a schedule. It works — until it doesn't. Until a contract gets exploited. Until a regulatory change makes custody legally untenable. Until the terms change and merchants find themselves subject to fee increases they never agreed to.</p>
 
     <h2>The custody trap</h2>
 
-    <p>Here's what most on-chain subscription protocols get wrong. They require the subscriber to:</p>
+    <p>The custodial model isn't just technically fragile — it creates serious legal exposure. In most jurisdictions, holding customer funds on behalf of a merchant makes you a payment institution. You need licences. Compliance infrastructure. A legal team.</p>
+
+    <p>More importantly for subscribers: your funds are not yours the moment they enter a custodial vault. You're trusting the protocol operator, the smart contract, and the team behind it — simultaneously.</p>
 
     <div class="comparison">
       <div class="comparison-card bad">
-        <div class="comparison-label">The old way</div>
+        <div class="comparison-label">The custodial way</div>
         <ul>
           <li>Deposit funds into a protocol vault</li>
           <li>Trust the protocol with custody</li>
-          <li>Wait for funds to be released</li>
-          <li>Expose funds to smart contract risk</li>
-          <li>Create regulatory liability for the protocol</li>
+          <li>Exposure to smart contract risk</li>
+          <li>Protocol holds funds between cycles</li>
+          <li>Creates regulatory liability</li>
         </ul>
       </div>
       <div class="comparison-card good">
         <div class="comparison-label">AuthOnce</div>
         <ul>
-          <li>Sign a permit once, off-chain</li>
-          <li>Funds stay in subscriber's wallet</li>
-          <li>Protocol pulls exact amount per cycle</li>
-          <li>No custody, no lock-up, no vault</li>
+          <li>Authorise once with a single signature</li>
+          <li>Funds stay in your wallet</li>
+          <li>Protocol never holds anything</li>
+          <li>Exact amount pulled per cycle only</li>
           <li>Non-custodial by design</li>
         </ul>
       </div>
     </div>
 
-    <p>The custody model isn't just technically inferior — it creates legal exposure. In most jurisdictions, holding customer funds on behalf of a merchant makes you a payment institution. You need licences. You need compliance infrastructure. You need a legal team.</p>
+    <p>AuthOnce never holds funds. Not for a millisecond. Every payment is a single atomic transaction: subscriber wallet → merchant wallet. The protocol collects its fee in the same transaction. There is no intermediate state where anyone other than the subscriber or merchant holds value.</p>
 
-    <p>AuthOnce never holds funds. Not for a millisecond. Every payment is a single atomic transaction: subscriber wallet → merchant wallet. The protocol collects its 0.5% fee in the same transaction. Done.</p>
+    <p>This isn't a product feature we added. It's a constraint we designed in from the start — and one we cannot remove even if we wanted to, because it's enforced by the contract itself.</p>
 
-    <h2>EIP-2612: the primitive that makes this possible</h2>
+    <h2>Gasless crypto subscriptions: authorise once, pay forever</h2>
 
-    <p>The technical foundation of AuthOnce is EIP-2612 — a permit standard that allows token holders to authorise a spending allowance via an off-chain signature, without an on-chain approval transaction.</p>
+    <p>The name isn't just a tagline. It describes the exact user experience we designed around.</p>
 
-    <p>In plain English: a subscriber signs a message in their wallet once. No gas. No transaction. No blockchain interaction at all. That signed message is stored by our keeper infrastructure. On each billing date, the keeper presents the permit on-chain and pulls exactly the subscription amount directly from the subscriber's wallet to the merchant's wallet.</p>
+    <p>A subscriber connects their wallet and signs a single authorisation. No gas fee. No on-chain transaction at any point during setup. The signature is stored by our keeper infrastructure. On each billing date, the keeper executes the payment — pulling exactly the subscription amount, atomically, directly to the merchant's wallet.</p>
 
-    <div class="code-block"><code><span class="code-comment">// What happens on every billing cycle</span>
-function executePull(uint256 subscriptionId) external {
-    Subscription storage sub = subscriptions[subscriptionId];
+    <p>From the subscriber's perspective: set it and forget it. From the merchant's perspective: predictable, automated revenue in stablecoins, settled instantly, with no chargebacks possible.</p>
 
-    <span class="code-comment">// Verify permit and pull exact amount, atomically</span>
-    IERC20Permit(sub.token).transferFrom(
-        sub.subscriber,
-        sub.merchant,
-        sub.amount
-    );
-
-    <span class="code-comment">// Protocol fee: 0.5%, hardcoded, immutable</span>
-    uint256 fee = (sub.amount * 50) / 10000;
-    IERC20(sub.token).transferFrom(sub.subscriber, treasury, fee);
-
-    sub.lastPull = block.timestamp;
-    sub.pullCount++;
-}</code></div>
-
-    <p>The subscriber's funds never leave their wallet until the exact moment a payment is due. If they revoke the permit, payments stop immediately. If their balance drops below the subscription amount, the payment fails gracefully and the grace period begins.</p>
+    <p>If the subscriber revokes their authorisation, payments stop immediately. If their balance is insufficient, the payment fails gracefully — and the grace period begins.</p>
 
     <h2>The grace period problem nobody talks about</h2>
 
-    <p>Failed payments are the silent killer of subscription businesses. In traditional SaaS, Stripe reports that involuntary churn — customers who leave because their card failed, not because they wanted to cancel — accounts for up to 40% of total churn for some businesses.</p>
+    <p>Failed payments are the silent killer of subscription businesses. Stripe's data shows that involuntary churn — customers who leave because their card failed, not because they wanted to cancel — accounts for up to 40% of total churn for some SaaS businesses.</p>
 
-    <p>On-chain, this problem is worse. A wallet might be temporarily underfunded. A permit might expire. Network conditions might cause a transaction to fail. Without a recovery mechanism, a single failed payment means a lost subscriber.</p>
+    <p>On-chain, this problem is potentially worse. A wallet might be temporarily underfunded. Network conditions might cause a transaction to fail. Without a recovery mechanism, a single failed payment means a permanently lost subscriber.</p>
 
     <div class="stat-row">
       <div class="stat">
@@ -461,52 +407,68 @@ function executePull(uint256 subscriptionId) external {
       </div>
       <div class="stat">
         <div class="stat-value">1–30</div>
-        <div class="stat-label">day configurable grace period in AuthOnce before a subscription expires</div>
+        <div class="stat-label">day configurable grace period before a subscription expires</div>
       </div>
       <div class="stat">
         <div class="stat-value">0.5%</div>
-        <div class="stat-label">flat protocol fee — hardcoded, immutable, same for every merchant</div>
+        <div class="stat-label">flat protocol fee — hardcoded and immutable for every merchant</div>
       </div>
     </div>
 
-    <p>AuthOnce has a programmable grace period built directly into the protocol. When a payment fails, the subscription enters a grace state. The keeper retries daily for up to 30 days — configurable per subscription. During the grace period, the subscriber's access isn't revoked immediately. They get a window to top up their wallet. Most of them do.</p>
+    <p>AuthOnce has a programmable grace period built directly into the protocol. When a payment fails, the subscription enters a grace state. Our keeper retries daily for the configured window — up to 30 days. During this period, access isn't immediately revoked and the subscriber gets a window to resolve the issue. Most do.</p>
 
-    <p>This isn't a product feature. It's a designed behaviour of the smart contract itself, enforced on-chain, not by a backend system that can fail or be changed.</p>
+    <p>This behaviour is enforced on-chain, not by a backend system that can fail, be changed, or be selectively applied. Every merchant gets the same dunning logic. It cannot be disabled.</p>
 
-    <h2>Why the fee is hardcoded at 0.5%</h2>
+    <h2>USDC subscription payments on Base: why the fee is hardcoded</h2>
 
-    <p>Stripe charges 2.9% + €0.30 per transaction. For a €10/month subscription, that's €3.48 per year in fees — 29% of the subscription value going to payment infrastructure.</p>
+    <p>This was a deliberate architectural decision, not a pricing choice.</p>
 
-    <p>AuthOnce charges 0.5%. Hardcoded. Immutable. The same for every merchant, every token, every transaction size.</p>
+    <p>Traditional payment processors can change their fees. They have. They will again. A merchant building their pricing model on top of Stripe's 2.9% fee has no guarantee that fee won't change next quarter.</p>
 
-    <p>I made this a constant in the smart contract deliberately. Not a parameter an admin can change. Not a fee that scales with volume tiers. A constant. Merchants building on AuthOnce can build their pricing models knowing the infrastructure cost will never change without them seeing it coming.</p>
-
-    <div class="highlight-box">
-      <p>The protocol fee is set at <strong>50 basis points</strong> in the contract. There is a hard ceiling of 200 basis points that can never be exceeded — enforced in the code, not in a terms of service document.</p>
-      <p>Stripe cannot offer this guarantee. No traditional payment processor can. We can, because the rule is in the contract, not in a policy.</p>
+    <div class="fee-compare">
+      <div class="fee-card stripe">
+        <div class="fee-name">Stripe</div>
+        <div class="fee-amount">2.9%</div>
+        <div class="fee-detail">+ €0.30 per transaction<br>€0.59 on a €10/month subscription<br>~6% of annual subscription value<br><strong style="color:var(--red)">Can change. Has changed.</strong></div>
+      </div>
+      <div class="fee-card authonce">
+        <div class="fee-name">AuthOnce</div>
+        <div class="fee-amount">0.5%</div>
+        <div class="fee-detail">No per-transaction fee<br>€0.05 on a €10/month subscription<br>~0.5% of annual subscription value<br><strong style="color:var(--green)">Hardcoded. Cannot change.</strong></div>
+      </div>
     </div>
+
+    <p>AuthOnce's protocol fee is a constant in the smart contract. Not a parameter an admin can adjust. Not a value stored in a database. A constant — with a hard ceiling that can never be exceeded, enforced in code, not in a terms of service document that can be updated unilaterally.</p>
+
+    <p>Merchants building on AuthOnce can model their unit economics knowing the infrastructure cost is fixed for as long as the protocol exists.</p>
 
     <h2>The creator economy angle</h2>
 
-    <p>While I was building this, Meta announced it would route $3B per year in creator payouts through USDC across 160+ countries. Millions of creators are about to receive stablecoins as their primary income.</p>
+    <p>While building this, Meta announced it would route $3B per year in creator payouts through USDC across 160+ countries. Millions of creators are receiving stablecoins as primary income.</p>
 
-    <p>Those creators need somewhere to spend it. Not through a CEX. Not through a fiat off-ramp. Directly — on the SaaS tools, AI subscriptions, and professional services they use every day.</p>
+    <p>Those creators need somewhere to spend it — on the SaaS tools, AI subscriptions, and professional services they use every day. Not through a CEX. Not by selling to fiat first. Directly, from their wallet, to a merchant who accepts USDC.</p>
 
-    <p>AuthOnce is the spending layer for the creator economy. A creator holding USDC can subscribe to any merchant on AuthOnce with a single permit signature. The merchant gets reliable, predictable recurring revenue in stablecoins, settled instantly, with no chargebacks.</p>
+    <p>AuthOnce is the spending layer for that economy. A merchant who integrates AuthOnce gets access to a growing base of stablecoin holders who can subscribe with a single authorisation, no bank account required, no FX conversion, no intermediary taking a cut beyond our 0.5%.</p>
+
+    <div class="highlight-box">
+      <p>Meta solved the disbursement problem. <strong>AuthOnce solves the spending problem.</strong></p>
+      <p>When a creator in Brazil, Nigeria, or Indonesia receives USDC from Meta, they can subscribe to any AuthOnce-integrated merchant — anywhere in the world — without touching a bank or a centralised exchange.</p>
+      <p>That's what financial inclusion actually looks like in practice.</p>
+    </div>
 
     <h2>Where we are</h2>
 
-    <p>AuthOnce is live on Base Sepolia. Both smart contracts — SubscriptionVault and MerchantRegistry — are deployed and running. The keeper bot processes test subscriptions 24/7. The merchant dashboard is live. The subscriber portal is live.</p>
+    <p>AuthOnce is live on Base Sepolia. Both smart contracts are deployed and processing test subscriptions around the clock. The merchant dashboard, subscriber portal, and keeper infrastructure are all running.</p>
 
     <p>Mainnet launch is Q3 2026. We're currently accepting applications from founding merchants — the first 10 approved get 0% protocol fees for 3 months.</p>
 
-    <p>If you're building a SaaS product, a creator platform, or any business that runs on recurring revenue and wants to accept stablecoins — <a href="https://authonce.io/#contact" style="color: var(--green); text-decoration: none; font-weight: 500;">apply to be a founding merchant</a>.</p>
+    <p>If you're building a SaaS product, a creator platform, or any business that runs on recurring revenue and wants to serve the stablecoin economy — <a href="https://authonce.io/#contact" style="color: var(--green); text-decoration: none; font-weight: 500;">apply to be a founding merchant</a>.</p>
 
     <p style="color: var(--mist); font-size: 14px; margin-top: 40px; padding-top: 24px; border-top: 0.5px solid var(--fog);">Questions or feedback? Find me on X at <a href="https://x.com/VascoBuilds" style="color: var(--green); text-decoration: none;">@VascoBuilds</a> or email <a href="mailto:vasco@authonce.io" style="color: var(--green); text-decoration: none;">vasco@authonce.io</a>.</p>
 
     <div class="cta-section">
       <h2>Ready to accept USDC subscriptions?</h2>
-      <p>Join the waitlist. First 10 merchants pay zero protocol fee for 3 months.</p>
+      <p>Apply as a founding merchant. First 10 approved pay zero protocol fee for 3 months.</p>
       <a href="https://authonce.io/#contact" class="cta-btn">Apply as founding merchant →</a>
     </div>
 
