@@ -259,7 +259,14 @@ async function processDueSubscriptions(vault, ids) {
 
       try {
         // EOA path: deadline=0, signature="0x"
-        const tx      = await vault.executePull(id, 0, "0x");
+        // Append Base Builder Code to calldata for leaderboard attribution
+        const BUILDER_CODE = "0x62635f6361336b376235320b0080218021802180218021802180218021";
+        const encodedCall  = vault.interface.encodeFunctionData("executePull", [id, 0, "0x"]);
+        const calldataWithCode = encodedCall + BUILDER_CODE.slice(2); // append without 0x prefix
+        const tx = await wallet.sendTransaction({
+          to: VAULT_ADDRESS,
+          data: calldataWithCode,
+        });
         console.log(`     TX sent:  ${tx.hash}`);
         const receipt = await tx.wait();
         console.log(`     Confirmed in block ${receipt.blockNumber}`);
