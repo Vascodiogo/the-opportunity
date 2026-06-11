@@ -600,7 +600,7 @@ async function upsertProduct(merchantAddress, data) {
   const {
     slug, name, amount, interval,
     trialDays = 0, introAmount = 0, introPulls = 0,
-    yearlyAmount = null, paymentMethods = ["crypto"],
+    yearlyAmount = null, payment_methods = ["crypto"],
     price_type = "crypto", fiat_currency = "eur",
     fiat_price = null, fiat_yearly_price = null,
     description = null, image_url = null,
@@ -632,7 +632,7 @@ async function upsertProduct(merchantAddress, data) {
     RETURNING *
   `, [
     merchantAddress, slug, name, amount, interval,
-    trialDays, introAmount, introPulls, yearlyAmount, paymentMethods,
+    trialDays, introAmount, introPulls, yearlyAmount, payment_methods,
     price_type, fiat_currency, fiat_price, fiat_yearly_price,
   ]);
   return res.rows[0];
