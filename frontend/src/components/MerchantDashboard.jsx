@@ -1284,7 +1284,7 @@ function WebhookModal({ merchantAddress, onClose, onSaved }) {
 }
 
 // ─── CSV Import ───────────────────────────────────────────────────────────────
-function CsvImport({ address, isDark }) {
+function CsvImport({ address }) {
   const [open, setOpen]         = useState(false);
   const [file, setFile]         = useState(null);
   const [preview, setPreview]   = useState([]);
@@ -1888,7 +1888,7 @@ export default function MerchantDashboard({ address }) {
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{subscribers.length} total</div>
 
             {/* ── CSV Import ── */}
-            <CsvImport address={address} isDark={isDark} />
+            <CsvImport address={address} />
 
             {loading ? (
               <EmptyState message="Loading subscribers..." />
