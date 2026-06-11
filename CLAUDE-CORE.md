@@ -448,29 +448,111 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 
 ## 16. Next Session Priorities
 
-1. **Subvisual call** — June 9th 13:30 — call structure ready in PT + EN
-2. **Subvisual follow-up email** — draft and send within 2 hours after the call
-3. **Prusela @ Hacken** — follow up if no reply by Mon Jun 8
-4. **Will @ Cyfrin** — awaiting reply on "what did you have in mind"
+1. **Snapshot Pro outreach** — send June 13 (Alex Poon/CharmVerse sent June 10, awaiting reply)
+2. **Circle Alliance follow-up** — 6 weeks no response, Arc launch is the hook — draft and send
+3. **ETHGlobal Lisbon application** — July 24-26, apply now at ethglobal.com/events/lisbon2026/apply
+4. **blog.authonce.io/vs-custodial** — submit to Google Search Console URL Inspection
 5. **Keeper + Safe ETH top-up** — both wallets at 0 ETH on Base Mainnet — send 0.05 ETH each via bridge.base.org
-6. **@VascoBuilds handle** — check if X approved the change
+6. **Will @ Cyfrin** — declined Wednesday slot, asked for July availability
 7. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
-8. **Coinbase Onramp case 01559408** — parked, follow up January 2027
+8. **Farcaster duplicate posts** — delete 5 duplicate "My smart contract" posts manually
+
+**Partnership outreach tracker:**
+1. CharmVerse (Alex Poon) — email sent June 10 2026, awaiting reply
+2. Snapshot Pro — send June 13
+3. Tally — send June 16
+4. DeepDAO — send June 19
+5. Boardroom — send June 22
+6. Dune Analytics — send June 25
+7. Messari — send June 28
+
+**SEO completed June 8-10:**
+- sitemap.xml + robots.txt live ✅
+- Google Search Console configured + sitemap submitted ✅
+- authonce.io indexed on Google ✅
+- blog.authonce.io live (Cloudflare Pages, CNAME configured) ✅
+- blog post: "Non-custodial crypto subscriptions on Base" ✅
+- comparison page: blog.authonce.io/vs-custodial ✅
+- FAQ + Organization JSON-LD schema in frontend/index.html ✅
+- noscript static content block for Google crawling ✅
+- Blog link added to LandingPage.jsx nav ✅
+- Full OG/Twitter/Bing meta tags ✅
+
+**Forms fixed June 8:**
+- EN form (authonce.io) → Formspree mwvjlyyy → vasco@authonce.io ✅
+- PT form (authonce.io/pt) → Formspree mwvjlyyy → vasco@authonce.io ✅
+- Railway API CORS fixed — api.js + keeper.js running together ✅
 
 **Audit outreach status:**
-- Cyfrin: replied "what did you have in mind?" — awaiting Will's response
+- Cyfrin (Will): declined Wednesday slot, asked for July — awaiting response
 - Hacken: João no-show — Prusela Andrade covering — email sent Jun 5
 - Hashlock: deferred payment declined — $5-10K proposal on table
-- Guardian: awaiting reply
+- Spearbit/Cantina, Electisec, Sherlock: no reply
 
-**Stripe webhook events registered (13 total — Jun 7):**
-checkout.session.completed, payment_intent.succeeded, payment_intent.payment_failed,
-invoice.paid, invoice.payment_failed, customer.subscription.deleted/created/updated/paused/resumed,
-charge.refunded, charge.dispute.created, charge.dispute.closed
+**Contract addresses — Base Sepolia (current — active):**
+- SubscriptionVault: `0x55180314174B30e778f35357035d49cAEF55C835`
+- MerchantRegistry v3: `0x989376ff6195be2e76871535Db21CB8BdC9175D4`
 
-**Session file protocol:** Upload CLAUDE-CORE.md every session. Upload specific files being touched (max 2-3). Never upload CLAUDE-REFERENCE.md unless specifically needed.
+**Old/inactive contracts:**
+- SubscriptionVault v5 (old): `0x2ED847da7f88231Ac6907196868adF4840A97f49` — 64 days inactive
+- MerchantRegistry v2 (old): `0xE62aF1DcADeF946ecC08978dec565344A63B8f9b` — never used
 
-**CLAUDE-REFERENCE.md** contains: decisions log, fee analysis, competitive landscape, legal notes,
-marketing strategy, DataOnce, social media. Upload only when needed.
+**Monthly burn: ~€25-30/month**
+- Railway Hobby: ~$10-15
+- Neynar/Farcaster: $10/month ($120/year)
+- Zoho Mail: ~$5
+- Resend: free tier (26/3,000 emails used)
+- Cloudflare/Formspree: free
 
-*Last updated: 2026-06-07*
+---
+
+## 17. Scaling Roadmap
+
+**Keeper scaling — when to act:**
+
+| Merchants | Subscribers | Action needed |
+|---|---|---|
+| 1-20 | up to 10,000 | Current sequential keeper — fine |
+| 20-50 | up to 25,000 | Add parallel batch processing (25 concurrent workers) |
+| 50+ | 25,000+ | Multiple keeper wallets + nonce management |
+
+**Why 25 concurrent workers:**
+- Target: process all due subscriptions within 1 hour of billing date
+- 25,000 subs ÷ 3,600 seconds = 7 tx/second needed
+- Each worker: 1 tx per 3 seconds = 0.33 tx/second
+- 25 workers = ~8 tx/second — covers target with buffer
+- Single keeper EOA causes nonce collisions above ~5 concurrent — need multiple wallets at scale
+
+**Gas costs at scale (Base Network):**
+- Per executePull(): ~50,000-80,000 gas, ~$0.0001-$0.002
+- 25,000 tx/month: ~$10-15/month in gas — negligible
+- Keep 0.05 ETH in keeper wallet = 3-5 months gas at 25K tx/month
+- Keep 0.1 ETH as comfortable buffer at scale
+
+**Immediate action (before September mainnet):**
+- Top up keeper wallet to 0.05 ETH via bridge.base.org
+- Top up Safe multisig to 0.05 ETH via bridge.base.org
+- Both currently at 0 ETH on Base Mainnet
+
+**Keeper infrastructure — how others solve it:**
+
+Current AuthOnce keeper: custom Node.js, single EOA, sequential execution. Fine for launch.
+
+Industry standard solutions:
+- **Gelato Network** — decentralised executor, Web3 Functions, multiple independent wallets, no nonce problems. Used by MakerDAO, Uniswap, Base projects. Pay per execution.
+- **Chainlink Automation** — decentralised keeper nodes, pay in LINK. Used by Aave, Synthetix.
+- **OpenZeppelin Defender** — centralised but battle-tested, manages nonces/retries/gas automatically.
+
+All three solve the nonce problem via multiple independent wallets running in parallel.
+
+**AuthOnce roadmap:**
+- Launch: custom keeper, single EOA, sequential — fine for 10 merchants
+- 20+ merchants: add parallel batch processing (25 concurrent workers, multiple EOAs)
+- 50+ merchants: migrate to Gelato or Chainlink Automation — replace custom keeper entirely
+- 500+ merchants: full decentralised executor infrastructure
+- Built June 10 2026 — merchant migration tool
+- Limit: 1,000 rows per upload (merchants split larger lists themselves)
+- Stress test planned: 30-100 rows first, then scale up
+- DB table: subscriber_imports (auto-created on first use)
+
+*Last updated: 2026-06-10*

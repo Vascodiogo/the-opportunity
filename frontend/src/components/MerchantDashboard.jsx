@@ -1283,6 +1283,200 @@ function WebhookModal({ merchantAddress, onClose, onSaved }) {
   );
 }
 
+// ─── CSV Import ───────────────────────────────────────────────────────────────
+function CsvImport({ address, isDark }) {
+  const [open, setOpen]         = useState(false);
+  const [file, setFile]         = useState(null);
+  const [preview, setPreview]   = useState([]);
+  const [result, setResult]     = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+
+  const API = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
+
+  function parseCSV(text) {
+    const lines = text.trim().split("\n").filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, "_"));
+    return lines.slice(1).map(line => {
+      const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+      return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
+    });
+  }
+
+  function handleFile(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    setFile(f);
+    setResult(null);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rows = parseCSV(ev.target.result);
+      setPreview(rows.slice(0, 5));
+    };
+    reader.readAsText(f);
+  }
+
+  async function handleImport() {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      const token = localStorage.getItem("merchant_token");
+      const res = await fetch(`${API}/api/merchants/${address}/subscribers/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rows }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Import failed");
+      setResult(data);
+      setFile(null);
+      setPreview([]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const cardStyle = {
+    background: "var(--bg-card)", border: "0.5px solid var(--border)",
+    borderRadius: 12, padding: "16px 20px", marginBottom: 20,
+  };
+  const btnStyle = {
+    background: "var(--green)", color: "#fff", border: "none",
+    borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500,
+    cursor: "pointer", transition: "opacity 0.2s",
+  };
+  const ghostBtn = {
+    background: "transparent", border: "0.5px solid var(--border)",
+    borderRadius: 8, padding: "8px 16px", fontSize: 13,
+    color: "var(--text-secondary)", cursor: "pointer",
+  };
+
+  if (!open) return (
+    <div style={{ marginBottom: 20 }}>
+      <button onClick={() => setOpen(true)} style={ghostBtn}>
+        ⬆ Import subscribers from CSV
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>Import subscribers</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+            Migrate existing subscribers from Stripe or another platform.
+          </div>
+        </div>
+        <button onClick={() => { setOpen(false); setFile(null); setPreview([]); setResult(null); setError(null); }} style={ghostBtn}>✕</button>
+      </div>
+
+      {/* CSV format guide */}
+      <div style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.7 }}>
+        <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>Required CSV format:</div>
+        email, name, wallet_address, amount_usdc, interval<br />
+        subscriber@email.com, Alice, 0x123...abc, 9.99, monthly
+        <div style={{ marginTop: 6, color: "var(--text-muted)" }}>
+          Intervals: <strong>weekly</strong> · <strong>monthly</strong> · <strong>yearly</strong> · Max 500 rows per import.
+        </div>
+      </div>
+
+      {/* File input */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+        <input
+          type="file"
+          accept=".csv"
+          onChange={handleFile}
+          style={{ fontSize: 13, color: "var(--text-secondary)", flex: 1 }}
+        />
+        {file && (
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{file.name}</span>
+        )}
+      </div>
+
+      {/* Preview */}
+      {preview.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Preview — first {preview.length} rows
+          </div>
+          <div style={{ background: "var(--bg-tag)", borderRadius: 8, overflow: "hidden", border: "0.5px solid var(--border)" }}>
+            {preview.map((row, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr", padding: "8px 12px", fontSize: 11, fontFamily: "monospace", borderBottom: i < preview.length - 1 ? "0.5px solid var(--border)" : "none", color: "var(--text-secondary)" }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.email || "—"}</span>
+                <span>{row.name || "—"}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.wallet_address ? row.wallet_address.slice(0, 10) + "..." : "—"}</span>
+                <span>{row.amount_usdc || "—"}</span>
+                <span>{row.interval || "—"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      {file && !result && (
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={handleImport} disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.6 : 1 }}>
+            {loading ? "Importing..." : "Import subscribers"}
+          </button>
+          <button onClick={() => { setFile(null); setPreview([]); }} style={ghostBtn}>Clear</button>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "0.5px solid rgba(239,68,68,0.3)", borderRadius: 8, fontSize: 13, color: "var(--red)" }}>
+          {error}
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ padding: "10px 14px", background: "rgba(29,158,117,0.08)", border: "0.5px solid rgba(29,158,117,0.3)", borderRadius: 8, fontSize: 13, color: "var(--green)", marginBottom: result.errors?.length > 0 ? 8 : 0 }}>
+            ✓ {result.imported} subscriber{result.imported !== 1 ? "s" : ""} imported successfully.
+            {result.skipped > 0 && ` ${result.skipped} row${result.skipped !== 1 ? "s" : ""} skipped.`}
+          </div>
+          {result.errors?.length > 0 && (
+            <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.06)", border: "0.5px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: 12, color: "var(--red)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Row errors:</div>
+              {result.errors.map((e, i) => (
+                <div key={i}>Row {e.row}{e.email ? ` (${e.email})` : ""}: {e.reason}</div>
+              ))}
+            </div>
+          )}
+          <button onClick={() => { setResult(null); setOpen(false); }} style={{ ...ghostBtn, marginTop: 10 }}>Done</button>
+        </div>
+      )}
+
+      {/* Download sample CSV */}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "0.5px solid var(--border)" }}>
+        <button
+          onClick={() => {
+            const sample = "email,name,wallet_address,amount_usdc,interval\nalice@example.com,Alice Smith,0xAbCd1234567890AbCd1234567890AbCd12345678,9.99,monthly\nbob@example.com,Bob Jones,0x1234567890AbCd1234567890AbCd1234567890Ab,49.99,yearly";
+            const blob = new Blob([sample], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = "authonce-import-template.csv"; a.click();
+          }}
+          style={{ ...ghostBtn, fontSize: 12 }}
+        >
+          ⬇ Download CSV template
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── CSV export ───────────────────────────────────────────────────────────────
 function exportPaymentsCSV(payments, address) {
   const headers = ["Date", "Subscriber", "Amount (USDC)", "You Received", "Protocol Fee", "Tx Hash"];
@@ -1692,6 +1886,10 @@ export default function MerchantDashboard({ address }) {
         {tab === "subscribers" && (
           <div>
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{subscribers.length} total</div>
+
+            {/* ── CSV Import ── */}
+            <CsvImport address={address} isDark={isDark} />
+
             {loading ? (
               <EmptyState message="Loading subscribers..." />
             ) : subscribers.length === 0 ? (

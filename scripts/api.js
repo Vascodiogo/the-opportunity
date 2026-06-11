@@ -870,6 +870,114 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
   }
 });
 
+// POST /api/merchants/:address/subscribers/import — CSV subscriber import (post-mainnet migration)
+// CSV format: email,name,wallet_address,amount_usdc,interval (monthly/weekly/yearly),product_id
+app.post("/api/merchants/:address/subscribers/import", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    const { rows } = req.body; // Array of parsed CSV rows from frontend
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "no_rows", message: "No valid rows provided." });
+    }
+    if (rows.length > 500) {
+      return res.status(400).json({ error: "too_many_rows", message: "Maximum 500 subscribers per import." });
+    }
+
+    const VALID_INTERVALS = ["weekly", "monthly", "yearly"];
+    const results = { imported: 0, skipped: 0, errors: [] };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2; // 1-indexed, +1 for header
+
+      // Validate required fields
+      const email    = (row.email    || "").trim().toLowerCase();
+      const name     = (row.name     || "").trim();
+      const wallet   = (row.wallet_address || "").trim().toLowerCase();
+      const amount   = parseFloat(row.amount_usdc);
+      const interval = (row.interval || "").trim().toLowerCase();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        results.errors.push({ row: rowNum, reason: "Invalid or missing email" });
+        results.skipped++;
+        continue;
+      }
+      if (!wallet || !/^0x[a-f0-9]{40}$/.test(wallet)) {
+        results.errors.push({ row: rowNum, email, reason: "Invalid or missing wallet address" });
+        results.skipped++;
+        continue;
+      }
+      if (!amount || isNaN(amount) || amount <= 0) {
+        results.errors.push({ row: rowNum, email, reason: "Invalid amount" });
+        results.skipped++;
+        continue;
+      }
+      if (!VALID_INTERVALS.includes(interval)) {
+        results.errors.push({ row: rowNum, email, reason: `Invalid interval — must be weekly, monthly, or yearly` });
+        results.skipped++;
+        continue;
+      }
+
+      try {
+        // Ensure table exists (auto-migration)
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS subscriber_imports (
+            id               SERIAL PRIMARY KEY,
+            merchant_address TEXT NOT NULL,
+            email            TEXT NOT NULL,
+            name             TEXT,
+            wallet_address   TEXT NOT NULL,
+            amount_usdc      NUMERIC(18,6) NOT NULL,
+            interval         TEXT NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'pending',
+            imported_at      TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(merchant_address, email)
+          )
+        `);
+
+        // Store import record — merchant reviews and sends invite emails
+        await db.query(`
+          INSERT INTO subscriber_imports
+            (merchant_address, email, name, wallet_address, amount_usdc, interval, status, imported_at)
+          VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
+          ON CONFLICT (merchant_address, email) DO UPDATE
+            SET name = EXCLUDED.name,
+                wallet_address = EXCLUDED.wallet_address,
+                amount_usdc = EXCLUDED.amount_usdc,
+                interval = EXCLUDED.interval,
+                status = 'pending',
+                imported_at = NOW()
+        `, [address, email, name || null, wallet, amount.toFixed(6), interval]);
+
+        results.imported++;
+      } catch (rowErr) {
+        results.errors.push({ row: rowNum, email, reason: rowErr.message });
+        results.skipped++;
+      }
+    }
+
+    // Log to audit log
+    await db.query(`
+      INSERT INTO audit_log (actor, action, details, created_at)
+      VALUES ($1, 'subscriber_import', $2, NOW())
+    `, [address, JSON.stringify({ imported: results.imported, skipped: results.skipped })]);
+
+    res.json({
+      success: true,
+      imported: results.imported,
+      skipped: results.skipped,
+      errors: results.errors.slice(0, 20), // Return first 20 errors max
+    });
+  } catch (err) {
+    console.error("[API] Subscriber import error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 // POST /api/webhooks — save a new webhook endpoint
 app.post("/api/webhooks", requireMerchantAuth, async (req, res) => {
   try {
