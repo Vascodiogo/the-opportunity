@@ -794,7 +794,12 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                 { id: "crypto", label: "⬡ Fixed in USDC", sub: "Fiat equivalent varies" },
                 { id: "fiat",   label: "💱 Fixed in fiat", sub: "USDC equivalent varies" },
               ].map(({ id, label, sub }) => (
-                <div key={id} onClick={() => setPriceType(id)} style={{
+                <div key={id} onClick={() => {
+                  setPriceType(id);
+                  // Auto-sync price when switching modes
+                  if (id === "fiat" && amount && !fiatPrice) setFiatPrice(amount);
+                  if (id === "crypto" && fiatPrice && !amount) setAmount(fiatPrice);
+                }} style={{
                   padding: "10px 12px", borderRadius: 10, cursor: "pointer",
                   border: `0.5px solid ${priceType === id ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
                   background: priceType === id ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
@@ -1058,6 +1063,8 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
     }
   };
 
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   const handleSave = async () => {
     if (!name || !amount) return;
     if (hasIntro && (!introAmount || parseFloat(introAmount) <= 0)) { alert("Please enter a valid intro price."); return; }
@@ -1077,7 +1084,9 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
         }),
       });
       if (!res.ok) throw new Error("Failed to update product");
-      onSaved(); onClose();
+      setSaveSuccess(true);
+      onSaved();
+      setTimeout(() => { setSaveSuccess(false); onClose(); }, 1200);
     } catch { alert("Could not update product. Please try again."); }
     finally { setSaving(false); }
   };
@@ -1210,8 +1219,8 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
             </div>
           </div>
 
-          <button onClick={handleSave} disabled={saving} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Saving..." : "Save Changes"}
+          <button onClick={handleSave} disabled={saving || saveSuccess} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1, background: saveSuccess ? "var(--green)" : undefined }}>
+            {saveSuccess ? "✓ Saved!" : saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
