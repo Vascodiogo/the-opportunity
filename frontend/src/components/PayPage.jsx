@@ -508,7 +508,7 @@ export default function PayPage() {
             )}
 
             {/* Payment method selector */}
-            {flowStatus === "idle" && availableMethods && availableMethods.length > 1 && (
+            {(flowStatus === "idle" || flowStatus === "connected") && availableMethods && availableMethods.length > 1 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Pay with</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -543,7 +543,7 @@ export default function PayPage() {
             )}
 
             {/* Stripe flow */}
-            {flowStatus === "idle" && paymentMethod !== "crypto" && (
+            {(flowStatus === "idle" || flowStatus === "connected") && paymentMethod !== "crypto" && (
               <button
                 onClick={async () => {
                   setStripeLoading(true); setErrorMsg("");
