@@ -320,6 +320,7 @@ async function initSchema() {
   await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS fiat_currency     TEXT DEFAULT 'eur'`);
   await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS fiat_price        NUMERIC(18,6)`);
   await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS fiat_yearly_price NUMERIC(18,6)`);
+  await query(`ALTER TABLE products  ADD COLUMN IF NOT EXISTS crypto_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0`);
   await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tier              TEXT DEFAULT 'starter'`);
   await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS brand_name        TEXT`);
   await query(`ALTER TABLE merchants ADD COLUMN IF NOT EXISTS brand_color       TEXT`);
@@ -601,8 +602,7 @@ async function upsertProduct(merchantAddress, data) {
     slug, name, amount, interval,
     trialDays = 0, introAmount = 0, introPulls = 0,
     yearlyAmount = null, payment_methods = ["crypto"],
-    price_type = "crypto", fiat_currency = "eur",
-    fiat_price = null, fiat_yearly_price = null,
+    fiat_currency = "eur", crypto_discount_pct = 0,
     description = null, image_url = null,
   } = data;
 
@@ -610,10 +610,10 @@ async function upsertProduct(merchantAddress, data) {
     INSERT INTO products (
       merchant_address, slug, name, amount, interval,
       trial_days, intro_amount, intro_pulls, yearly_amount, payment_methods,
-      price_type, fiat_currency, fiat_price, fiat_yearly_price,
+      fiat_currency, crypto_discount_pct,
       created_at, updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
     ON CONFLICT (merchant_address, slug) DO UPDATE SET
       name              = EXCLUDED.name,
       amount            = EXCLUDED.amount,
@@ -623,17 +623,15 @@ async function upsertProduct(merchantAddress, data) {
       intro_pulls       = EXCLUDED.intro_pulls,
       yearly_amount     = EXCLUDED.yearly_amount,
       payment_methods   = EXCLUDED.payment_methods,
-      price_type        = EXCLUDED.price_type,
       fiat_currency     = EXCLUDED.fiat_currency,
-      fiat_price        = EXCLUDED.fiat_price,
-      fiat_yearly_price = EXCLUDED.fiat_yearly_price,
+      crypto_discount_pct = EXCLUDED.crypto_discount_pct,
       active            = TRUE,
       updated_at        = NOW()
     RETURNING *
   `, [
     merchantAddress, slug, name, amount, interval,
     trialDays, introAmount, introPulls, yearlyAmount, payment_methods,
-    price_type, fiat_currency, fiat_price, fiat_yearly_price,
+    fiat_currency, crypto_discount_pct,
   ]);
   return res.rows[0];
 }

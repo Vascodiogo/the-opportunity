@@ -201,7 +201,11 @@ export default function PayPage() {
   });
 
   const isYearly     = selectedInterval === "yearly" && product?.yearly_amount;
-  const activeAmount = isYearly ? product.yearly_amount : product?.amount;
+  const baseAmount   = isYearly ? product.yearly_amount : product?.amount;
+  const cryptoDiscountPct = product?.crypto_discount_pct || 0;
+  const activeAmount = (paymentMethod === "crypto" && cryptoDiscountPct > 0 && baseAmount)
+    ? baseAmount * (1 - cryptoDiscountPct / 100)
+    : baseAmount;
   const selectedTokenAddress = NETWORK_TOKENS[selectedToken] || USDC_ADDRESS;
   const selectedTokenMeta    = TOKEN_META[selectedToken] || TOKEN_META.usdc;
   const amountRaw    = activeAmount
@@ -514,7 +518,7 @@ export default function PayPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {availableMethods.map(method => {
                     const cfg = {
-                      crypto:     { label: "USDC wallet",  icon: "⛓" },
+                      crypto:     { label: "Crypto wallet", icon: "⛓" },
                       card:       { label: "Card",          icon: "💳" },
                       sepa:       { label: "SEPA Transfer", icon: "🏦" },
                       ideal:      { label: "iDEAL",         icon: "🇳🇱" },
@@ -526,15 +530,27 @@ export default function PayPage() {
                       multibanco: { label: "Multibanco",    icon: "🏧" },
                     }[method] || { label: method, icon: "💳" };
                     const sel = paymentMethod === method;
+                    const showDiscount = method === "crypto" && cryptoDiscountPct > 0 && baseAmount;
+                    const methodPrice = showDiscount
+                      ? (baseAmount * (1 - cryptoDiscountPct / 100))
+                      : baseAmount;
                     return (
                       <div key={method} onClick={() => setPaymentMethod(method)} style={{
-                        display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+                        display: "flex", flexDirection: "column", gap: 4, padding: "10px 12px",
                         borderRadius: 10, cursor: "pointer",
                         border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
                         background: sel ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
                       }}>
-                        <span style={{ fontSize: 18 }}>{cfg.icon}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{cfg.label}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 18 }}>{cfg.icon}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{cfg.label}</span>
+                        </div>
+                        {methodPrice != null && (
+                          <div style={{ fontSize: 11, color: sel ? "var(--green)" : "var(--text-muted)", paddingLeft: 28 }}>
+                            ${methodPrice.toFixed(showDiscount ? 4 : 2)}
+                            {showDiscount && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>(-{cryptoDiscountPct}%)</span>}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -578,7 +594,7 @@ export default function PayPage() {
                   // Filter to tokens the product accepts, intersected with selectable stablecoins
                   const productTokens = product?.payment_methods
                     ? SELECTABLE_TOKENS.filter(t =>
-                        product.payment_methods.includes(t) || product.payment_methods.includes("crypto")
+                        product.payment_methods.includes(t)
                       )
                     : SELECTABLE_TOKENS;
                   const tokensToShow = productTokens.length > 0 ? productTokens : ["usdc"];
@@ -658,7 +674,7 @@ export default function PayPage() {
                 {flowStatus === "connected" && (() => {
                   const productTokens = product?.payment_methods
                     ? SELECTABLE_TOKENS.filter(t =>
-                        product.payment_methods.includes(t) || product.payment_methods.includes("crypto")
+                        product.payment_methods.includes(t)
                       )
                     : SELECTABLE_TOKENS;
                   const tokensToShow = productTokens.length > 0 ? productTokens : ["usdc"];

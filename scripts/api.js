@@ -870,114 +870,6 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
   }
 });
 
-// POST /api/merchants/:address/subscribers/import — CSV subscriber import (post-mainnet migration)
-// CSV format: email,name,wallet_address,amount_usdc,interval (monthly/weekly/yearly),product_id
-app.post("/api/merchants/:address/subscribers/import", requireMerchantAuth, async (req, res) => {
-  try {
-    const address = req.params.address.toLowerCase();
-    if (address !== req.merchantAddress) {
-      return res.status(403).json({ error: "forbidden" });
-    }
-
-    const { rows } = req.body; // Array of parsed CSV rows from frontend
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: "no_rows", message: "No valid rows provided." });
-    }
-    if (rows.length > 500) {
-      return res.status(400).json({ error: "too_many_rows", message: "Maximum 500 subscribers per import." });
-    }
-
-    const VALID_INTERVALS = ["weekly", "monthly", "yearly"];
-    const results = { imported: 0, skipped: 0, errors: [] };
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNum = i + 2; // 1-indexed, +1 for header
-
-      // Validate required fields
-      const email    = (row.email    || "").trim().toLowerCase();
-      const name     = (row.name     || "").trim();
-      const wallet   = (row.wallet_address || "").trim().toLowerCase();
-      const amount   = parseFloat(row.amount_usdc);
-      const interval = (row.interval || "").trim().toLowerCase();
-
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        results.errors.push({ row: rowNum, reason: "Invalid or missing email" });
-        results.skipped++;
-        continue;
-      }
-      if (!wallet || !/^0x[a-f0-9]{40}$/.test(wallet)) {
-        results.errors.push({ row: rowNum, email, reason: "Invalid or missing wallet address" });
-        results.skipped++;
-        continue;
-      }
-      if (!amount || isNaN(amount) || amount <= 0) {
-        results.errors.push({ row: rowNum, email, reason: "Invalid amount" });
-        results.skipped++;
-        continue;
-      }
-      if (!VALID_INTERVALS.includes(interval)) {
-        results.errors.push({ row: rowNum, email, reason: `Invalid interval — must be weekly, monthly, or yearly` });
-        results.skipped++;
-        continue;
-      }
-
-      try {
-        // Ensure table exists (auto-migration)
-        await db.query(`
-          CREATE TABLE IF NOT EXISTS subscriber_imports (
-            id               SERIAL PRIMARY KEY,
-            merchant_address TEXT NOT NULL,
-            email            TEXT NOT NULL,
-            name             TEXT,
-            wallet_address   TEXT NOT NULL,
-            amount_usdc      NUMERIC(18,6) NOT NULL,
-            interval         TEXT NOT NULL,
-            status           TEXT NOT NULL DEFAULT 'pending',
-            imported_at      TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE(merchant_address, email)
-          )
-        `);
-
-        // Store import record — merchant reviews and sends invite emails
-        await db.query(`
-          INSERT INTO subscriber_imports
-            (merchant_address, email, name, wallet_address, amount_usdc, interval, status, imported_at)
-          VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
-          ON CONFLICT (merchant_address, email) DO UPDATE
-            SET name = EXCLUDED.name,
-                wallet_address = EXCLUDED.wallet_address,
-                amount_usdc = EXCLUDED.amount_usdc,
-                interval = EXCLUDED.interval,
-                status = 'pending',
-                imported_at = NOW()
-        `, [address, email, name || null, wallet, amount.toFixed(6), interval]);
-
-        results.imported++;
-      } catch (rowErr) {
-        results.errors.push({ row: rowNum, email, reason: rowErr.message });
-        results.skipped++;
-      }
-    }
-
-    // Log to audit log
-    await db.query(`
-      INSERT INTO audit_log (actor, action, details, created_at)
-      VALUES ($1, 'subscriber_import', $2, NOW())
-    `, [address, JSON.stringify({ imported: results.imported, skipped: results.skipped })]);
-
-    res.json({
-      success: true,
-      imported: results.imported,
-      skipped: results.skipped,
-      errors: results.errors.slice(0, 20), // Return first 20 errors max
-    });
-  } catch (err) {
-    console.error("[API] Subscriber import error:", err.message);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
 // POST /api/webhooks — save a new webhook endpoint
 app.post("/api/webhooks", requireMerchantAuth, async (req, res) => {
   try {
@@ -1254,6 +1146,9 @@ app.get("/api/products/:merchantAddress/:productSlug", geofenceMiddleware, async
       intro_amount:     parseFloat(product.intro_amount || 0),
       intro_pulls:      parseInt(product.intro_pulls    || 0),
       yearly_amount:    product.yearly_amount ? parseFloat(product.yearly_amount) : null,
+      payment_methods:  product.payment_methods || ["crypto"],
+      fiat_currency:    product.fiat_currency || "eur",
+      crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
     });
   } catch (err) {
     console.error("[API] Get product error:", err.message);
@@ -1296,8 +1191,7 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       name, amount, interval, trial_days = 0,
       intro_amount = 0, intro_pulls = 0,
       yearly_amount = null, payment_methods = ["crypto"],
-      price_type = "crypto", fiat_currency = "eur",
-      fiat_price = null, fiat_yearly_price = null,
+      fiat_currency = "eur", crypto_discount_pct = 0,
     } = req.body;
 
     // Validate — reject volatile tokens (WETH, cbBTC require v6 oracle pricing)
@@ -1317,13 +1211,11 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
     if (!["weekly", "monthly", "yearly"].includes(interval)) {
       return res.status(400).json({ error: "invalid_interval", message: "interval must be weekly, monthly, or yearly." });
     }
-    // For fiat price type, validate fiat_price instead of amount
-    const effectiveAmount = price_type === "fiat" ? fiat_price : amount;
-    if (!effectiveAmount || isNaN(effectiveAmount) || parseFloat(effectiveAmount) <= 0) {
+    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
     }
-    // For fiat products, set amount to fiat_price so DB constraint passes
-    const finalAmount = price_type === "fiat" ? parseFloat(fiat_price) : parseFloat(amount);
+    const finalAmount = parseFloat(amount);
+    const discountPct = Math.min(Math.max(parseFloat(crypto_discount_pct) || 0, 0), 50);
 
     const trialDays      = Math.min(Math.max(parseInt(trial_days)    || 0, 0), 90);
     const introAmount    = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), finalAmount);
@@ -1335,7 +1227,10 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
     // Ensure crypto is always in payment methods for crypto-wallet subscriptions
     const finalPaymentMethods = paymentMethods.includes("crypto") ? paymentMethods : ["crypto", ...paymentMethods];
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const product = await db.upsertProduct(address, { slug, name, amount: finalAmount, interval, trialDays, introAmount, introPulls, yearlyAmount, paymentMethods: finalPaymentMethods, price_type, fiat_currency, fiat_price: fiat_price ? parseFloat(fiat_price) : null, fiat_yearly_price: fiat_yearly_price ? parseFloat(fiat_yearly_price) : null });
+    const product = await db.upsertProduct(address, {
+      slug, name, amount: finalAmount, interval, trialDays, introAmount, introPulls, yearlyAmount,
+      payment_methods: finalPaymentMethods, fiat_currency, crypto_discount_pct: discountPct,
+    });
 
     console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (methods: ${paymentMethods.join(",")})`);
     res.status(201).json({
@@ -1347,10 +1242,8 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       intro_pulls:      parseInt(product.intro_pulls    || 0),
       yearly_amount:    product.yearly_amount ? parseFloat(product.yearly_amount) : null,
       payment_methods:  product.payment_methods || ["crypto"],
-      price_type:       product.price_type       || "crypto",
       fiat_currency:    product.fiat_currency    || "eur",
-      fiat_price:       product.fiat_price       || null,
-      fiat_yearly_price: product.fiat_yearly_price || null,
+      crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
     });
   } catch (err) {
     console.error("[API] Create product error:", err.message);
@@ -1367,8 +1260,7 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
     name, amount, interval, trial_days = 0,
     intro_amount = 0, intro_pulls = 0,
     yearly_amount = null, payment_methods = ["crypto"],
-    price_type = "crypto", fiat_currency = "eur",
-    fiat_price = null, fiat_yearly_price = null,
+    fiat_currency = "eur", crypto_discount_pct = 0,
   } = req.body;
 
   if (!name || !amount || !interval) {
@@ -1380,6 +1272,8 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
     if (invalid.length > 0) return res.status(400).json({ error: "volatile_token", invalid_tokens: invalid });
   }
 
+  const discountPct = Math.min(Math.max(parseFloat(crypto_discount_pct) || 0, 0), 50);
+
   try {
     const product = await db.upsertProduct(address, {
       slug:              req.params.productSlug,
@@ -1389,9 +1283,8 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
       introPulls:        parseInt(intro_pulls),
       yearlyAmount:      yearly_amount ? parseFloat(yearly_amount) : null,
       payment_methods,
-      price_type, fiat_currency,
-      fiat_price:        fiat_price ? parseFloat(fiat_price) : null,
-      fiat_yearly_price: fiat_yearly_price ? parseFloat(fiat_yearly_price) : null,
+      fiat_currency,
+      crypto_discount_pct: discountPct,
     });
     res.json({ success: true, product });
   } catch (err) {
@@ -1488,6 +1381,9 @@ app.get("/api/products/:merchantAddress/:productSlug/payment-methods", async (re
       methods:  available.length > 0 ? available : ["crypto"],
       country:  country || "unknown",
       all_merchant_methods: merchantMethods,
+      amount: parseFloat(product.amount),
+      crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
+      fiat_currency: product.fiat_currency || "eur",
     });
   } catch (err) {
     console.error("[API] Payment methods error:", err.message);
@@ -1514,38 +1410,21 @@ app.post("/api/stripe/checkout", geofenceMiddleware, async (req, res) => {
     }
 
     // Determine amount and currency
-    const isYearly    = interval === "yearly" && product.yearly_amount;
-    const priceType   = product.price_type   || "crypto";    // "crypto" | "fiat"
+    // Unified pricing: $1 = 1 USDC = 1 EURC = 1 fiat unit. Card always pays full `amount`
+    // (the crypto discount, if any, applies only to the on-chain path — not Stripe).
+    const isYearly     = interval === "yearly" && product.yearly_amount;
     const fiatCurrency = (product.fiat_currency || "eur").toLowerCase();
 
-    let amountUsdc, stripeAmount, stripeCurrency;
+    const amountUsdc = isYearly && product.yearly_amount
+      ? parseFloat(product.yearly_amount)
+      : parseFloat(product.amount);
 
-    if (priceType === "fiat" && product.fiat_price > 0) {
-      // Fixed fiat price — subscriber always pays same fiat amount
-      // USDC amount varies slightly with exchange rate
-      stripeCurrency = fiatCurrency;
-      const fiatPrice  = isYearly && product.fiat_yearly_price
-        ? parseFloat(product.fiat_yearly_price)
-        : parseFloat(product.fiat_price);
-      stripeAmount = ZERO_DECIMAL_CURRENCIES.has(fiatCurrency)
-        ? Math.round(fiatPrice)
-        : Math.round(fiatPrice * 100);
-      amountUsdc = fiatToUsdc(fiatPrice, fiatCurrency);
-      console.log(`[CHECKOUT] Fixed fiat: ${fiatPrice} ${fiatCurrency.toUpperCase()} → ${amountUsdc} USDC`);
-    } else {
-      // Fixed crypto price — subscriber pays fiat equivalent of USDC amount
-      // Fiat amount varies with exchange rate
-      stripeCurrency = fiatCurrency;
-      amountUsdc   = isYearly && product.yearly_amount
-        ? parseFloat(product.yearly_amount)
-        : parseFloat(product.amount);
-      await getFiatToUsdcRate(fiatCurrency); // warm cache
-      stripeAmount = usdcToStripeAmount(amountUsdc, fiatCurrency);
-      const displayFiat = ZERO_DECIMAL_CURRENCIES.has(fiatCurrency)
-        ? stripeAmount
-        : (stripeAmount / 100).toFixed(2);
-      console.log(`[CHECKOUT] Fixed crypto: ${amountUsdc} USDC → ${displayFiat} ${fiatCurrency.toUpperCase()}`);
-    }
+    const stripeCurrency = fiatCurrency;
+    const stripeAmount = ZERO_DECIMAL_CURRENCIES.has(fiatCurrency)
+      ? Math.round(amountUsdc)
+      : Math.round(amountUsdc * 100);
+
+    console.log(`[CHECKOUT] Card payment: ${amountUsdc} ${fiatCurrency.toUpperCase()}`);
 
     const amountEur = stripeAmount; // alias for downstream code
 

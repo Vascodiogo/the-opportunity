@@ -670,11 +670,12 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [introPulls, setIntroPulls]   = useState("1");
   const [hasYearly, setHasYearly]     = useState(false);
   const [yearlyAmount, setYearlyAmount] = useState("");
-  const [paymentMethods, setPaymentMethods] = useState(["crypto"]);
-  const [priceType, setPriceType]       = useState("crypto");   // "crypto" | "fiat"
-  const [fiatCurrency, setFiatCurrency] = useState("eur");
-  const [fiatPrice, setFiatPrice]       = useState("");
-  const [fiatYearlyPrice, setFiatYearlyPrice] = useState("");
+  const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "dai", "eurc"];
+  const [cryptoTokens, setCryptoTokens]     = useState(["usdc"]);
+  const [paymentMethods, setPaymentMethods] = useState([]); // fiat methods, e.g. ["card"]
+  const [fiatCurrency, setFiatCurrency]     = useState("eur");
+  const [hasCryptoDiscount, setHasCryptoDiscount] = useState(false);
+  const [cryptoDiscountPct, setCryptoDiscountPct] = useState("");
   const [saving, setSaving]             = useState(false);
   const [errors, setErrors]             = useState({});
 
@@ -685,39 +686,41 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
     : 0;
 
-  const toggleMethod = (method) => {
-    // "crypto" base method cannot be removed — always required for crypto wallet payments
-    if (method === "crypto") return;
-    setPaymentMethods(prev =>
-      prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]
-    );
+  const hasFiatMethods = paymentMethods.length > 0;
+
+  const cryptoPrice = amount && hasCryptoDiscount && cryptoDiscountPct
+    ? (parseFloat(amount) * (1 - parseFloat(cryptoDiscountPct) / 100)).toFixed(4)
+    : amount ? parseFloat(amount).toFixed(2) : "";
+
+  const toggleCryptoToken = (id) => {
+    setCryptoTokens(prev => {
+      if (prev.includes(id) && prev.length === 1) return prev; // keep at least one
+      return prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id];
+    });
   };
 
-  // Ensure "crypto" is always in paymentMethods (crypto wallet is always enabled)
-  // and USDC is always included as a token
-  const effectivePaymentMethods = paymentMethods.includes("crypto")
-    ? paymentMethods
-    : ["crypto", ...paymentMethods];
+  const toggleFiatMethod = (id) => {
+    setPaymentMethods(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
+  };
 
   // Validate all fields before submitting — no API call if form is invalid
   const validate = () => {
     const e = {};
     if (!name.trim())                                              e.name        = "Product name is required";
     if (name.trim().length > 100)                                  e.name        = "Name must be under 100 characters";
-    if (priceType === "crypto") {
-      if (!amount || isNaN(amount) || parseFloat(amount) <= 0)    e.amount      = "Enter a valid price";
-      if (parseFloat(amount) > 1000000)                           e.amount      = "Price too high (max 1,000,000)";
-    } else {
-      if (!fiatPrice || isNaN(fiatPrice) || parseFloat(fiatPrice) <= 0) e.amount = "Enter a valid price";
-    }
+    if (!amount || isNaN(amount) || parseFloat(amount) <= 0)       e.amount      = "Enter a valid price";
+    if (parseFloat(amount) > 1000000)                              e.amount      = "Price too high (max 1,000,000)";
     if (hasIntro) {
       if (!introAmount || parseFloat(introAmount) <= 0)            e.introAmount = "Enter a valid intro price";
-      const mainPrice = priceType === "crypto" ? parseFloat(amount) : parseFloat(fiatPrice);
-      if (parseFloat(introAmount) >= mainPrice)                    e.introAmount = "Intro price must be less than full price";
+      if (parseFloat(introAmount) >= parseFloat(amount))           e.introAmount = "Intro price must be less than full price";
     }
     if (hasYearly) {
-      if (priceType === "crypto" && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) e.yearlyAmount = "Enter a valid yearly price";
-      if (priceType === "fiat"   && (!fiatYearlyPrice || parseFloat(fiatYearlyPrice) <= 0)) e.yearlyAmount = "Enter a valid yearly price";
+      if (!yearlyAmount || parseFloat(yearlyAmount) <= 0)          e.yearlyAmount = "Enter a valid yearly price";
+    }
+    if (hasCryptoDiscount) {
+      if (cryptoDiscountPct === "" || isNaN(cryptoDiscountPct) || parseFloat(cryptoDiscountPct) < 0 || parseFloat(cryptoDiscountPct) > 50) {
+        e.cryptoDiscount = "Enter a discount between 0 and 50%";
+      }
     }
     return e;
   };
@@ -734,23 +737,18 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
         body: JSON.stringify({
           name,
-          // For fiat price type, send fiat_price as amount so API validation passes
-          // API uses fiat_price for actual billing; amount field holds USDC equivalent
-          amount:            priceType === "crypto" ? parseFloat(amount) : parseFloat(fiatPrice || 0),
+          amount:            parseFloat(amount),
           interval:          intervalMap[interval],
           intro_amount:      hasIntro  ? parseFloat(introAmount)  : 0,
           intro_pulls:       hasIntro  ? parseInt(introPulls)     : 0,
-          yearly_amount:     hasYearly && priceType === "crypto" ? parseFloat(yearlyAmount) : null,
-          payment_methods:   effectivePaymentMethods,
-          price_type:        priceType,
+          yearly_amount:     hasYearly ? parseFloat(yearlyAmount) : null,
+          payment_methods:   ["crypto", ...cryptoTokens, ...paymentMethods],
           fiat_currency:     fiatCurrency,
-          fiat_price:        priceType === "fiat" ? parseFloat(fiatPrice) : null,
-          fiat_yearly_price: priceType === "fiat" && hasYearly ? parseFloat(fiatYearlyPrice) : null,
+          crypto_discount_pct: hasCryptoDiscount ? parseFloat(cryptoDiscountPct) : 0,
         }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        // Show specific field error if API returns one, otherwise generic
         if (errData.error === "missing_fields") {
           setErrors({ name: "Please fill in all required fields" });
         } else if (errData.error === "volatile_token") {
@@ -786,88 +784,34 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             />
             {errors.name && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.name}</div>}
           </div>
-          {/* Price type toggle */}
-          <div>
-            <label style={S.label}>Price type</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {[
-                { id: "crypto", label: "⬡ Fixed in USDC", sub: "Fiat equivalent varies" },
-                { id: "fiat",   label: "💱 Fixed in fiat", sub: "USDC equivalent varies" },
-              ].map(({ id, label, sub }) => (
-                <div key={id} onClick={() => {
-                  setPriceType(id);
-                  // Auto-sync price when switching modes
-                  if (id === "fiat" && amount && !fiatPrice) setFiatPrice(amount);
-                  if (id === "crypto" && fiatPrice && !amount) setAmount(fiatPrice);
-                }} style={{
-                  padding: "10px 12px", borderRadius: 10, cursor: "pointer",
-                  border: `0.5px solid ${priceType === id ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
-                  background: priceType === id ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: priceType === id ? "var(--green)" : "var(--text-secondary)" }}>{label}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{sub}</div>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Crypto price fields */}
-          {priceType === "crypto" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={S.label}>Price (USDC)</label>
+          {/* Price — single value, 1:1 across stablecoins and fiat */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={S.label}>Price</label>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)" }}>$</span>
                 <input
                   type="number" placeholder="29.00" min="0.01" step="0.01"
                   value={amount}
                   onChange={e => { setAmount(e.target.value); setErrors(prev => ({ ...prev, amount: undefined })); }}
-                  style={{ borderColor: errors.amount ? "var(--red)" : undefined }}
+                  style={{ paddingLeft: 22, borderColor: errors.amount ? "var(--red)" : undefined }}
                 />
-                {errors.amount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.amount}</div>}
               </div>
-              <div>
-                <label style={S.label}>Billing interval</label>
-                <select value={interval} onChange={e => setInterval(e.target.value)}>
-                  <option value="0">Weekly</option>
-                  <option value="1">Monthly</option>
-                  <option value="2">Yearly</option>
-                </select>
-              </div>
+              {errors.amount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.amount}</div>}
             </div>
-          )}
-
-          {/* Fiat price fields */}
-          {priceType === "fiat" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={S.label}>Currency</label>
-                  <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
-                    {FIAT_CURRENCIES.map(c => (
-                      <option key={c.code} value={c.code}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={S.label}>Billing interval</label>
-                  <select value={interval} onChange={e => setInterval(e.target.value)}>
-                    <option value="0">Weekly</option>
-                    <option value="1">Monthly</option>
-                    <option value="2">Yearly</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label style={S.label}>Price ({fiatCurrency.toUpperCase()})</label>
-                <div style={{ position: "relative" }}>
-                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)" }}>{currencySymbol}</span>
-                  <input type="number" placeholder="29.00" value={fiatPrice} onChange={e => setFiatPrice(e.target.value)} style={{ paddingLeft: 26 }} />
-                </div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                  Subscriber always pays this exact {fiatCurrency.toUpperCase()} amount. USDC equivalent calculated at checkout.
-                </div>
-              </div>
+            <div>
+              <label style={S.label}>Billing interval</label>
+              <select value={interval} onChange={e => setInterval(e.target.value)}>
+                <option value="0">Weekly</option>
+                <option value="1">Monthly</option>
+                <option value="2">Yearly</option>
+              </select>
             </div>
-          )}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: -8 }}>
+            $1 = 1 USDC = 1 USDT = 1 DAI = 1 EURC. Same price across crypto and card.
+          </div>
 
           {/* Intro pricing toggle */}
           <div>
@@ -878,10 +822,11 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Introductory pricing</span>
             </div>
             {hasIntro && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, paddingLeft: 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label style={S.label}>Intro price (USDC)</label>
+                  <label style={S.label}>Intro price ($)</label>
                   <input type="number" placeholder="5.00" value={introAmount} onChange={e => setIntroAmount(e.target.value)} />
+                  {errors.introAmount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.introAmount}</div>}
                 </div>
                 <div>
                   <label style={S.label}>For how many {intervalLabel[interval]}s</label>
@@ -899,22 +844,13 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               </div>
               <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer yearly billing option</span>
             </div>
-            {hasYearly && priceType === "crypto" && (
+            {hasYearly && (
               <div>
-                <label style={S.label}>Yearly price (USDC)</label>
+                <label style={S.label}>Yearly price ($)</label>
                 {yearlySuggestion && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Suggested: ${yearlySuggestion} (20% off)</div>}
                 <input type="number" placeholder={yearlySuggestion || "290.00"} value={yearlyAmount} onChange={e => setYearlyAmount(e.target.value)} />
                 {yearlyDiscount > 0 && <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>{yearlyDiscount}% discount vs monthly</div>}
-              </div>
-            )}
-            {hasYearly && priceType === "fiat" && (
-              <div>
-                <label style={S.label}>Yearly price ({fiatCurrency.toUpperCase()})</label>
-                {fiatPrice && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Suggested: {currencySymbol}{(parseFloat(fiatPrice || 0) * 12 * 0.8).toFixed(2)} (20% off)</div>}
-                <div style={{ position: "relative" }}>
-                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)" }}>{currencySymbol}</span>
-                  <input type="number" placeholder={(parseFloat(fiatPrice || 0) * 12 * 0.8).toFixed(2)} value={fiatYearlyPrice} onChange={e => setFiatYearlyPrice(e.target.value)} style={{ paddingLeft: 26 }} />
-                </div>
+                {errors.yearlyAmount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.yearlyAmount}</div>}
               </div>
             )}
           </div>
@@ -922,18 +858,23 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
           {/* Accepted crypto tokens */}
           <div>
             <label style={S.label}>Accepted crypto tokens</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
-              {SUBSCRIPTION_TOKENS.map(({ id, label }) => {
-                const isEnabled = paymentMethods.includes(id) || id === "usdc";
-                const always    = id === "usdc";
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {[
+                { id: "usdc", label: "⬡ USDC" },
+                { id: "usdt", label: "₮ USDT" },
+                { id: "dai",  label: "◈ DAI" },
+                { id: "eurc", label: "€ EURC" },
+              ].map(({ id, label }) => {
+                const isEnabled = cryptoTokens.includes(id);
+                const isLast = cryptoTokens.length === 1 && isEnabled;
                 return (
-                  <div key={id} onClick={() => !always && toggleMethod(id)} style={{
+                  <div key={id} onClick={() => !isLast && toggleCryptoToken(id)} style={{
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "8px 10px", borderRadius: 8,
-                    cursor: always ? "default" : "pointer",
+                    cursor: isLast ? "default" : "pointer",
                     border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
                     background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                    opacity: always ? 0.75 : 1,
+                    opacity: isLast ? 0.7 : 1,
                   }}>
                     <div style={{
                       width: 14, height: 14, borderRadius: 3, flexShrink: 0,
@@ -948,7 +889,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                 );
               })}
             </div>
-            <div style={{ fontSize: 10, color: "var(--text-muted)", padding: "6px 10px", background: "var(--bg-tag)", borderRadius: 6, border: "0.5px solid var(--border)" }}>
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, padding: "6px 10px", background: "var(--bg-tag)", borderRadius: 6, border: "0.5px solid var(--border)" }}>
               ⓘ Volatile tokens (WETH, cbBTC) require USD-denominated oracle pricing — available in v6.
             </div>
           </div>
@@ -969,7 +910,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               ].map(({ id, label }) => {
                 const isEnabled = paymentMethods.includes(id);
                 return (
-                  <div key={id} onClick={() => toggleMethod(id)} style={{
+                  <div key={id} onClick={() => toggleFiatMethod(id)} style={{
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "8px 10px", borderRadius: 8, cursor: "pointer",
                     border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
@@ -988,6 +929,41 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                 );
               })}
             </div>
+            {hasFiatMethods && (
+              <div style={{ marginTop: 8 }}>
+                <label style={S.label}>Settlement currency</label>
+                <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
+                  {FIAT_CURRENCIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Crypto discount toggle */}
+          <div>
+            <div onClick={() => setHasCryptoDiscount(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: hasCryptoDiscount ? 10 : 0 }}>
+              <div style={{ width: 32, height: 18, borderRadius: 99, background: hasCryptoDiscount ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                <div style={{ position: "absolute", top: 2, left: hasCryptoDiscount ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+              </div>
+              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer a crypto discount</span>
+            </div>
+            {hasCryptoDiscount && (
+              <div>
+                <label style={S.label}>Discount for paying with crypto (%)</label>
+                <input type="number" min="0" max="50" step="0.5" placeholder="5" value={cryptoDiscountPct} onChange={e => setCryptoDiscountPct(e.target.value)} />
+                {errors.cryptoDiscount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.cryptoDiscount}</div>}
+                {amount && cryptoDiscountPct && !errors.cryptoDiscount && (
+                  <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
+                    Crypto price: ${cryptoPrice} · Card price: ${parseFloat(amount).toFixed(2)}
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                  Common in Web3 — incentivises subscribers to pay on-chain, avoiding card processing fees.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Pay link preview */}
@@ -1042,6 +1018,9 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   const [paymentMethods, setPaymentMethods] = useState(
     initialMethods.filter(m => !CRYPTO_TOKENS.includes(m) && m !== "crypto") 
   );
+  const [fiatCurrency, setFiatCurrency] = useState(product.fiat_currency || "eur");
+  const [hasCryptoDiscount, setHasCryptoDiscount] = useState(!!product.crypto_discount_pct);
+  const [cryptoDiscountPct, setCryptoDiscountPct] = useState(product.crypto_discount_pct ? String(product.crypto_discount_pct) : "");
   const [saving, setSaving]           = useState(false);
 
   const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
@@ -1070,6 +1049,9 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
     if (hasIntro && (!introAmount || parseFloat(introAmount) <= 0)) { alert("Please enter a valid intro price."); return; }
     if (hasIntro && parseFloat(introAmount) > parseFloat(amount)) { alert("Intro price cannot be higher than the full price."); return; }
     if (hasYearly && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) { alert("Please enter a valid yearly price."); return; }
+    if (hasCryptoDiscount && (cryptoDiscountPct === "" || isNaN(cryptoDiscountPct) || parseFloat(cryptoDiscountPct) < 0 || parseFloat(cryptoDiscountPct) > 50)) {
+      alert("Enter a crypto discount between 0 and 50%."); return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/api/products/${merchantAddress}/${product.slug}`, {
@@ -1081,6 +1063,8 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
           intro_pulls:   hasIntro  ? parseInt(introPulls)    : 0,
           yearly_amount: hasYearly ? parseFloat(yearlyAmount): null,
           payment_methods: ["crypto", ...cryptoTokens, ...paymentMethods],
+          fiat_currency: fiatCurrency,
+          crypto_discount_pct: hasCryptoDiscount ? parseFloat(cryptoDiscountPct) : 0,
         }),
       });
       if (!res.ok) throw new Error("Failed to update product");
@@ -1217,6 +1201,40 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
                 );
               })}
             </div>
+            {paymentMethods.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <label style={S.label}>Settlement currency</label>
+                <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
+                  {FIAT_CURRENCIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Crypto discount toggle */}
+          <div>
+            <div onClick={() => setHasCryptoDiscount(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: hasCryptoDiscount ? 10 : 0 }}>
+              <div style={{ width: 32, height: 18, borderRadius: 99, background: hasCryptoDiscount ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                <div style={{ position: "absolute", top: 2, left: hasCryptoDiscount ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+              </div>
+              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer a crypto discount</span>
+            </div>
+            {hasCryptoDiscount && (
+              <div>
+                <label style={S.label}>Discount for paying with crypto (%)</label>
+                <input type="number" min="0" max="50" step="0.5" placeholder="5" value={cryptoDiscountPct} onChange={e => setCryptoDiscountPct(e.target.value)} />
+                {amount && cryptoDiscountPct && !isNaN(cryptoDiscountPct) && (
+                  <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
+                    Crypto price: ${(parseFloat(amount) * (1 - parseFloat(cryptoDiscountPct) / 100)).toFixed(4)} · Card price: ${parseFloat(amount).toFixed(2)}
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                  Common in Web3 — incentivises subscribers to pay on-chain, avoiding card processing fees.
+                </div>
+              </div>
+            )}
           </div>
 
           <button onClick={handleSave} disabled={saving || saveSuccess} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1, background: saveSuccess ? "var(--green)" : undefined }}>
