@@ -53,8 +53,10 @@ export default function App() {
   const savedLang = localStorage.getItem("ao_lang");
   if (savedLang) {
     setLang(savedLang);
-    // If they saved "en" but are on "/", stay in EN — do not redirect
-    if (savedLang === "pt") {
+    // If they saved "pt" AND we're on the homepage, reflect it in the URL.
+    // Do NOT rewrite the URL on other routes (/pricing, /pay, /admin, etc) —
+    // doing so flips route-detection flags and renders the wrong component.
+    if (savedLang === "pt" && window.location.pathname === "/") {
       window.history.replaceState({}, "", "/pt");
     }
     return;
@@ -64,7 +66,9 @@ export default function App() {
   const browser = navigator.language || navigator.userLanguage || "en";
   const isPt = browser.toLowerCase().startsWith("pt");
   if (isPt) {
-    window.history.replaceState({}, "", "/pt");
+    if (window.location.pathname === "/") {
+      window.history.replaceState({}, "", "/pt");
+    }
     setLang("pt");
     localStorage.setItem("ao_lang", "pt");
   }

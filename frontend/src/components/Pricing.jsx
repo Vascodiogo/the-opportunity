@@ -142,12 +142,20 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           </span>
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a href={`/${otherLang === "en" ? "" : otherLang}`} style={{
-            fontSize: 12, fontWeight: 600, color: muted,
-            padding: "4px 10px", borderRadius: 6,
-            border: `0.5px solid ${border}`, textDecoration: "none",
-            background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-          }}>{otherLabel}</a>
+          <a
+            href="/pricing"
+            onClick={(e) => {
+              e.preventDefault();
+              localStorage.setItem("ao_lang", otherLang);
+              window.location.reload();
+            }}
+            style={{
+              fontSize: 12, fontWeight: 600, color: muted,
+              padding: "4px 10px", borderRadius: 6,
+              border: `0.5px solid ${border}`, textDecoration: "none",
+              background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
+              cursor: "pointer",
+            }}>{otherLabel}</a>
           <button onClick={onToggleTheme} style={{
             background: "none", border: `0.5px solid ${border}`,
             borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14,
