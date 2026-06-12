@@ -26,7 +26,7 @@ export default function App() {
   const isPricingRoute         = window.location.pathname.startsWith("/pricing");
   const isStatusRoute          = window.location.pathname.startsWith("/status");
   const [view, setView] = useState("subscriber");
-  const [showApp, setShowApp] = useState(false);
+  const [showApp, setShowApp] = useState(() => new URLSearchParams(window.location.search).get("launch") === "true");
 
   const [lang, setLang] = useState(() => detectLang());
 
@@ -124,7 +124,7 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onLaunchApp={() => {
-          window.location.href = "/";
+          window.location.href = "/?launch=true";
         }}
       />
     );
