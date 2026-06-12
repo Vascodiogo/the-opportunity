@@ -1367,7 +1367,14 @@ app.get("/api/products/:merchantAddress/:productSlug/payment-methods", async (re
     const countryMethods = getMethodsForCountry(country);
 
     // Get merchant-enabled methods (defaults to crypto only)
-    const merchantMethods = product.payment_methods || ["crypto"];
+    const merchant = await db.getMerchant(address);
+    let merchantMethods = product.payment_methods || ["crypto"];
+
+    // If Stripe isn't connected, strip all fiat methods — only crypto/tokens remain
+    const FIAT_METHODS = ["card","sepa","ideal","bancontact","eps","klarna","blik","mbway","multibanco"];
+    if (!merchant?.stripe_account_id) {
+      merchantMethods = merchantMethods.filter(m => !FIAT_METHODS.includes(m));
+    }
 
     // Intersection: only show methods both merchant enabled AND available in country
     const available = merchantMethods.filter(m => countryMethods.includes(m));
