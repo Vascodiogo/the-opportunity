@@ -6,7 +6,7 @@ import PayPage from "./components/PayPage.jsx";
 import Pricing from "./components/Pricing.jsx";
 import { useState, useEffect } from "react";
 import { useAccount, useDisconnect } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ConnectButton, useConnectModal } from "@rainbow-me/rainbowkit";
 import { shortAddress, ADMIN_ADDRESS } from "./config.js";
 import Dashboard from "./components/Dashboard.jsx";
 import MerchantDashboard from "./components/MerchantDashboard.jsx";
@@ -17,6 +17,7 @@ import { detectLang, t } from "./i18n.js";
 export default function App() {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
+  const { openConnectModal } = useConnectModal();
   const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
   const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem("admin_token") || "");
   const [adminEmail, setAdminEmail] = useState(() => sessionStorage.getItem("admin_email") || "");
@@ -29,6 +30,14 @@ export default function App() {
   const [showApp, setShowApp] = useState(() => new URLSearchParams(window.location.search).get("launch") === "true");
 
   const [lang, setLang] = useState(() => detectLang());
+
+  // Auto-open wallet connect modal when arriving via "Launch App" from /pricing
+  useEffect(() => {
+    if (showApp && !isConnected && openConnectModal) {
+      const timer = setTimeout(() => openConnectModal(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showApp, isConnected, openConnectModal]);
 
   useEffect(() => {
   const isOnPtPath = window.location.pathname.startsWith("/pt");
