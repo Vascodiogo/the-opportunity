@@ -156,10 +156,14 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
               background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
               cursor: "pointer",
             }}>{otherLabel}</a>
-          <button onClick={onToggleTheme} style={{
+          <label style={{
             background: "none", border: `0.5px solid ${border}`,
             borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14,
-          }}>{isDark ? "☀️" : "🌙"}</button>
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <input type="checkbox" checked={isDark} onChange={onToggleTheme} style={{ display: "none" }} />
+            {isDark ? "☀️" : "🌙"}
+          </label>
           <button onClick={scrollToApply} style={{
             background: "linear-gradient(135deg, #34d399, #3b82f6)",
             border: "none", borderRadius: 8, padding: "8px 20px",
@@ -167,13 +171,14 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           }}>
             {lang === "en" ? "Apply Today →" : "Registar →"}
           </button>
-          <button onClick={onLaunchApp} style={{
+          <a href="/?launch=true" style={{
             background: "none", border: `0.5px solid ${border}`,
             borderRadius: 8, padding: "8px 16px",
             color: text, fontSize: 13, fontWeight: 600, cursor: "pointer",
+            textDecoration: "none", display: "inline-block",
           }}>
             {lang === "en" ? "Launch App →" : "Abrir App →"}
-          </button>
+          </a>
         </div>
       </nav>
 
