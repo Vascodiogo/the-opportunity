@@ -210,7 +210,7 @@ async function getSubscriptionIds(vault) {
 }
 
 // ─── Process active subscriptions ────────────────────────────────────────────
-async function processDueSubscriptions(vault, ids) {
+async function processDueSubscriptions(vault, wallet, ids) {
   let pulled  = 0;
   let skipped = 0;
 
@@ -480,7 +480,7 @@ async function run() {
         console.log("  Nothing to do.");
         console.log("");
       } else {
-        ({ pulled, skipped } = await processDueSubscriptions(vault, ids));
+        ({ pulled, skipped } = await processDueSubscriptions(vault, wallet, ids));
         expired = await expireGracePeriodSubscriptions(vault, ids);
         console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due / skipped.`);
       }
