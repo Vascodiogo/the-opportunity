@@ -24,7 +24,11 @@ const { Resend }  = require("resend");
 const db          = require("./db");
 const { dispatchWebhook } = require("./webhook");
 
-const VAULT_ADDRESS  = process.env.VAULT_ADDRESS || "0x12ded877546bdaF500A1FeAd66798d5877c42f1d";
+if (!process.env.VAULT_ADDRESS) {
+  console.error("FATAL: VAULT_ADDRESS env var is not set — refusing to start with a stale fallback address");
+  process.exit(1);
+}
+const VAULT_ADDRESS  = process.env.VAULT_ADDRESS;
 const RPC_URL        = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const POLL_INTERVAL  = 30_000; // 30 seconds
 const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
@@ -38,12 +42,12 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 
 // ─── v4 ABI ──────────────────────────────────────────────────────────────────
 const VAULT_ABI = [
-  "event SubscriptionCreated(uint256 indexed id, address indexed owner, address indexed merchant, address safeVault, uint256 amount, uint256 introAmount, uint256 introPulls, uint8 interval, address guardian)",
-  "event PaymentExecuted(uint256 indexed id, uint256 amount, uint256 merchantReceived, uint256 fee, uint256 pullCount, uint256 timestamp)",
-  "event InsufficientFunds(uint256 indexed id, uint256 required, uint256 available, uint256 pausedUntil)",
-  "event InsufficientAllowance(uint256 indexed id, uint256 required, uint256 allowance)",
-  "event SubscriptionPaused(uint256 indexed id, address indexed pausedBy)",
-  "event SubscriptionCancelled(uint256 indexed id, address indexed cancelledBy)",
+  "event SubscriptionCreated(uint256 indexed id, address indexed owner, address indexed merchant, address safeVault, address token, uint256 amount, uint256 introAmount, uint256 introPulls, uint8 interval, address guardian, uint256 trialEndsAt, uint256 gracePeriodDays, bool isContractVault)",
+  "event PaymentExecuted(uint256 indexed id, address indexed token, uint256 amount, uint256 merchantReceived, uint256 fee, uint256 pullCount, uint256 timestamp)",
+  "event InsufficientFunds(uint256 indexed id, address indexed token, uint256 required, uint256 available, uint256 pausedUntil)",
+  "event InsufficientAllowance(uint256 indexed id, address indexed token, uint256 required, uint256 allowance)",
+  "event SubscriptionPaused(uint256 indexed id, address pausedBy, string reason)",
+  "event SubscriptionCancelled(uint256 indexed id, address cancelledBy)",
   "event SubscriptionExpired(uint256 indexed id, uint256 timestamp)",
   "event SubscriptionResumed(uint256 indexed id, uint256 timestamp)",
   "event TrialStarted(uint256 indexed id, uint256 trialEndsAt)",
