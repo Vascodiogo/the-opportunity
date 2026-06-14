@@ -28,7 +28,7 @@ if (!process.env.VAULT_ADDRESS) {
   console.error("FATAL: VAULT_ADDRESS env var is not set — refusing to start with a stale fallback address");
   process.exit(1);
 }
-const VAULT_ADDRESS  = process.env.VAULT_ADDRESS.trim();
+const VAULT_ADDRESS  = ethers.getAddress(process.env.VAULT_ADDRESS.trim());
 const RPC_URL        = (process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org").trim();
 const POLL_INTERVAL  = 30_000; // 30 seconds
 const BLOCK_LAG      = 2;      // Process blocks 2 behind head to avoid reorgs
