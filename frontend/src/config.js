@@ -30,8 +30,8 @@ export const RPC_URLS = [
 ];
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-export const VAULT_ADDRESS    = "0x55180314174B30e778f35357035d49cAEF55C835"; // v6
-export const REGISTRY_ADDRESS = "0x989376ff6195be2e76871535Db21CB8BdC9175D4"; // v3
+export const VAULT_ADDRESS    = "0xeb068B47731261F7B4A5ae8535686D67D7f72321"; // v7
+export const REGISTRY_ADDRESS = "0xAE681E431c353f5930dDFfBC74037d3f2afE3264"; // v4
 export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
@@ -223,6 +223,14 @@ export const VAULT_ABI = [
   // approvedMerchants and approveMerchant moved to MerchantRegistry v2 in v5
   // Use REGISTRY_ABI.isApproved() to check merchant approval status
   {
+    // [V7-H1] Accumulated fees where treasury transfer failed — accounting only
+    name: "pendingFees",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     name: "setProductExpiry",
     type: "function",
     stateMutability: "nonpayable",
@@ -324,6 +332,14 @@ export const VAULT_ABI = [
 
 // ─── MerchantRegistry v3 ABI ─────────────────────────────────────────────────
 export const REGISTRY_ABI = [
+  {
+    // [V7-L5] Stored as immutable — verifiable on Basescan
+    name: "IS_MAINNET",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
   {
     name: "isApproved",
     type: "function",
