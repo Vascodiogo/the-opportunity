@@ -22,9 +22,9 @@ const { upsertKeeperHeartbeat } = process.env.DATABASE_URL
   : { upsertKeeperHeartbeat: async () => {} }; // no-op if DB not configured
 
 if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
-const VAULT_ADDRESS   = process.env.VAULT_ADDRESS;
-const RPC_URL         = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
-const KEEPER_PRIVKEY  = process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY;
+const VAULT_ADDRESS   = ethers.getAddress(process.env.VAULT_ADDRESS.trim());
+const RPC_URL         = (process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org").trim();
+const KEEPER_PRIVKEY  = (process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || "").trim();
 const RUN_INTERVAL_MS = 60_000;
 
 // ─── DB pool (optional — falls back to on-chain scan if DATABASE_URL not set) ─
