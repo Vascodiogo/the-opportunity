@@ -208,6 +208,14 @@ export default function PayPage() {
     : baseAmount;
   const selectedTokenAddress = NETWORK_TOKENS[selectedToken] || USDC_ADDRESS;
   const selectedTokenMeta    = TOKEN_META[selectedToken] || TOKEN_META.usdc;
+
+  // Crypto tokens this product accepts, in display order.
+  // Uses product.payment_methods directly — NOT filtered by SELECTABLE_TOKENS,
+  // which is a network contract whitelist, not a UI filter.
+  const CRYPTO_TOKEN_ORDER = ["usdc", "usdt", "dai", "eurc"];
+  const productCryptoTokens = product
+    ? CRYPTO_TOKEN_ORDER.filter(t => (product.payment_methods || ["usdc"]).includes(t))
+    : ["usdc"];
   const amountRaw    = activeAmount
     ? parseUnits(activeAmount.toString(), selectedTokenMeta.decimals)
     : 0n;
@@ -221,13 +229,23 @@ export default function PayPage() {
     if (!resolvedAddress || !productSlug) return;
     fetch(`${API_BASE}/api/products/${resolvedAddress}/${productSlug}`)
       .then(r => { if (r.status === 451) throw new Error("451"); if (!r.ok) throw new Error("Not found"); return r.json(); })
-      .then(data => setProduct({
-        ...data,
-        interval:      INTERVAL_MAP[data.interval] ?? data.interval,
-        intro_amount:  parseFloat(data.intro_amount || 0),
-        intro_pulls:   parseInt(data.intro_pulls || 0),
-        yearly_amount: data.yearly_amount ? parseFloat(data.yearly_amount) : null,
-      }))
+      .then(data => {
+        const p = {
+          ...data,
+          interval:      INTERVAL_MAP[data.interval] ?? data.interval,
+          intro_amount:  parseFloat(data.intro_amount || 0),
+          intro_pulls:   parseInt(data.intro_pulls || 0),
+          yearly_amount: data.yearly_amount ? parseFloat(data.yearly_amount) : null,
+        };
+        setProduct(p);
+        // Reset selectedToken to first crypto token the product accepts.
+        // Guards against stale state if user navigates between pay links.
+        const CRYPTO_TOKENS = ["usdc", "usdt", "dai", "eurc"];
+        const acceptedCrypto = (p.payment_methods || []).filter(m => CRYPTO_TOKENS.includes(m));
+        if (acceptedCrypto.length > 0 && !acceptedCrypto.includes("usdc")) {
+          setSelectedToken(acceptedCrypto[0]);
+        }
+      })
       .catch(err => { setProductError(err.message); setProduct(null); })
       .finally(() => setProductLoading(false));
   }, [resolvedAddress, productSlug]);
@@ -291,7 +309,7 @@ export default function PayPage() {
     setFlowStatus("subscribing");
     setErrorMsg("");
     try {
-      const introAmountRaw = hasIntro && !isYearly ? parseUnits(product.intro_amount.toString(), 6) : 0n;
+      const introAmountRaw = hasIntro && !isYearly ? parseUnits(product.intro_amount.toString(), selectedTokenMeta.decimals) : 0n;
       const hash = await writeContractAsync({
         address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "createSubscription",
         args: [
@@ -487,7 +505,7 @@ export default function PayPage() {
                 <span style={{ fontSize: 32, fontWeight: 800, color: "var(--green)", fontFamily: "monospace", letterSpacing: "-0.03em" }}>
                   ${activeAmount?.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {paymentMethod === "crypto" ? selectedTokenMeta.label : "USDC"}</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {paymentMethod === "crypto" ? selectedTokenMeta.label : (product.fiat_currency || "eur").toUpperCase()}</span>
               </div>
 
               {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>${(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
@@ -589,49 +607,39 @@ export default function PayPage() {
             {/* Crypto — token selector + wallet connect (idle) */}
             {flowStatus === "idle" && paymentMethod === "crypto" && (
               <div style={{ textAlign: "center" }}>
-                {/* Token selector */}
-                {(() => {
-                  // Filter to tokens the product accepts, intersected with selectable stablecoins
-                  const productTokens = product?.payment_methods
-                    ? SELECTABLE_TOKENS.filter(t =>
-                        product.payment_methods.includes(t)
-                      )
-                    : SELECTABLE_TOKENS;
-                  const tokensToShow = productTokens.length > 0 ? productTokens : ["usdc"];
-
-                  return tokensToShow.length > 1 ? (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-                        Pay with token
-                      </div>
-                      <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                        {tokensToShow.map(tokenId => {
-                          const meta = TOKEN_META[tokenId];
-                          const sel  = selectedToken === tokenId;
-                          return (
-                            <button
-                              key={tokenId}
-                              onClick={() => setSelectedToken(tokenId)}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 6,
-                                padding: "8px 14px", borderRadius: 10, cursor: "pointer",
-                                border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
-                                background: sel ? "rgba(29,158,117,0.08)" : "var(--bg-tag)",
-                                fontFamily: "inherit",
-                              }}
-                            >
-                              <span style={{ fontSize: 15 }}>{meta.icon}</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>
-                                {meta.label}
-                              </span>
-                              {sel && <span style={{ fontSize: 10, color: "var(--green)" }}>✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
+                {/* Token selector — idle, crypto path */}
+                {productCryptoTokens.length > 1 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+                      Pay with token
                     </div>
-                  ) : null;
-                })()}
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                      {productCryptoTokens.map(tokenId => {
+                        const meta = TOKEN_META[tokenId];
+                        const sel  = selectedToken === tokenId;
+                        return (
+                          <button
+                            key={tokenId}
+                            onClick={() => setSelectedToken(tokenId)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 6,
+                              padding: "8px 14px", borderRadius: 10, cursor: "pointer",
+                              border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                              background: sel ? "rgba(29,158,117,0.08)" : "var(--bg-tag)",
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            <span style={{ fontSize: 15 }}>{meta.icon}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>
+                              {meta.label}
+                            </span>
+                            {sel && <span style={{ fontSize: 10, color: "var(--green)" }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>Connect your wallet to subscribe</div>
                 <div style={{ display: "flex", justifyContent: "center" }}>
@@ -670,37 +678,29 @@ export default function PayPage() {
                   </button>
                 </div>
 
-                {/* Token selector — show when connected but not yet approving */}
-                {flowStatus === "connected" && (() => {
-                  const productTokens = product?.payment_methods
-                    ? SELECTABLE_TOKENS.filter(t =>
-                        product.payment_methods.includes(t)
-                      )
-                    : SELECTABLE_TOKENS;
-                  const tokensToShow = productTokens.length > 0 ? productTokens : ["usdc"];
-                  return tokensToShow.length > 1 ? (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Pay with token</div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {tokensToShow.map(tokenId => {
-                          const meta = TOKEN_META[tokenId];
-                          const sel  = selectedToken === tokenId;
-                          return (
-                            <button key={tokenId} onClick={() => setSelectedToken(tokenId)} style={{
-                              display: "flex", alignItems: "center", gap: 6, padding: "7px 12px",
-                              borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
-                              border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
-                              background: sel ? "rgba(29,158,117,0.08)" : "var(--bg-tag)",
-                            }}>
-                              <span style={{ fontSize: 13 }}>{meta.icon}</span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{meta.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                {/* Token selector — connected, crypto path */}
+                {flowStatus === "connected" && productCryptoTokens.length > 1 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Pay with token</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {productCryptoTokens.map(tokenId => {
+                        const meta = TOKEN_META[tokenId];
+                        const sel  = selectedToken === tokenId;
+                        return (
+                          <button key={tokenId} onClick={() => setSelectedToken(tokenId)} style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "7px 12px",
+                            borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                            border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
+                            background: sel ? "rgba(29,158,117,0.08)" : "var(--bg-tag)",
+                          }}>
+                            <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{meta.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ) : null;
-                })()}
+                  </div>
+                )}
 
                 {/* Transaction steps */}
                 <div style={{ marginBottom: 18 }}>
@@ -757,7 +757,7 @@ export default function PayPage() {
 
                 {(stepApprove || stepSubscribe) && (
                   <button style={{ ...ctaBtn(true) }} disabled>
-                    {stepApprove && !approveConfirmed ? "Approving USDC..." : "Creating subscription..."}
+                    {stepApprove && !approveConfirmed ? `Approving ${selectedTokenMeta.label}...` : "Creating subscription..."}
                   </button>
                 )}
               </>
