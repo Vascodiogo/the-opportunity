@@ -9,7 +9,7 @@ pragma solidity 0.8.24;
 //  Compiler:   Solidity v0.8.24, optimizer: true, 200 runs,
 //              viaIR: true, evmVersion: paris
 //
-//  Changes from v3 (security fix — post Hacken AI audit):
+//  Changes from v3 (security fixes — post Hacken AI audit):
 //
 //    [V7-C2] CRITICAL — MAX_MERCHANTS cap now enforces against _approvedMerchantCount
 //            instead of _merchantList.length. _merchantList is a historical log that
@@ -17,6 +17,17 @@ pragma solidity 0.8.24;
 //            be incorrectly consumed by removed entries, making the registry falsely
 //            full. _approvedMerchantCount is the live count, maintained on every
 //            approve and revoke. One-line fix in _approve() internal function.
+//
+//    [V7-L2/L3] LOW — blacklistMerchant() now rejects attempts to blacklist the
+//            current admin or pendingAdmin. Without this, a malicious or mistaken
+//            admin could permanently ban the incoming admin during a transfer,
+//            creating an irrecoverable state (no un-blacklist function exists).
+//            Two require() guards added.
+//
+//    [V7-L5] LOW — IS_MAINNET stored as public immutable. Previously the _isMainnet
+//            constructor parameter was not stored, making it impossible to verify
+//            post-deployment whether the mainnet admin check was enforced.
+//            Now visible on Basescan as IS_MAINNET.
 //
 //    [MR-01] HIGH — require(_admin.code.length > 0) re-enabled for mainnet.
 //            Use compile-time constant IS_MAINNET to control enforcement.
@@ -102,6 +113,10 @@ contract MerchantRegistry {
     address public admin;
     address public pendingAdmin;
 
+    /// @notice [V7-L5] Stored as public immutable for post-deployment verification.
+    ///         Visible on Basescan — confirms mainnet admin check was enforced at deploy.
+    bool public immutable IS_MAINNET;
+
     bool public selfServeEnabled;
 
     /// @notice Live whitelist. true = currently approved.
@@ -158,6 +173,8 @@ contract MerchantRegistry {
             );
         }
 
+        // [V7-L5] Store flag as immutable for on-chain verifiability.
+        IS_MAINNET       = _isMainnet;
         admin            = _admin;
         selfServeEnabled = false;
 
@@ -203,8 +220,13 @@ contract MerchantRegistry {
     /// @notice Admin permanently blacklists a merchant.
     ///         Blacklisted merchants cannot re-register even if self-serve is on.
     ///         Also revokes if currently approved.
+    ///         [V7-L2/L3] Cannot blacklist current admin or pending admin —
+    ///                    prevents inconsistent state where the protocol admin
+    ///                    is permanently banned from merchant approval.
     function blacklistMerchant(address merchant) external onlyAdmin {
-        require(merchant != address(0), "Registry: zero address");
+        require(merchant != address(0),   "Registry: zero address");
+        require(merchant != admin,        "Registry: cannot blacklist admin");
+        require(merchant != pendingAdmin, "Registry: cannot blacklist pending admin");
         require(!blacklistedMerchants[merchant], "Registry: already blacklisted");
         blacklistedMerchants[merchant] = true;
         if (approvedMerchants[merchant]) {

@@ -360,15 +360,18 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     ///         O(1) read. Maintained on approveToken/revokeToken.
     uint256 public approvedTokenCount;
 
+    /// @notice [V7-L3] Tracks whether a token has ever been added to _tokenList.
+    ///         Prevents duplicate _tokenList entries on revoke+re-approve cycles.
+    mapping(address => bool) private _tokenEverAdded;
+
     mapping(uint256 => Subscription) public subscriptions;
 
     mapping(uint256 => uint256) public totalMerchantPauseDays;
     mapping(uint256 => uint256) public lastMerchantPauseAt;
 
-    /// @notice [V7-H1] Accumulated protocol fees per token.
-    ///         Fee transfers to treasury are wrapped in try/catch.
-    ///         If treasury reverts (e.g. contract recipient), fees land here
-    ///         and can be withdrawn via withdrawPendingFees().
+    /// @notice [V7-H1] Accumulated protocol fees per token where treasury transfer failed.
+    ///         Recorded for accounting/alerting only — tokens remain in subscriber vault.
+    ///         Admin must fix treasury via setProtocolTreasury() to restore fee collection.
     mapping(address => uint256) public pendingFees;
 
     // -------------------------------------------------------------------------
@@ -915,13 +918,26 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
 
     /// @notice Add a token to the global whitelist.
     ///         [SV-09] Enforces MAX_TOKEN_LIST cap. Increments approvedTokenCount.
+    ///         [V7-M6] Enforces 6-decimal requirement. MAX_SUBSCRIPTION_AMOUNT is
+    ///                 calibrated for 6-decimal tokens (USDC/USDT/EURC). An 18-decimal
+    ///                 token would make the cap 0.000001 tokens — effectively blocking
+    ///                 all subscriptions for that token.
+    ///         [V7-L3] Uses _tokenEverAdded to prevent duplicate _tokenList entries
+    ///                 on revoke+re-approve cycles. Without this, repeated revoke/approve
+    ///                 of the same token consumes MAX_TOKEN_LIST slots.
     function approveToken(address token) external onlyAdmin {
         require(token != address(0),    "ZeroToken");
         require(!approvedTokens[token], "AlreadyApproved");
-        require(_tokenList.length < MAX_TOKEN_LIST, "TokenListFull");
+        // [V7-M6] Only 6-decimal tokens supported. Matches MAX_SUBSCRIPTION_AMOUNT calibration.
+        require(IERC20(token).decimals() == 6, "Only6DecimalTokens");
         approvedTokens[token] = true;
-        _tokenList.push(token);
         approvedTokenCount++;
+        // [V7-L3] Only push to _tokenList on first-ever approval.
+        if (!_tokenEverAdded[token]) {
+            require(_tokenList.length < MAX_TOKEN_LIST, "TokenListFull");
+            _tokenList.push(token);
+            _tokenEverAdded[token] = true;
+        }
         emit TokenApproved(token, msg.sender);
     }
 
