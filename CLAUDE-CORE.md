@@ -448,32 +448,47 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 
 ## 16. Next Session Priorities
 
-1. **Snapshot Pro outreach** — send June 13 (Alex Poon/CharmVerse sent June 10, awaiting reply)
-2. **Circle Alliance follow-up** — 6 weeks no response, Arc launch is the hook — draft and send
-3. **ETHGlobal Lisbon application** — July 24-26, apply now at ethglobal.com/events/lisbon2026/apply
-4. **blog.authonce.io/vs-custodial** — submit to Google Search Console URL Inspection
-5. **Keeper + Safe ETH top-up** — both wallets at 0 ETH on Base Mainnet — send 0.05 ETH each via bridge.base.org
-6. **Will @ Cyfrin** — declined Wednesday slot, asked for July availability
-7. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
-8. **Farcaster duplicate posts** — delete 5 duplicate "My smart contract" posts manually
+**RESOLVED THIS SESSION (June 13 2026):**
+- ✅ keeper.js wallet-scope ReferenceError fixed (commit f4dd98f) — 0 pulls for 6+ days since v6 deploy
+- ✅ notifier.js 6× stale v4 ABI signatures fixed (commit c953b12) — all events silently dropped since May 31
+- ✅ 12 stress-test subscriptions (IDs 10-21) backfilled into DB via backfill-stress-test.js
+- ✅ Hacken AI audit reviewed and triaged — v7 contract fix list defined
+
+**[CRITICAL] v7 contract fixes (must ship before mainnet):**
+1. **updateSafeVault: add `require(newSafeVault == msg.sender)`** — current implementation allows any address to become the safeVault; safeVault must always equal msg.sender (same H2 rule as createSubscription). Missing check = anyone can redirect funds.
+2. **MerchantRegistry MAX_MERCHANTS: use `_approvedMerchantCount` not `_merchantList.length`** — _merchantList.length includes revoked merchants, so the cap is incorrectly consumed by removed entries; swap to the approved count.
+
+**[HIGH] v7 contract fixes:**
+3. **Fee transfer: wrap in try/catch, accumulate in `pendingFees`** — if treasury transfer reverts (e.g. contract recipient), the entire executePull reverts and the subscriber's payment is stuck; buffer fees and allow manual withdrawal.
+4. **Cache `prevLastPulledAt` before state mutation for reversion** — if executePull partially succeeds (transfer ok, state update fails), the subscription's lastPulledAt is stale; capture before modifying so revert path restores correct state.
+
+**Standard items:**
+5. **Safe multisig ETH top-up** — still at 0 ETH on Base Mainnet — send 0.05 ETH via bridge.base.org
+6. **Keeper wallet ETH top-up** — send 0.05 ETH via bridge.base.org
+7. **Tally outreach** — send June 16 (per partnership tracker)
+8. **Cyfrin follow-up** — share Hacken AI audit findings as context; may move their July slot earlier
+9. **stress-test-setup.js: add USDC approve()** — test subscriptions (IDs 10-21) in grace period because script never called approve(); add before createSubscription so keeper can pull
+10. **System tab: keeper pull failure alerting** — surface "0 pulls in last 24h despite N due subscriptions" as red warning on AdminDashboard System tab
+11. **Circle Alliance follow-up** — 6 weeks no response, Arc launch is the hook — draft and send
+12. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
 
 **Partnership outreach tracker:**
 1. CharmVerse (Alex Poon) — email sent June 10 2026, awaiting reply
-2. Snapshot Pro — send June 13
+2. Snapshot Pro/Labs (Fabien Marino) — sent June 13 (scheduled)
 3. Tally — send June 16
 4. DeepDAO — send June 19
 5. Boardroom — send June 22
 6. Dune Analytics — send June 25
 7. Messari — send June 28
 
-**SEO completed June 8-10:**
+**SEO completed June 8-12:**
 - sitemap.xml + robots.txt live ✅
 - Google Search Console configured + sitemap submitted ✅
 - authonce.io indexed on Google ✅
-- blog.authonce.io live (Cloudflare Pages, CNAME configured) ✅
-- blog post: "Non-custodial crypto subscriptions on Base" ✅
+- blog.authonce.io live with index page listing both posts ✅
 - comparison page: blog.authonce.io/vs-custodial ✅
 - FAQ + Organization JSON-LD schema in frontend/index.html ✅
+- Base App Dashboard registration + app_id verification ✅
 - noscript static content block for Google crawling ✅
 - Blog link added to LandingPage.jsx nav ✅
 - Full OG/Twitter/Bing meta tags ✅
@@ -545,14 +560,94 @@ Industry standard solutions:
 
 All three solve the nonce problem via multiple independent wallets running in parallel.
 
-**AuthOnce roadmap:**
-- Launch: custom keeper, single EOA, sequential — fine for 10 merchants
-- 20+ merchants: add parallel batch processing (25 concurrent workers, multiple EOAs)
-- 50+ merchants: migrate to Gelato or Chainlink Automation — replace custom keeper entirely
-- 500+ merchants: full decentralised executor infrastructure
-- Built June 10 2026 — merchant migration tool
-- Limit: 1,000 rows per upload (merchants split larger lists themselves)
-- Stress test planned: 30-100 rows first, then scale up
-- DB table: subscriber_imports (auto-created on first use)
+---
 
-*Last updated: 2026-06-10*
+## 19. Session Summary — June 13 2026
+
+**CRITICAL BUG FOUND + FIXED: keeper.js wallet-scope ReferenceError**
+- `processDueSubscriptions()` referenced `wallet` (defined only inside `run()`) but was declared at module level — never in scope
+- Every `executePull()` attempt threw `ReferenceError: wallet is not defined`, caught silently by try/catch
+- Result: 0 successful pulls since v6 deploy on May 31 (6+ days)
+- Fix: added `wallet` as third parameter to `processDueSubscriptions(vault, wallet, ids)` and updated the call site
+- Commit: `f4dd98f` — deployed to Railway, confirmed working
+
+**SECONDARY BUG FOUND + FIXED: notifier.js stale v4 event ABI signatures**
+- 6 event ABIs in notifier.js still matched v4 signatures — different topic hashes → all events silently dropped since May 31 v6 deploy
+- Affected: `SubscriptionCreated` (9 params vs 13), `PaymentExecuted`/`InsufficientFunds`/`InsufficientAllowance` (missing `address indexed token`), `SubscriptionPaused` (missing `string reason`), `SubscriptionCancelled` (`cancelledBy` wrongly `indexed`)
+- Result: 0 subscriptions indexed into DB; keeper scan returned 0 candidates
+- Fix: corrected all 6 event strings + added `VAULT_ADDRESS` hard-fail guard (was silently falling back to v4 address)
+- Commit: `c953b12` — deployed
+
+**Stress test: 12 subscriptions created on Base Sepolia (IDs 10-21)**
+- `stress-test-setup.js` written, debugged (2-confirmation ETH funding fix for RPC state lag), and run
+- All 12 backfilled into DB via `backfill-stress-test.js`; merchant email fallback confirmed (12 emails received)
+- IDs 10-21 in grace period — script never called `approve()` on vault (USDC allowance = 0); test gap, not production bug
+
+**Hacken AI audit reviewed — v7 fix list defined**
+- Critical: `updateSafeVault` missing `require(newSafeVault == msg.sender)` — anyone can redirect funds
+- Critical: `MerchantRegistry` MAX_MERCHANTS cap uses `_merchantList.length` (includes revoked) instead of `_approvedMerchantCount`
+- High: fee transfer not wrapped in try/catch → executePull reverts if treasury is a rejecting contract; fix: accumulate in `pendingFees`
+- High: `prevLastPulledAt` not cached before state mutation — partial failure leaves stale state
+- Next: implement all v7 fixes, redeploy to Sepolia, run full stress test, then book Cyfrin/Hacken for formal review
+
+## 18. Session Summary — June 11-12 2026
+
+**Base ecosystem integration completed:**
+- AuthOnce registered on Base App Dashboard (dashboard.base.org) — logo, tagline "USDC subscriptions on Base.", description added
+- `base:app_id` meta tag added to frontend/index.html, domain verified ✅
+- Builder Code `bc_ca3k7b52` added to keeper.js — appends to executePull() calldata for leaderboard attribution
+- Base Weekly Leaderboards: ON. Base App Notifications: OFF.
+- Submitted to Base Ecosystem directory via Google Form (old GitHub PR route archived)
+
+**SEO completed:**
+- FAQ + Organization JSON-LD schema added to frontend/index.html (5 FAQ questions, sameAs links)
+- blog.authonce.io index page built — Blog schema JSON-LD, lists both posts (vs-custodial + why-onchain-recurring-payments-are-broken)
+- Fixed: blog nav only linked to 1 post — now has proper index
+
+**CSV Subscriber Import — built and deployed:**
+- POST /api/products/:address/subscribers/import — validates email/wallet/amount/interval, max 1,000 rows
+- subscriber_imports table auto-created on first use
+- MerchantDashboard.jsx: CsvImport component in Subscribers tab — upload, preview, error reporting, CSV template download
+- Fixed isDark undefined bug (prop wasn't passed — removed dependency)
+
+**Unified Pricing Model — major refactor, deployed:**
+- Removed price_type/fiat_price/fiat_yearly_price split entirely
+- Single `amount` field = price across USDC/USDT/DAI/EURC/fiat (1:1)
+- New "crypto discount %" field (0-50%) — common Web3 pattern, incentivizes on-chain payment
+- AddProductModal completely rewritten (unified token + fiat method checkboxes)
+- EditProductModal updated with same fields + save-success feedback
+- api.js: POST/PUT product endpoints updated, Stripe checkout simplified to 1:1
+- db.js: crypto_discount_pct column added, upsertProduct updated
+- PayPage.jsx: payment method selector now shows when wallet connected (was hidden after connect — bug fixed), applies crypto discount, fixed token-filter bug (was showing ALL tokens regardless of merchant selection)
+- Fixed: payment_methods camelCase/snake_case mismatch in db.js upsertProduct (root cause of "settings not saving")
+
+**Payment method selector bugs fixed:**
+- Root cause #1: db.js destructuring mismatch (paymentMethods vs payment_methods)
+- Root cause #2: PayPage selector hidden when flowStatus=="connected" (only showed at "idle")
+- Root cause #3: Stripe/Card showing as available even when merchant has no Stripe account — now filtered server-side in /payment-methods
+
+**Pricing page (/pricing) bugs — partially fixed:**
+- Root cause found: lang-detection effect in App.jsx did `history.replaceState(..., "/pt")` on ANY route if localStorage.ao_lang==="pt" — flipped isPricingRoute to false, broke the page. Fixed to only rewrite URL on homepage "/".
+- "Launch App" button converted from onClick to `<a href="/?launch=true">` — works now ✅
+- Auto-opens wallet connect modal via useConnectModal when arriving with ?launch=true
+- PT/EN switcher on /pricing fixed to stay on /pricing (was redirecting to homepage)
+- REMAINING MINOR ISSUES (low priority, no merchant impact):
+  - Theme toggle (moon icon) on /pricing still doesn't respond to clicks — converted to label+checkbox, untested after deploy
+  - Navigating /pt → /pricing shows EN instead of PT
+
+**ETHGlobal Lisbon — REMOVED from roadmap:** Vasco can't attend. Replaced with "Built for AI Agents" positioning task (ERC-1271 already supported, just needs comms).
+
+**Product vision additions to CLAUDE-REFERENCE.md:**
+- Section 19a "RevOnce" — revenue-based financing layered on AuthOnce's verified on-chain MRR (Phase 3, post-DataOnce, post-mainnet only). AuthOnce stays infrastructure-only (never the lender) to preserve no-CASP/VASP positioning.
+
+**Outreach status:**
+- CharmVerse (Alex Poon) — emailed June 10, awaiting reply
+- Snapshot Labs (Fabien Marino) — scheduled June 13, 08:45 Phuket time
+- Stan Trenev (@sstrenev) — DeFi engineer, $300M+ deployed, followed by jesse.base.eth — identified as integration target (build recurring billing on AuthOnce's deployed contracts directly), reply not yet drafted/sent
+
+**Stress test prep:**
+- Keeper wallet funded with 0.1 testnet ETH on Base Sepolia (sent from 0x00df2...A02C0)
+- Plan: 30-100 real on-chain pulls this weekend + DB seeder for 20K rows (seeder not yet built)
+- Daily faucet claims ongoing
+
+*Last updated: 2026-06-12*
