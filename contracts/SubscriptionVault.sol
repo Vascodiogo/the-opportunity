@@ -2,13 +2,39 @@
 pragma solidity 0.8.24;
 
 // =============================================================================
-//  SubscriptionVault.sol — AuthOnce Protocol v6
+//  SubscriptionVault.sol — AuthOnce Protocol v7
 //
 //  Network:    Base Sepolia (testnet) / Base Mainnet
 //  Compiler:   Solidity v0.8.24, optimizer: true, 200 runs,
 //              viaIR: true, evmVersion: paris
 //
-//  Changes from v5 (security fixes — post ChainShield audit):
+//  Changes from v6 (security fixes — post Hacken AI audit):
+//
+//    [V7-C1] CRITICAL — updateSafeVault now requires newSafeVault == msg.sender.
+//            Same invariant as createSubscription [H2]. Without this, any address
+//            could call updateSafeVault and redirect future pulls to a vault they
+//            control, without holding the original vault key.
+//
+//    [V7-C2] CRITICAL — MerchantRegistry MAX_MERCHANTS cap now uses
+//            _approvedMerchantCount instead of _merchantList.length.
+//            (Fixed in MerchantRegistry v4.)
+//
+//    [V7-H1] HIGH — Fee transfer to treasury wrapped in try/catch.
+//            If treasury is a contract that reverts (mis-configured recipient),
+//            the fee is forgone for that pull and recorded in pendingFees[token]
+//            for accounting/alerting. The pull completes — merchant is paid.
+//            Admin must fix treasury via setProtocolTreasury() to restore fees.
+//
+//    [V7-H2] HIGH — prevLastPulledAt cached before state mutation in executePull.
+//            Revert path now restores from cache, not arithmetic on mutated value.
+//            Eliminates stale lastPulledAt if fee transfer path fails after
+//            merchant payment succeeds.
+//
+//  EIP-712 domain:
+//    name:              "AuthOnce"
+//    version:           "7"
+//    chainId:           <runtime>
+//    verifyingContract: <this contract>
 //
 //    [SV-01] CRITICAL — isContractVault flag stored at createSubscription time.
 //            extcodesize called once at subscription creation, result stored
@@ -224,7 +250,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // -------------------------------------------------------------------------
 
     string public constant PROTOCOL      = "AuthOnce Protocol";
-    string public constant VERSION       = "6.0.0";
+    string public constant VERSION       = "7.0.0";
     string public constant ORIGIN_DOMAIN = "authonce.io";
     string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
     string public constant LICENSE_SPDX  = "BUSL-1.1";
@@ -339,6 +365,12 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     mapping(uint256 => uint256) public totalMerchantPauseDays;
     mapping(uint256 => uint256) public lastMerchantPauseAt;
 
+    /// @notice [V7-H1] Accumulated protocol fees per token.
+    ///         Fee transfers to treasury are wrapped in try/catch.
+    ///         If treasury reverts (e.g. contract recipient), fees land here
+    ///         and can be withdrawn via withdrawPendingFees().
+    mapping(address => uint256) public pendingFees;
+
     // -------------------------------------------------------------------------
     // Events
     // -------------------------------------------------------------------------
@@ -386,6 +418,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     );
 
     event MerchantTransferFailed(uint256 indexed id, address indexed merchant);
+    event FeeAccumulated(uint256 indexed id, address indexed token, uint256 amount);   // [V7-H1]
 
     event InsufficientFunds(
         uint256 indexed id,
@@ -453,7 +486,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         address _keeper,
         address _protocolTreasury,
         address _merchantRegistry
-    ) EIP712("AuthOnce", "6") {
+    ) EIP712("AuthOnce", "7") {
         require(_admin            != address(0), "ZeroAdmin");
         require(_keeper           != address(0), "ZeroKeeper");
         require(_protocolTreasury != address(0), "ZeroTreasury");
@@ -623,8 +656,11 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     ///         Vault type change is emitted explicitly in SafeVaultUpdated event.
     function updateSafeVault(uint256 id, address newSafeVault) external {
         Subscription storage sub = subscriptions[id];
-        require(msg.sender == sub.owner, "NotOwner");
-        require(newSafeVault != address(0), "ZeroVault");
+        require(msg.sender == sub.owner,        "NotOwner");
+        require(newSafeVault != address(0),     "ZeroVault");
+        // [V7-C1] newSafeVault must be the caller — same invariant as createSubscription [H2].
+        // Prevents any address from becoming the safeVault without holding the key.
+        require(newSafeVault == msg.sender,     "VaultMustBeCaller");
         require(
             sub.status == SubscriptionStatus.Active ||
             sub.status == SubscriptionStatus.Paused,
@@ -815,6 +851,11 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 fee              = (pullAmount * feeBps) / 10_000;
         uint256 merchantReceives = pullAmount - fee;
 
+        // [V7-H2] Cache lastPulledAt before any state mutation.
+        //         Used to restore correct value if merchant transfer fails,
+        //         and to avoid stale-state on the fee revert path.
+        uint256 prevLastPulledAt = sub.lastPulledAt;
+
         // [M2] CEI: Update state BEFORE external calls.
         sub.lastPulledAt = block.timestamp;
         sub.pullCount    = pullCount + 1;
@@ -826,16 +867,26 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         );
 
         if (!merchantPaid) {
-            // Revert state updates — payment did not complete.
-            sub.lastPulledAt = sub.lastPulledAt - intervalSeconds;
+            // [V7-H2] Restore from cache — not arithmetic on mutated value.
+            sub.lastPulledAt = prevLastPulledAt;
             sub.pullCount    = pullCount;
             emit MerchantTransferFailed(id, merchant);
             return;
         }
 
-        // Fee transfer to treasury using SafeERC20.
+        // [V7-H1] Fee transfer wrapped in try/catch.
+        //         If treasury is a contract that reverts, the fee is forgone for
+        //         this pull and recorded in pendingFees[token] for accounting.
+        //         Admin must fix treasury via setProtocolTreasury() to restore fees.
+        //         Prevents a rejecting treasury from bricking all executePull calls.
         if (fee > 0) {
-            IERC20(token).safeTransferFrom(safeVault, protocolTreasury, fee);
+            bool feePaid = _safeTransferFromWithCatch(
+                IERC20(token), safeVault, protocolTreasury, fee
+            );
+            if (!feePaid) {
+                pendingFees[token] += fee;
+                emit FeeAccumulated(id, token, fee);
+            }
         }
 
         emit PaymentExecuted(

@@ -2,14 +2,21 @@
 pragma solidity 0.8.24;
 
 // =============================================================================
-//  MerchantRegistry.sol — AuthOnce Protocol v3
+//  MerchantRegistry.sol — AuthOnce Protocol v4
 //  "The Guest List"
 //
 //  Network:    Base Sepolia (testnet) / Base Mainnet
 //  Compiler:   Solidity v0.8.24, optimizer: true, 200 runs,
 //              viaIR: true, evmVersion: paris
 //
-//  Changes from v2 (security fixes — post ChainShield audit):
+//  Changes from v3 (security fix — post Hacken AI audit):
+//
+//    [V7-C2] CRITICAL — MAX_MERCHANTS cap now enforces against _approvedMerchantCount
+//            instead of _merchantList.length. _merchantList is a historical log that
+//            retains revoked merchants; using it for the cap caused approved slots to
+//            be incorrectly consumed by removed entries, making the registry falsely
+//            full. _approvedMerchantCount is the live count, maintained on every
+//            approve and revoke. One-line fix in _approve() internal function.
 //
 //    [MR-01] HIGH — require(_admin.code.length > 0) re-enabled for mainnet.
 //            Use compile-time constant IS_MAINNET to control enforcement.
@@ -50,7 +57,7 @@ contract MerchantRegistry {
     // -------------------------------------------------------------------------
 
     string public constant PROTOCOL      = "AuthOnce Protocol";
-    string public constant VERSION       = "3.0.0";
+    string public constant VERSION       = "4.0.0";
     string public constant ORIGIN_DOMAIN = "authonce.io";
     string public constant ORIGIN_REPO   = "github.com/Vascodiogo/the-opportunity";
     string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
@@ -332,7 +339,9 @@ contract MerchantRegistry {
 
         if (approvedMerchants[merchant]) return; // Idempotent
 
-        require(_merchantList.length < MAX_MERCHANTS, "Registry: merchant limit reached");
+        // [V7-C2] Use _approvedMerchantCount for cap — _merchantList.length includes
+        //         revoked merchants and would incorrectly consume cap slots for them.
+        require(_approvedMerchantCount < MAX_MERCHANTS, "Registry: merchant limit reached");
 
         approvedMerchants[merchant] = true;
         _approvedMerchantCount++;
