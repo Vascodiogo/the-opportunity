@@ -1164,13 +1164,16 @@ app.get("/api/products/:merchantAddress", async (req, res) => {
     res.json({
       products: products.map(p => ({
         id: p.id, slug: p.slug, name: p.name,
-        amount:        parseFloat(p.amount),
-        interval:      p.interval,
-        trial_days:    p.trial_days   || 0,
-        intro_amount:  parseFloat(p.intro_amount || 0),
-        intro_pulls:   parseInt(p.intro_pulls    || 0),
-        yearly_amount: p.yearly_amount ? parseFloat(p.yearly_amount) : null,
-        created_at:    p.created_at,
+        amount:              parseFloat(p.amount),
+        interval:            p.interval,
+        trial_days:          p.trial_days   || 0,
+        intro_amount:        parseFloat(p.intro_amount || 0),
+        intro_pulls:         parseInt(p.intro_pulls    || 0),
+        yearly_amount:       p.yearly_amount ? parseFloat(p.yearly_amount) : null,
+        payment_methods:     p.payment_methods    || ['crypto'],
+        fiat_currency:       p.fiat_currency      || 'eur',
+        crypto_discount_pct: p.crypto_discount_pct ? parseFloat(p.crypto_discount_pct) : 0,
+        created_at:          p.created_at,
       })),
     });
   } catch (err) {
@@ -1273,23 +1276,41 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
   }
 
   const discountPct = Math.min(Math.max(parseFloat(crypto_discount_pct) || 0, 0), 50);
+  // Apply same whitelist filter and crypto guarantee as POST route
+  const ALLOWED_METHODS = ['crypto','card','sepa','ideal','bancontact','eps','klarna','blik','mbway','multibanco','usdc','usdt','dai','eurc'];
+  const filteredMethods = Array.isArray(payment_methods) && payment_methods.length > 0
+    ? payment_methods.filter(m => ALLOWED_METHODS.includes(m))
+    : ['crypto'];
+  const finalPaymentMethods = filteredMethods.includes('crypto') ? filteredMethods : ['crypto', ...filteredMethods];
 
   try {
     const product = await db.upsertProduct(address, {
       slug:              req.params.productSlug,
       name, amount: parseFloat(amount), interval,
-      trialDays:         parseInt(trial_days),
-      introAmount:       parseFloat(intro_amount),
-      introPulls:        parseInt(intro_pulls),
+      trialDays:         parseInt(trial_days)    || 0,
+      introAmount:       parseFloat(intro_amount) || 0,
+      introPulls:        parseInt(intro_pulls)    || 0,
       yearlyAmount:      yearly_amount ? parseFloat(yearly_amount) : null,
-      payment_methods,
+      payment_methods:   finalPaymentMethods,
       fiat_currency,
       crypto_discount_pct: discountPct,
     });
-    res.json({ success: true, product });
+    res.json({
+      success: true,
+      product: {
+        ...product,
+        amount:              parseFloat(product.amount),
+        intro_amount:        parseFloat(product.intro_amount || 0),
+        intro_pulls:         parseInt(product.intro_pulls    || 0),
+        yearly_amount:       product.yearly_amount ? parseFloat(product.yearly_amount) : null,
+        payment_methods:     product.payment_methods    || ['crypto'],
+        fiat_currency:       product.fiat_currency      || 'eur',
+        crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
+      },
+    });
   } catch (err) {
-    console.error("[API] PUT product error:", err.message);
-    res.status(500).json({ error: "server_error", message: err.message });
+    console.error('[API] PUT product error:', err.message);
+    res.status(500).json({ error: 'server_error', message: err.message });
   }
 });
 
