@@ -732,3 +732,38 @@ MerchantRegistry v4 fixes:
 - STRIPE_CONNECT_CLIENT_ID still needs real ca_ value once approved
 
 *Last updated: 2026-06-14*
+
+## 21. Session Summary — June 15 2026
+
+**SEO audit and implementation completed:**
+
+**Cloudflare:**
+- www → non-www 301 redirect configured via Cloudflare Redirect Rules ✅
+- HSTS enabled (Full Strict already set) ✅
+
+**Google Analytics 4:**
+- GA4 property created — Measurement ID: G-5NE0QK40WZ ✅
+- GA4 tag added to frontend/index.html and index-pt.html ✅
+- GA4 confirmed live in Realtime (1 active user, 4 page views tracked) ✅
+
+**Blog:**
+- Second blog post created: blog-site/why-onchain-recurring-payments-are-broken/index.html ✅
+- Full SEO: title, meta description, canonical, OG, Twitter, Article + FAQPage JSON-LD, favicon ✅
+- GA4 tag added to all 3 blog pages (index, vs-custodial, why-onchain) ✅
+- Favicon added to all blog pages ✅
+- blog.authonce.io added to Google Search Console (auto-verified) ✅
+- Blog sitemap.xml created and submitted to Search Console ✅
+- robots.txt created for blog.authonce.io ✅
+
+**Main site:**
+- hreflang EN/PT added to index.html and index-pt.html ✅
+- og:image confirmed exists at frontend/public/og-image.png ✅
+
+**SEO score: 84/100 — all technical gaps resolved. Remaining gap: backlinks (1 referring domain only).**
+
+**Remaining SEO actions (next session):**
+- Custom 404 page in App.jsx (low priority)
+- Backlinks: submit blog posts to Paragraph, dev.to, Base ecosystem newsletter
+- Next blog post — write and publish to build topical authority
+
+*Last updated: 2026-06-15*
