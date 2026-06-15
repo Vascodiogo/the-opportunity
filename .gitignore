@@ -22,3 +22,8 @@ Thumbs.db
 scripts/test-*.js
 scripts/approve-*.js
 scripts/fix-*.js
+
+# Stress test — contains private keys and secrets, never commit
+.env.stress-test
+stress-test-keys.json
+stress-test-results.json

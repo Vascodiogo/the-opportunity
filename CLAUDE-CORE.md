@@ -37,10 +37,14 @@
 | Railway plan | Hobby ($5/month) | ✅ Active |
 | Landing page | LandingPage.jsx v3 — Web3 native, gradient hero | ✅ Updated May 30 |
 
-**Contract addresses — Base Sepolia testnet (redeployed May 31 with all audit fixes — v6):**
-- SubscriptionVault v6: `0x55180314174B30e778f35357035d49cAEF55C835`
-- MerchantRegistry v3:  `0x989376ff6195be2e76871535Db21CB8BdC9175D4`
+**Contract addresses — Base Sepolia testnet (redeployed June 14 with all Hacken AI fixes — v7/v4):**
+- SubscriptionVault v7: `0xeb068B47731261F7B4A5ae8535686D67D7f72321`
+- MerchantRegistry v4:  `0xAE681E431c353f5930dDFfBC74037d3f2afE3264`
 - USDC Sepolia:         `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+
+**Old/inactive contracts (Base Sepolia):**
+- SubscriptionVault v6 (old): `0x55180314174B30e778f35357035d49cAEF55C835`
+- MerchantRegistry v3 (old):  `0x989376ff6195be2e76871535Db21CB8BdC9175D4`
 
 **Contract addresses — Base Mainnet (not yet deployed):**
 - USDC Mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
@@ -448,6 +452,46 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 
 ## 16. Next Session Priorities
 
+**RESOLVED THIS SESSION (June 14 2026):**
+- ✅ All Hacken AI audit findings addressed — v7 contracts (SubscriptionVault v7, MerchantRegistry v4)
+- ✅ v7 contracts deployed to Base Sepolia and verified on Sourcify
+- ✅ config.js updated with new addresses + ABI additions (pendingFees, IS_MAINNET)
+- ✅ Railway VAULT_ADDRESS updated to v7
+- ✅ api.js fixed: GET /api/products list was missing payment_methods/fiat_currency/crypto_discount_pct
+- ✅ api.js fixed: PUT product route now applies same whitelist filter as POST
+- ✅ PayPage.jsx: 5 bugs fixed (token selector SELECTABLE_TOKENS filter, introAmount decimals, fiat currency label, hardcoded USDC text, selectedToken reset)
+- ✅ Merchant re-approved on new MerchantRegistry v4
+- ✅ stress-test-setup.js: vault address updated to v7, approve() call added (root cause of IDs 10-21 grace period)
+- ✅ Stripe Connect activated on Stripe dashboard (under review — 1-3 days)
+
+**[CRITICAL] Still outstanding:**
+1. **stress-test-setup.js** — run against v7 contracts to create fresh subscriptions with correct approve() flow
+2. **Keeper pull on v7** — confirm at least one successful executePull() on new contracts
+3. **Tally outreach** — send June 16
+4. **Cyfrin follow-up** — share Hacken AI findings, ask about moving August slot earlier
+5. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
+6. **CLAUDE-CORE.md push** — git commit after session
+
+**MetaMask EIP-7702 issue (testnet only):**
+- All MetaMask accounts on Base Sepolia are auto-enrolled in delegation framework
+- Causes gas simulation failures for createSubscription (420M gas limit)
+- Not a contract bug — won't affect real EOA subscribers on mainnet
+- Workaround: use stress-test-setup.js (pure ethers.js, no browser wallet)
+
+**Stripe Connect:**
+- Activated Platform model on Stripe dashboard June 14
+- Under review — STRIPE_CONNECT_CLIENT_ID still ca_placeholder in Railway
+- Update Railway once Stripe approves and provides real ca_ client ID
+
+**Partnership outreach tracker:**
+1. CharmVerse (Alex Poon) — email sent June 10, awaiting reply
+2. Snapshot Pro/Labs (Fabien Marino) — sent June 13 (scheduled)
+3. Tally — send June 16
+4. DeepDAO — send June 19
+5. Boardroom — send June 22
+6. Dune Analytics — send June 25
+7. Messari — send June 28
+
 **RESOLVED THIS SESSION (June 13 2026):**
 - ✅ keeper.js wallet-scope ReferenceError fixed (commit f4dd98f) — 0 pulls for 6+ days since v6 deploy
 - ✅ notifier.js 6× stale v4 ABI signatures fixed (commit c953b12) — all events silently dropped since May 31
@@ -651,3 +695,40 @@ All three solve the nonce problem via multiple independent wallets running in pa
 - Daily faucet claims ongoing
 
 *Last updated: 2026-06-12*
+
+## 20. Session Summary — June 14 2026
+
+**v7 contracts — all Hacken AI findings addressed and deployed:**
+
+SubscriptionVault v7 fixes:
+- [V7-C1] CRITICAL: updateSafeVault missing require(newSafeVault == msg.sender)
+- [V7-H1] HIGH: fee transfer to treasury wrapped in try/catch + pendingFees accounting
+- [V7-H2] HIGH: prevLastPulledAt cached before state mutation in executePull
+- [V7-M6] MEDIUM: approveToken enforces require(IERC20(token).decimals() == 6)
+- [V7-L3] LOW: _tokenEverAdded mapping prevents duplicate _tokenList entries
+
+MerchantRegistry v4 fixes:
+- [V7-C2] CRITICAL: MAX_MERCHANTS cap uses _approvedMerchantCount not _merchantList.length
+- [V7-L2/L3] LOW: blacklistMerchant guards against blacklisting admin or pendingAdmin
+- [V7-L5] LOW: IS_MAINNET stored as public immutable
+
+**New contract addresses (Base Sepolia):**
+- SubscriptionVault v7: 0xeb068B47731261F7B4A5ae8535686D67D7f72321
+- MerchantRegistry v4:  0xAE681E431c353f5930dDFfBC74037d3f2afE3264
+
+**Bug fixes shipped:**
+- api.js: GET /api/products list missing payment_methods/fiat_currency/crypto_discount_pct — root cause of edit product always reverting to USDC
+- api.js: PUT product route missing whitelist filter and normalisation
+- PayPage.jsx: token selector used SELECTABLE_TOKENS (network whitelist) instead of product.payment_methods — selector never showed on Sepolia
+- PayPage.jsx: introAmount hardcoded 6 decimals (wrong for DAI)
+- PayPage.jsx: fiat currency label showed "USDC" instead of EUR/USD etc
+- PayPage.jsx: "Approving USDC..." hardcoded text
+- PayPage.jsx: selectedToken never reset on product load
+- stress-test-setup.js: missing approve() call — root cause of IDs 10-21 in grace period
+
+**Stripe Connect:**
+- Activated Platform model on Stripe live account
+- Under Stripe review (1-3 days)
+- STRIPE_CONNECT_CLIENT_ID still needs real ca_ value once approved
+
+*Last updated: 2026-06-14*
