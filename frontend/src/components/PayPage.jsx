@@ -650,7 +650,7 @@ export default function PayPage() {
             )}
 
             {/* Connected — steps + subscribe button */}
-            {(flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") && (
+            {(flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") && paymentMethod === "crypto" && (
               <>
                 {/* Wallet badge */}
                 <div style={{
