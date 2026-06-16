@@ -1656,7 +1656,7 @@ app.get("/api/connect/authorize", requireMerchantAuth, async (req, res) => {
     if (!clientId) return res.status(500).json({ error: "config_error", message: "Stripe Connect not configured." });
 
     const state = Buffer.from(JSON.stringify({ wallet: req.merchantAddress, ts: Date.now() })).toString("base64");
-    const redirectUri = `${process.env.FRONTEND_URL || "https://authonce.io"}/api/connect/callback`;
+    const redirectUri = `${process.env.API_URL || "https://the-opportunity-production.up.railway.app"}/api/connect/callback`;
 
     const url = `https://connect.stripe.com/oauth/authorize?` +
       `response_type=code&client_id=${clientId}&scope=read_write` +
