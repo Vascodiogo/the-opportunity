@@ -255,12 +255,14 @@ async function initSchema() {
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_products_merchant ON products(merchant_address)`);
-  // Migration: add trial_days to existing products table
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS trial_days INTEGER NOT NULL DEFAULT 0`);
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_amount   NUMERIC(18,6) NOT NULL DEFAULT 0`);
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_pulls    INTEGER       NOT NULL DEFAULT 0`);
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS yearly_amount  NUMERIC(18,6) DEFAULT NULL`);
-  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS payment_methods TEXT[] DEFAULT ARRAY['crypto']`);
+  // Migration: add columns to existing products table
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS trial_days       INTEGER       NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_amount     NUMERIC(18,6) NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS intro_pulls      INTEGER       NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS yearly_amount    NUMERIC(18,6) DEFAULT NULL`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS payment_methods  TEXT[]        DEFAULT ARRAY['crypto']`);
+  // ✅ v7: grace period per product (1–30 days, default 7)
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS grace_period_days INTEGER NOT NULL DEFAULT 7`);
 
   // Stripe checkout sessions — track pending payments before on-chain confirmation
   await query(`
@@ -603,6 +605,7 @@ async function upsertProduct(merchantAddress, data) {
     trialDays = 0, introAmount = 0, introPulls = 0,
     yearlyAmount = null, payment_methods = ["crypto"],
     fiat_currency = "eur", crypto_discount_pct = 0,
+    grace_period_days = 7,                              // ✅ v7
     description = null, image_url = null,
   } = data;
 
@@ -610,28 +613,29 @@ async function upsertProduct(merchantAddress, data) {
     INSERT INTO products (
       merchant_address, slug, name, amount, interval,
       trial_days, intro_amount, intro_pulls, yearly_amount, payment_methods,
-      fiat_currency, crypto_discount_pct,
+      fiat_currency, crypto_discount_pct, grace_period_days,
       created_at, updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW())
     ON CONFLICT (merchant_address, slug) DO UPDATE SET
-      name              = EXCLUDED.name,
-      amount            = EXCLUDED.amount,
-      interval          = EXCLUDED.interval,
-      trial_days        = EXCLUDED.trial_days,
-      intro_amount      = EXCLUDED.intro_amount,
-      intro_pulls       = EXCLUDED.intro_pulls,
-      yearly_amount     = EXCLUDED.yearly_amount,
-      payment_methods   = EXCLUDED.payment_methods,
-      fiat_currency     = EXCLUDED.fiat_currency,
+      name                = EXCLUDED.name,
+      amount              = EXCLUDED.amount,
+      interval            = EXCLUDED.interval,
+      trial_days          = EXCLUDED.trial_days,
+      intro_amount        = EXCLUDED.intro_amount,
+      intro_pulls         = EXCLUDED.intro_pulls,
+      yearly_amount       = EXCLUDED.yearly_amount,
+      payment_methods     = EXCLUDED.payment_methods,
+      fiat_currency       = EXCLUDED.fiat_currency,
       crypto_discount_pct = EXCLUDED.crypto_discount_pct,
-      active            = TRUE,
-      updated_at        = NOW()
+      grace_period_days   = EXCLUDED.grace_period_days,
+      active              = TRUE,
+      updated_at          = NOW()
     RETURNING *
   `, [
     merchantAddress, slug, name, amount, interval,
     trialDays, introAmount, introPulls, yearlyAmount, payment_methods,
-    fiat_currency, crypto_discount_pct,
+    fiat_currency, crypto_discount_pct, grace_period_days,
   ]);
   return res.rows[0];
 }
@@ -663,8 +667,7 @@ async function deactivateProduct(merchantAddress, slug) {
 // Stripe checkout session helpers
 // -----------------------------------------------------------------------------
 
-async function createCheckoutSession(data) {
-  const { sessionId, merchantAddress, productSlug, subscriberEmail, subscriberWallet, amountEur, currency } = data;
+async function createCheckoutSession({ sessionId, merchantAddress, productSlug, subscriberEmail, subscriberWallet, amountEur, currency }) {
   const res = await query(`
     INSERT INTO stripe_checkout_sessions
       (session_id, merchant_address, product_slug, subscriber_email, subscriber_wallet, amount_eur, currency, created_at)
