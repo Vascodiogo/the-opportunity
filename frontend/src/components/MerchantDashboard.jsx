@@ -676,6 +676,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [fiatCurrency, setFiatCurrency]     = useState("eur");
   const [hasCryptoDiscount, setHasCryptoDiscount] = useState(false);
   const [cryptoDiscountPct, setCryptoDiscountPct] = useState("");
+  const [gracePeriod, setGracePeriod]   = useState("7");
   const [saving, setSaving]             = useState(false);
   const [errors, setErrors]             = useState({});
 
@@ -722,6 +723,8 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         e.cryptoDiscount = "Enter a discount between 0 and 50%";
       }
     }
+    const gp = parseInt(gracePeriod);
+    if (!gracePeriod || isNaN(gp) || gp < 1 || gp > 30) e.gracePeriod = "Enter a value between 1 and 30";
     return e;
   };
 
@@ -745,6 +748,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
           payment_methods:   ["crypto", ...cryptoTokens, ...paymentMethods],
           fiat_currency:     fiatCurrency,
           crypto_discount_pct: hasCryptoDiscount ? parseFloat(cryptoDiscountPct) : 0,
+          grace_period_days: parseInt(gracePeriod),
         }),
       });
       if (!res.ok) {
@@ -766,227 +770,273 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     finally { setSaving(false); }
   };
 
+  // ─── Shared sub-component styles ────────────────────────────────────────────
+  const SECTION_LABEL = {
+    fontSize: 10, fontWeight: 600, color: "var(--text-muted)",
+    letterSpacing: "0.07em", textTransform: "uppercase", display: "block", marginBottom: 8,
+  };
+  const TOKEN_ROW = (isEnabled, isLast) => ({
+    display: "flex", alignItems: "center", gap: 8,
+    padding: "9px 11px", borderRadius: 8, cursor: isLast ? "default" : "pointer",
+    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
+    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
+    opacity: isLast ? 0.7 : 1,
+  });
+  const CHECKBOX = (isEnabled) => ({
+    width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+    border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`,
+    background: isEnabled ? "var(--green)" : "none",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  });
+  const TOGGLE_TRACK = (on) => ({
+    width: 32, height: 18, borderRadius: 99,
+    background: on ? "var(--green)" : "var(--border)",
+    position: "relative", transition: "background 0.2s", flexShrink: 0,
+  });
+  const TOGGLE_THUMB = (on) => ({
+    position: "absolute", top: 2, left: on ? 16 : 2,
+    width: 14, height: 14, borderRadius: "50%",
+    background: "#fff", transition: "left 0.2s",
+  });
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
-      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: "28px 32px", width: "100%", maxWidth: 720, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "92vh", overflowY: "auto" }}>
+
+        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>New Product</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>New product</h2>
           <button onClick={onClose} style={S.btn.ghost}>✕</button>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label style={S.label}>Product name</label>
-            <input
-              placeholder="Pro Plan"
-              value={name}
-              onChange={e => { setName(e.target.value.replace(/[^a-zA-Z0-9 \-\.]/g, "")); setErrors(prev => ({ ...prev, name: undefined })); }}
-              style={{ borderColor: errors.name ? "var(--red)" : undefined }}
-            />
-            {errors.name && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.name}</div>}
-          </div>
 
-          {/* Price — single value, 1:1 across stablecoins and fiat */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {/* Two-column grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+
+          {/* ── LEFT COLUMN ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* Product name */}
             <div>
-              <label style={S.label}>Price</label>
-              <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-muted)" }}>$</span>
+              <label style={SECTION_LABEL}>Product name</label>
+              <input
+                placeholder="Pro Plan"
+                value={name}
+                onChange={e => { setName(e.target.value.replace(/[^a-zA-Z0-9 \-\.]/g, "")); setErrors(prev => ({ ...prev, name: undefined })); }}
+                style={{ borderColor: errors.name ? "var(--red)" : undefined }}
+              />
+              {errors.name && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.name}</div>}
+            </div>
+
+            {/* Price + Interval */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={SECTION_LABEL}>Price ($)</label>
                 <input
                   type="number" placeholder="29.00" min="0.01" step="0.01"
                   value={amount}
                   onChange={e => { setAmount(e.target.value); setErrors(prev => ({ ...prev, amount: undefined })); }}
-                  style={{ paddingLeft: 22, borderColor: errors.amount ? "var(--red)" : undefined }}
+                  style={{ borderColor: errors.amount ? "var(--red)" : undefined }}
                 />
+                {errors.amount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.amount}</div>}
               </div>
-              {errors.amount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.amount}</div>}
-            </div>
-            <div>
-              <label style={S.label}>Billing interval</label>
-              <select value={interval} onChange={e => setInterval(e.target.value)}>
-                <option value="0">Weekly</option>
-                <option value="1">Monthly</option>
-                <option value="2">Yearly</option>
-              </select>
-            </div>
-          </div>
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: -8 }}>
-            $1 = 1 USDC = 1 USDT = 1 DAI = 1 EURC. Same price across crypto and card.
-          </div>
-
-          {/* Intro pricing toggle */}
-          <div>
-            <div onClick={() => setHasIntro(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: hasIntro ? 10 : 0 }}>
-              <div style={{ width: 32, height: 18, borderRadius: 99, background: hasIntro ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                <div style={{ position: "absolute", top: 2, left: hasIntro ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-              </div>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Introductory pricing</span>
-            </div>
-            {hasIntro && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={S.label}>Intro price ($)</label>
-                  <input type="number" placeholder="5.00" value={introAmount} onChange={e => setIntroAmount(e.target.value)} />
-                  {errors.introAmount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.introAmount}</div>}
-                </div>
-                <div>
-                  <label style={S.label}>For how many {intervalLabel[interval]}s</label>
-                  <input type="number" min="1" placeholder="1" value={introPulls} onChange={e => setIntroPulls(e.target.value)} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Yearly option toggle */}
-          <div>
-            <div onClick={() => setHasYearly(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: hasYearly ? 10 : 0 }}>
-              <div style={{ width: 32, height: 18, borderRadius: 99, background: hasYearly ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                <div style={{ position: "absolute", top: 2, left: hasYearly ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-              </div>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer yearly billing option</span>
-            </div>
-            {hasYearly && (
               <div>
-                <label style={S.label}>Yearly price ($)</label>
-                {yearlySuggestion && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Suggested: ${yearlySuggestion} (20% off)</div>}
-                <input type="number" placeholder={yearlySuggestion || "290.00"} value={yearlyAmount} onChange={e => setYearlyAmount(e.target.value)} />
-                {yearlyDiscount > 0 && <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>{yearlyDiscount}% discount vs monthly</div>}
-                {errors.yearlyAmount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.yearlyAmount}</div>}
-              </div>
-            )}
-          </div>
-
-          {/* Accepted crypto tokens */}
-          <div>
-            <label style={S.label}>Accepted crypto tokens</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {[
-                { id: "usdc", label: "⬡ USDC" },
-                { id: "usdt", label: "₮ USDT" },
-                { id: "dai",  label: "◈ DAI" },
-                { id: "eurc", label: "€ EURC" },
-              ].map(({ id, label }) => {
-                const isEnabled = cryptoTokens.includes(id);
-                const isLast = cryptoTokens.length === 1 && isEnabled;
-                return (
-                  <div key={id} onClick={() => !isLast && toggleCryptoToken(id)} style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: "8px 10px", borderRadius: 8,
-                    cursor: isLast ? "default" : "pointer",
-                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
-                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                    opacity: isLast ? 0.7 : 1,
-                  }}>
-                    <div style={{
-                      width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                      border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`,
-                      background: isEnabled ? "var(--green)" : "none",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
-                    </div>
-                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, padding: "6px 10px", background: "var(--bg-tag)", borderRadius: 6, border: "0.5px solid var(--border)" }}>
-              ⓘ Volatile tokens (WETH, cbBTC) require USD-denominated oracle pricing — available in v6.
-            </div>
-          </div>
-
-          {/* Fiat payment methods */}
-          <div>
-            <label style={S.label}>Accept fiat payments via</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {[
-                { id: "card",       label: "💳 Card (Stripe)" },
-                { id: "mbway",      label: "📱 MB Way (PT)" },
-                { id: "multibanco", label: "🏧 Multibanco (PT)" },
-                { id: "ideal",      label: "🇳🇱 iDEAL (NL)" },
-                { id: "bancontact", label: "🇧🇪 Bancontact (BE)" },
-                { id: "eps",        label: "🇦🇹 EPS (AT)" },
-                { id: "klarna",     label: "🛍 Klarna" },
-                { id: "blik",       label: "🇵🇱 BLIK (PL)" },
-              ].map(({ id, label }) => {
-                const isEnabled = paymentMethods.includes(id);
-                return (
-                  <div key={id} onClick={() => toggleFiatMethod(id)} style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
-                    background: isEnabled ? "rgba(29,158,101,0.06)" : "var(--bg-tag)",
-                  }}>
-                    <div style={{
-                      width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                      border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`,
-                      background: isEnabled ? "var(--green)" : "none",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
-                    </div>
-                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {hasFiatMethods && (
-              <div style={{ marginTop: 8 }}>
-                <label style={S.label}>Settlement currency</label>
-                <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
-                  {FIAT_CURRENCIES.map(c => (
-                    <option key={c.code} value={c.code}>{c.label}</option>
-                  ))}
+                <label style={SECTION_LABEL}>Interval</label>
+                <select value={interval} onChange={e => setInterval(e.target.value)}>
+                  <option value="0">Weekly</option>
+                  <option value="1">Monthly</option>
+                  <option value="2">Yearly</option>
                 </select>
               </div>
-            )}
-          </div>
-
-          {/* Crypto discount toggle */}
-          <div>
-            <div onClick={() => setHasCryptoDiscount(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: hasCryptoDiscount ? 10 : 0 }}>
-              <div style={{ width: 32, height: 18, borderRadius: 99, background: hasCryptoDiscount ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                <div style={{ position: "absolute", top: 2, left: hasCryptoDiscount ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-              </div>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer a crypto discount</span>
             </div>
-            {hasCryptoDiscount && (
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: -8 }}>
+              $1 = 1 USDC = 1 USDT = 1 DAI = 1 EURC. Same price across crypto and card.
+            </div>
+
+            {/* Grace period */}
+            <div>
+              <label style={SECTION_LABEL}>
+                Grace period{" "}
+                <span style={{ textTransform: "none", fontWeight: 400, letterSpacing: 0 }}>(days, 1–30)</span>
+              </label>
+              <input
+                type="number" min="1" max="30" placeholder="7"
+                value={gracePeriod}
+                onChange={e => { setGracePeriod(e.target.value); setErrors(prev => ({ ...prev, gracePeriod: undefined })); }}
+                style={{ borderColor: errors.gracePeriod ? "var(--red)" : undefined }}
+              />
+              {errors.gracePeriod
+                ? <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.gracePeriod}</div>
+                : <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 5 }}>Keeper retries daily. Subscription expires if unpaid after this window.</div>
+              }
+            </div>
+
+            {/* Toggles */}
+            <div style={{ borderTop: "0.5px solid var(--border)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+
+              {/* Intro pricing */}
               <div>
-                <label style={S.label}>Discount for paying with crypto (%)</label>
-                <input type="number" min="0" max="50" step="0.5" placeholder="5" value={cryptoDiscountPct} onChange={e => setCryptoDiscountPct(e.target.value)} />
-                {errors.cryptoDiscount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.cryptoDiscount}</div>}
-                {amount && cryptoDiscountPct && !errors.cryptoDiscount && (
-                  <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
-                    Crypto price: ${cryptoPrice} · Card price: ${parseFloat(amount).toFixed(2)}
+                <div onClick={() => setHasIntro(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: "var(--text-primary)" }}>Introductory pricing</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Lower price for first N cycles</div>
+                  </div>
+                  <div style={TOGGLE_TRACK(hasIntro)}><div style={TOGGLE_THUMB(hasIntro)} /></div>
+                </div>
+                {hasIntro && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                    <div>
+                      <label style={SECTION_LABEL}>Intro price ($)</label>
+                      <input type="number" placeholder="5.00" value={introAmount} onChange={e => setIntroAmount(e.target.value)} />
+                      {errors.introAmount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.introAmount}</div>}
+                    </div>
+                    <div>
+                      <label style={SECTION_LABEL}>For how many {intervalLabel[interval]}s</label>
+                      <input type="number" min="1" placeholder="1" value={introPulls} onChange={e => setIntroPulls(e.target.value)} />
+                    </div>
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                  Common in Web3 — incentivises subscribers to pay on-chain, avoiding card processing fees.
+              </div>
+
+              {/* Yearly option */}
+              <div>
+                <div onClick={() => setHasYearly(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: "var(--text-primary)" }}>Yearly billing option</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Annual plan alongside monthly</div>
+                  </div>
+                  <div style={TOGGLE_TRACK(hasYearly)}><div style={TOGGLE_THUMB(hasYearly)} /></div>
+                </div>
+                {hasYearly && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={SECTION_LABEL}>Yearly price ($)</label>
+                    {yearlySuggestion && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Suggested: ${yearlySuggestion} (20% off)</div>}
+                    <input type="number" placeholder={yearlySuggestion || "290.00"} value={yearlyAmount} onChange={e => setYearlyAmount(e.target.value)} />
+                    {yearlyDiscount > 0 && <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>{yearlyDiscount}% discount vs monthly</div>}
+                    {errors.yearlyAmount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.yearlyAmount}</div>}
+                  </div>
+                )}
+              </div>
+
+              {/* Crypto discount */}
+              <div>
+                <div onClick={() => setHasCryptoDiscount(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: "var(--text-primary)" }}>Crypto discount</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Incentivise on-chain payment (0–50%)</div>
+                  </div>
+                  <div style={TOGGLE_TRACK(hasCryptoDiscount)}><div style={TOGGLE_THUMB(hasCryptoDiscount)} /></div>
+                </div>
+                {hasCryptoDiscount && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={SECTION_LABEL}>Discount (%)</label>
+                    <input type="number" min="0" max="50" step="0.5" placeholder="5" value={cryptoDiscountPct} onChange={e => setCryptoDiscountPct(e.target.value)} />
+                    {errors.cryptoDiscount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.cryptoDiscount}</div>}
+                    {amount && cryptoDiscountPct && !errors.cryptoDiscount && (
+                      <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
+                        Crypto: ${cryptoPrice} · Card: ${parseFloat(amount).toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+          {/* ── RIGHT COLUMN ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* Crypto tokens */}
+            <div>
+              <label style={SECTION_LABEL}>Crypto tokens</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {[
+                  { id: "usdc", label: "USDC" },
+                  { id: "usdt", label: "USDT" },
+                  { id: "dai",  label: "DAI"  },
+                  { id: "eurc", label: "EURC" },
+                ].map(({ id, label }) => {
+                  const isEnabled = cryptoTokens.includes(id);
+                  const isLast    = cryptoTokens.length === 1 && isEnabled;
+                  return (
+                    <div key={id} onClick={() => !isLast && toggleCryptoToken(id)} style={TOKEN_ROW(isEnabled, isLast)}>
+                      <div style={CHECKBOX(isEnabled)}>
+                        {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <span style={{ fontSize: 13, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {errors.tokens && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.tokens}</div>}
+            </div>
+
+            {/* Fiat payment methods */}
+            <div>
+              <label style={SECTION_LABEL}>
+                Fiat payments{" "}
+                <span style={{ textTransform: "none", fontWeight: 400, letterSpacing: 0 }}>(requires Stripe connected)</span>
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {[
+                  { id: "card",       label: "Card"           },
+                  { id: "mbway",      label: "MB Way (PT)"    },
+                  { id: "multibanco", label: "Multibanco (PT)"},
+                  { id: "ideal",      label: "iDEAL (NL)"     },
+                  { id: "bancontact", label: "Bancontact (BE)"},
+                  { id: "eps",        label: "EPS (AT)"       },
+                  { id: "klarna",     label: "Klarna"         },
+                  { id: "blik",       label: "BLIK (PL)"      },
+                ].map(({ id, label }) => {
+                  const isEnabled = paymentMethods.includes(id);
+                  return (
+                    <div key={id} onClick={() => toggleFiatMethod(id)} style={TOKEN_ROW(isEnabled, false)}>
+                      <div style={CHECKBOX(isEnabled)}>
+                        {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <span style={{ fontSize: 12, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {hasFiatMethods && (
+                <div style={{ marginTop: 10 }}>
+                  <label style={SECTION_LABEL}>Settlement currency</label>
+                  <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
+                    {FIAT_CURRENCIES.map(c => (
+                      <option key={c.code} value={c.code}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Pay link preview */}
+            {name && amount && (
+              <div style={{ background: "rgba(29,158,117,0.06)", border: "0.5px solid rgba(29,158,117,0.2)", borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ fontSize: 11, color: "var(--green)", marginBottom: 4 }}>Pay link preview</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", wordBreak: "break-all" }}>
+                  {BASE_URL}/{shortAddress(merchantAddress)}/{name.toLowerCase().replace(/\s+/g, "-")}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+                  Add a free trial after creating — use the "Trial Link" button.
                 </div>
               </div>
             )}
+
+            {/* Errors + submit */}
+            <div style={{ marginTop: "auto" }}>
+              {errors.general && (
+                <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "var(--red)" }}>
+                  {errors.general}
+                </div>
+              )}
+              <button onClick={handleAdd} disabled={saving} style={{ ...S.btn.primary, width: "100%", padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+                {saving ? "Saving..." : "Create product"}
+              </button>
+            </div>
+
           </div>
-
-          {/* Pay link preview */}
-          {name && amount && (
-            <div style={{ background: "rgba(29,158,117,0.06)", border: "0.5px solid rgba(29,158,117,0.2)", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 11, color: "var(--green)", marginBottom: 4 }}>Pay link preview</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", wordBreak: "break-all" }}>
-                {BASE_URL}/{shortAddress(merchantAddress)}/{name.toLowerCase().replace(/\s+/g, "-")}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-                Add a free trial after creating — use the "Trial Link" button.
-              </div>
-            </div>
-          )}
-
-          {errors.general && (
-            <div style={{ background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 12, color: "var(--red)" }}>
-              {errors.general}
-            </div>
-          )}
-          <button onClick={handleAdd} disabled={saving} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Saving..." : "Create Product"}
-          </button>
         </div>
       </div>
     </div>
@@ -1021,6 +1071,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   const [fiatCurrency, setFiatCurrency] = useState(product.fiat_currency || "eur");
   const [hasCryptoDiscount, setHasCryptoDiscount] = useState(!!product.crypto_discount_pct);
   const [cryptoDiscountPct, setCryptoDiscountPct] = useState(product.crypto_discount_pct ? String(product.crypto_discount_pct) : "");
+  const [gracePeriod, setGracePeriod] = useState(product.grace_period_days ? String(product.grace_period_days) : "7");
   const [saving, setSaving]           = useState(false);
 
   const yearlySuggestion = amount ? (parseFloat(amount) * 12 * 0.8).toFixed(2) : "";
@@ -1065,6 +1116,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
           payment_methods: ["crypto", ...cryptoTokens, ...paymentMethods],
           fiat_currency: fiatCurrency,
           crypto_discount_pct: hasCryptoDiscount ? parseFloat(cryptoDiscountPct) : 0,
+          grace_period_days: parseInt(gracePeriod) || 7,
         }),
       });
       if (!res.ok) throw new Error("Failed to update product");
