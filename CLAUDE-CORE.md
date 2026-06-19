@@ -767,3 +767,74 @@ MerchantRegistry v4 fixes:
 - Next blog post — write and publish to build topical authority
 
 *Last updated: 2026-06-15*
+
+## 22. Session Summary — June 16 2026
+
+**Stripe Connect — fully live ✅**
+- Stripe Connect Platform approved: `acct_1TRzB99OrTZ08FUb`
+- Live Client ID: `ca_UhbS2B4nN4rjwy3BZuzwkoa49qpY5ubS` — updated in Railway
+- Standard OAuth enabled in Stripe Dashboard → Connect → Onboarding Options → OAuth tab
+- Redirect URIs added:
+  - `https://authonce.io/api/connect/callback`
+  - `https://the-opportunity-production.up.railway.app/api/connect/callback`
+- **Bug fixed:** api.js line 1659 — redirect URI used `FRONTEND_URL` instead of `API_URL`
+- `API_URL` = `https://the-opportunity-production.up.railway.app` added to Railway variables
+- Merchant `0xbb6d960b...` connected Stripe account `acct_1TizydDpTvv1ELrs` ✅
+- Card payments confirmed working end-to-end — Stripe Checkout loads with CHF/EUR selector ✅
+
+**Stripe KYC completed:**
+- Business type: Individual, Portugal
+- Website: authonce.io
+- Category: Software/SaaS
+- Statement descriptor: AUTHONCE.IO
+- Bank account: Swiss IBAN via Wise personal account
+
+**Wise account created:**
+- Personal account, Switzerland
+- EUR balance (Belgian IBAN — not used for Stripe)
+- Swiss IBAN used for Stripe payouts
+
+**Google Cloud Web3 Startup Program:**
+- Application submitted June 16 ✅
+- Account: `admin@authonce.io` (Google account created, Zoho alias)
+- Billing account: `01BB2F-594210-BA4958` — `admin@authonce.io` added as Billing Account Administrator
+- Program tier: Start (pre-seed/bootstrapped)
+- Response expected: 3-5 business days
+- Potential: up to $200,000 in Google Cloud credits over 2 years
+
+**PayPage.jsx bug fixed:**
+- Wallet steps (Approve USDC, Create subscription on-chain) now hidden when `paymentMethod === 'card'`
+- Previously showed wallet steps even when card was selected
+
+**Merchant dashboard updates:**
+- Merchant renamed to **AuthOnce Labs**
+- Product renamed to **Pro Plan** — $2.00/Monthly, USDC + Card
+- Pay link: `authonce.io/pay/authonce-labs/new-plan`
+
+**Deployer wallet imported to MetaMask:**
+- `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` imported as "AuthOnce Deployer"
+- Used to connect merchant dashboard and complete Stripe OAuth flow
+
+**Rabby wallet — ready for video demo:**
+- Address: `0x128cE652e31Ef886376696Adf92ce6E36057c832`
+- Balance: 46 USDC, 0.02 ETH (Base Sepolia)
+- Clean EOA — no EIP-7702 delegation ✅
+- Will be used as subscriber wallet in video demo
+
+**Video demo — scheduled for tomorrow (June 17):**
+- Script written and ready (6 scenes, 60 seconds)
+- PC only — Rabby as subscriber, MetaMask Deployer as merchant
+- Tool: Loom or ShareX + CapCut
+- Pay link: `authonce.io/pay/authonce-labs/new-plan`
+- 6 tabs prepared: landing page, merchant dashboard, pay link, Basescan, Railway logs, closing shot
+
+**Stale DB subscriptions:**
+- IDs 6-22 deleted from DB (v6 stress test leftovers)
+- Active: IDs 0-4 (weekly, next due ~June 21)
+- Grace: ID 5 (116h remaining, 0 USDC)
+
+**Railway variables updated this session:**
+- `STRIPE_CONNECT_CLIENT_ID`: `ca_UhbS2B4nN4rjwy3BZuzwkoa49qpY5ubS`
+- `API_URL`: `https://the-opportunity-production.up.railway.app`
+
+*Last updated: 2026-06-16*
