@@ -356,7 +356,52 @@ async function initSchema() {
     )
   `);
 
+  // Keeper pull attempt log — every executePull attempt, success or failure
+  await query(`
+    CREATE TABLE IF NOT EXISTS keeper_pull_attempts (
+      id                SERIAL PRIMARY KEY,
+      subscription_id   BIGINT NOT NULL,
+      wallet            TEXT NOT NULL,
+      merchant          TEXT NOT NULL,
+      amount_usdc       TEXT NOT NULL,
+      status            TEXT NOT NULL,   -- 'success' | 'failed' | 'skipped'
+      tx_hash           TEXT,
+      block_number      BIGINT,
+      error             TEXT,
+      attempted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_kpa_sub      ON keeper_pull_attempts(subscription_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_kpa_status   ON keeper_pull_attempts(status)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_kpa_attempted ON keeper_pull_attempts(attempted_at)`);
+
   console.log("[DB] Schema ready ✓");
+}
+
+// -----------------------------------------------------------------------------
+// Keeper pull attempt logging
+// -----------------------------------------------------------------------------
+
+async function logKeeperPullAttempt({ subscriptionId, wallet, merchant, amountUsdc, status, txHash = null, blockNumber = null, error = null }) {
+  try {
+    await query(`
+      INSERT INTO keeper_pull_attempts
+        (subscription_id, wallet, merchant, amount_usdc, status, tx_hash, block_number, error, attempted_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    `, [
+      subscriptionId,
+      wallet?.toLowerCase(),
+      merchant?.toLowerCase(),
+      amountUsdc,
+      status,
+      txHash || null,
+      blockNumber || null,
+      error || null,
+    ]);
+  } catch (err) {
+    // Never let logging failure break the keeper
+    console.error(`[DB] logKeeperPullAttempt failed: ${err.message}`);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -830,6 +875,7 @@ module.exports = {
   // Payments
   insertPayment,
   getPaymentsByMerchant,
+  logKeeperPullAttempt,
   // Merchants
   upsertMerchant,
   getMerchant,

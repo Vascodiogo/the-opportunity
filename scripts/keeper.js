@@ -17,9 +17,12 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
 const { Pool }   = require("pg");
-const { upsertKeeperHeartbeat } = process.env.DATABASE_URL
+const { upsertKeeperHeartbeat, logKeeperPullAttempt: _logPullAttempt } = process.env.DATABASE_URL
   ? require("./db.js")
-  : { upsertKeeperHeartbeat: async () => {} }; // no-op if DB not configured
+  : { upsertKeeperHeartbeat: async () => {}, logKeeperPullAttempt: async () => {} }; // no-op if DB not configured
+
+// Safe wrapper — never throws
+const logPullAttempt = async (data) => { try { await _logPullAttempt(data); } catch {} };
 
 if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
 const VAULT_ADDRESS   = ethers.getAddress(process.env.VAULT_ADDRESS.trim());
@@ -254,6 +257,14 @@ async function processDueSubscriptions(vault, wallet, ids) {
         console.warn(`     WARNING: Subscription #${id} is a contract vault. ERC-1271 signing not yet implemented in keeper. Skipping.`);
         console.warn(`     ACTION:  Upgrade keeper to v6.1 before onboarding contract wallet subscribers.`);
         skipped++;
+        await logPullAttempt({
+          subscriptionId: id,
+          wallet:   sub.owner,
+          merchant: sub.merchant,
+          amountUsdc: ethers.formatUnits(pullAmount, 6),
+          status:   "skipped",
+          error:    "contract-vault: ERC-1271 not yet implemented",
+        });
         continue;
       }
 
@@ -271,8 +282,27 @@ async function processDueSubscriptions(vault, wallet, ids) {
         const receipt = await tx.wait();
         console.log(`     Confirmed in block ${receipt.blockNumber}`);
         pulled++;
+        // ── Log successful pull to DB ────────────────────────────────────────
+        await logPullAttempt({
+          subscriptionId: id,
+          wallet:   sub.owner,
+          merchant: sub.merchant,
+          amountUsdc: ethers.formatUnits(pullAmount, 6),
+          status:   "success",
+          txHash:   tx.hash,
+          blockNumber: receipt.blockNumber,
+        });
       } catch (err) {
         console.error(`     executePull failed: ${err.message}`);
+        // ── Log failed pull to DB ────────────────────────────────────────────
+        await logPullAttempt({
+          subscriptionId: id,
+          wallet:   sub.owner,
+          merchant: sub.merchant,
+          amountUsdc: ethers.formatUnits(pullAmount, 6),
+          status:   "failed",
+          error:    err.message?.slice(0, 500),
+        });
       }
       console.log("");
     }
