@@ -427,15 +427,15 @@ const templates = {
   },
 
   // ── Merchant: payment received ────────────────────────────────────────────────
-  merchantPaymentReceived({ amountUsdc, merchantReceivedUsdc, merchantReceivedEur, date, subscriptionId, txHash, basescanUrl, productName = null, subscriberWallet = null, subscriberEmail = null, paymentMethod = 'crypto', token = 'USDC' }) {
-    const eurStr = merchantReceivedEur ? ` (≈ €${merchantReceivedEur})` : "";
+  merchantPaymentReceived({ amountUsdc, merchantReceivedUsdc, merchantReceivedEur, date, subscriptionId, txHash, basescanUrl, productName = null, subscriberWallet = null, subscriberEmail = null, paymentMethod = 'crypto', token = 'USDC', fiatCurrency = 'EUR' }) {
+    const eurStr = merchantReceivedEur ? ` (≈ ${merchantReceivedEur} ${fiatCurrency})` : "";
     const isFiat = paymentMethod === 'card';
     const body = `
       <p style="margin:0 0 20px;color:#0f172a;">A subscription payment has been collected.</p>
 
       <div class="amount-box">
         <p class="amount-label">You received</p>
-        <p class="amount-value">${isFiat ? `€${merchantReceivedEur || merchantReceivedUsdc}` : `$${merchantReceivedUsdc} ${token}${eurStr}`}</p>
+        <p class="amount-value">${isFiat ? `${merchantReceivedEur || merchantReceivedUsdc} ${fiatCurrency}` : `$${merchantReceivedUsdc} ${token}${eurStr}`}</p>
         <p class="amount-sub">${date}</p>
       </div>
 

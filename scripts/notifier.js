@@ -23,6 +23,7 @@ const { ethers } = require("ethers");
 const { Resend }  = require("resend");
 const db          = require("./db");
 const { dispatchWebhook } = require("./webhook");
+const { templates }       = require("./email-templates");
 
 if (!process.env.VAULT_ADDRESS) {
   console.error("FATAL: VAULT_ADDRESS env var is not set — refusing to start with a stale fallback address");
@@ -114,7 +115,7 @@ function formatUsdc(raw) {
 async function sendEmail({ to, subject, html, text }) {
   if (!resend) { console.warn("[NOTIFIER] RESEND_API_KEY not set — skipping email"); return; }
   try {
-    await resend.emails.send({ from: "AuthOnce <notifications@authonce.io>", to, subject, html, text });
+    await resend.emails.send({ from: "AuthOnce <noreply@authonce.io>", replyTo: "support@authonce.io", to, subject, html, text });
     console.log(`[EMAIL] Sent to ${to}: ${subject}`);
   } catch (err) {
     console.error(`[EMAIL] Failed to send to ${to}:`, err.message);
@@ -206,18 +207,11 @@ async function checkUpcomingPayments(vault) {
       // Email subscriber
       const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
       if (subscriber?.email) {
+        const reminderTpl = templates.paymentReminder({ name: subscriber.name, merchantName, amountUsdc, nextDate, daysUntil });
         await sendEmail({
           to: subscriber.email,
-          subject: `Payment reminder: $${amountUsdc} due ${daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`}`,
-          html: `
-            <p>Hi ${subscriber.name || "there"},</p>
-            <p>Your <strong>${merchantName}</strong> subscription payment of <strong>$${amountUsdc} USDC</strong> is due on <strong>${nextDate}</strong>.</p>
-            <p>Make sure your wallet has sufficient USDC to avoid interruption.</p>
-            <p>You can manage your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
-            <hr/>
-            <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol · <a href="https://authonce.io">authonce.io</a></p>
-          `,
-          text: `Your ${merchantName} subscription payment of $${amountUsdc} USDC is due on ${nextDate}. Make sure your wallet has sufficient USDC.`,
+          subject: templates.subjects.paymentReminder(amountUsdc, daysUntil),
+          ...reminderTpl,
         });
       }
 
@@ -285,19 +279,8 @@ async function checkPriceChangeNotices(vault) {
       // Email subscriber
       const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
       if (subscriber?.email) {
-        await sendEmail({
-          to: subscriber.email,
-          subject: `Important: Your ${merchantName} subscription is changing on ${expiryDate}`,
-          html: `
-            <p>Hi ${subscriber.name || "there"},</p>
-            <p>Your <strong>${merchantName}</strong> subscription will be changing on <strong>${expiryDate}</strong> (in ${daysUntil} days).</p>
-            <p>Your current price of <strong>$${amountUsdc} USDC</strong> will change after this date.</p>
-            <p>If you'd like to cancel before the change, visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
-            <hr/>
-            <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol · <a href="https://authonce.io">authonce.io</a></p>
-          `,
-          text: `Your ${merchantName} subscription price will change on ${expiryDate}. Current price: $${amountUsdc} USDC. Cancel at authonce.io/my-subscriptions if needed.`,
-        });
+        const priceTpl = templates.priceChangeNotice({ name: subscriber.name, merchantName, amountUsdc, expiryDate, daysUntil });
+        await sendEmail({ to: subscriber.email, subject: templates.subjects.priceChangeNotice(merchantName, expiryDate), ...priceTpl });
       }
 
       // Webhook to merchant
@@ -352,19 +335,8 @@ async function onSubscriptionCreated(log, iface) {
   if (subscriber?.email) {
     const merchantName = await getMerchantName(merchant);
     const amountUsdc   = (Number(amount) / 1e6).toFixed(2);
-    await sendEmail({
-      to: subscriber.email,
-      subject: `Subscription confirmed — ${merchantName}`,
-      html: `
-        <p>Hi ${subscriber.name || "there"},</p>
-        <p>Your subscription to <strong>${merchantName}</strong> is now active.</p>
-        <p>Amount: <strong>$${amountUsdc} USDC / ${INTERVAL_NAME[interval]}</strong></p>
-        <p>Manage your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
-      `,
-      text: `Your ${merchantName} subscription of $${amountUsdc} USDC/${INTERVAL_NAME[interval]} is now active.`,
-    });
+    const confirmedTpl2 = templates.subscriptionConfirmed({ name: subscriber.name, merchantName, amountUsdc, interval: INTERVAL_NAME[interval], trialDays: 0, gracePeriodDays: 7 });
+    await sendEmail({ to: subscriber.email, subject: templates.subjects.subscriptionConfirmed(merchantName), ...confirmedTpl2 });
   }
 
   await dispatchWebhook(merchant, "subscription.created", {
@@ -456,38 +428,25 @@ async function onPaymentExecuted(log, iface) {
   if (subscriber?.email) {
     const merchantName = await getMerchantName(sub.merchant_address);
     const amountUsdc   = (Number(amount) / 1e6).toFixed(2);
-    await sendEmail({
-      to: subscriber.email,
-      subject: `Payment processed — $${amountUsdc} USDC to ${merchantName}`,
-      html: `
-        <p>Hi ${subscriber.name || "there"},</p>
-        <p>Your subscription payment of <strong>$${amountUsdc} USDC</strong> to <strong>${merchantName}</strong> was processed successfully.</p>
-        <p>Date: ${new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
-        <p>View your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="${BASESCAN_URL}/tx/${log.transactionHash}">View on Basescan</a></p>
-      `,
-      text: `Payment of $${amountUsdc} USDC to ${merchantName} processed. Tx: ${log.transactionHash}`,
-    });
+    const receiptDate = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const receiptTpl  = templates.paymentReceipt({ name: subscriber.name, merchantName, amountUsdc, date: receiptDate, txHash: log.transactionHash, basescanUrl: BASESCAN_URL });
+    await sendEmail({ to: subscriber.email, subject: templates.subjects.paymentReceipt(amountUsdc, merchantName, tokenSymbol), ...receiptTpl });
   }
 
   // Email merchant receipt
   const merchantEmail = await getMerchantEmail(sub.merchant_address);
   if (merchantEmail) {
-    const amountUsdc   = (Number(amount) / 1e6).toFixed(2);
-    const eurStr       = merchantReceivedEur ? ` (≈ €${merchantReceivedEur})` : "";
-    await sendEmail({
-      to: merchantEmail,
-      subject: `Payment received — $${amountUsdc} USDC`,
-      html: `
-        <p>A subscription payment of <strong>$${amountUsdc} USDC${eurStr}</strong> was collected successfully.</p>
-        <p>Date: ${new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
-        <p><a href="${BASESCAN_URL}/tx/${log.transactionHash}">View transaction on Basescan</a></p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
-      `,
-      text: `Payment of $${amountUsdc} USDC${eurStr} received. Tx: ${log.transactionHash}`,
+    const merchantPayDate = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const merchantPayTpl  = templates.merchantPaymentReceived({
+      amountUsdc: amountUsdc.toString(), merchantReceivedUsdc: merchantReceivedUsdc.toString(),
+      merchantReceivedEur: merchantFiatAmount || merchantReceivedEur,
+      date: merchantPayDate, subscriptionId: id.toString(),
+      txHash: log.transactionHash, basescanUrl: BASESCAN_URL,
+      productName: sub.product_name || null, subscriberWallet: sub.owner_address || null,
+      subscriberEmail: subscriber?.email || null, token: tokenSymbol,
+      fiatCurrency: merchantCurrency.toUpperCase(),
     });
+    await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantPaymentReceived(merchantReceivedUsdc, tokenSymbol), ...merchantPayTpl });
   }
 
   await dispatchWebhook(sub.merchant_address, "payment.success", {
@@ -533,13 +492,12 @@ async function onInsufficientFunds(log, iface) {
     const requiredUsdc  = (Number(required) / 1e6).toFixed(2);
     const availableUsdc = (Number(available) / 1e6).toFixed(2);
     const graceDate     = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
-    await sendEmail({
-      to: subscriber.email,
-      subject: `Action required: Payment failed for ${merchantName}`,
-      html: `
-        <p>Hi ${subscriber.name || "there"},</p>
-        <p>Your payment of <strong>$${requiredUsdc} USDC</strong> to <strong>${merchantName}</strong> failed because your wallet only has <strong>$${availableUsdc} USDC</strong>.</p>
-        <p>Please top up your wallet before <strong>${graceDate}</strong> to keep your subscription active.</p>
+    const fundsTpl2 = templates.paymentFailedFunds({ name: subscriber.name, merchantName, requiredUsdc, availableUsdc, graceDate });
+    await sendEmail({ to: subscriber.email, subject: templates.subjects.paymentFailedFunds(merchantName), ...fundsTpl2 });
+    if (false) { await sendEmail({ to: subscriber.email, subject: "", html: `
+        <p>REPLACED</p>
+        <p>REPLACED</p>
+        <p>REPLACED</p>
         <p>Manage your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
@@ -553,13 +511,12 @@ async function onInsufficientFunds(log, iface) {
   if (merchantEmail) {
     const requiredUsdc = (Number(required) / 1e6).toFixed(2);
     const graceDate    = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    await sendEmail({
-      to: merchantEmail,
-      subject: `Payment failed — subscriber needs to top up`,
-      html: `
-        <p>A subscriber's payment of <strong>$${requiredUsdc} USDC</strong> failed due to insufficient funds.</p>
-        <p>Their subscription has entered a grace period and will retry automatically. If the subscriber does not top up before <strong>${graceDate}</strong>, the subscription will expire.</p>
-        <p>The subscriber has been notified.</p>
+    const fundsMerchantTpl2 = templates.merchantPaymentFailed({ requiredUsdc, graceDate, reason: "insufficient_funds", subscriptionId: id.toString(), productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: subscriber?.email || null });
+    await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantPaymentFailed(), ...fundsMerchantTpl2 });
+    if (false) { await sendEmail({ to: merchantEmail, subject: "", html: `
+        <p>REPLACED</p>
+        <p>REPLACED</p>
+        <p>REPLACED</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
       `,
@@ -596,13 +553,12 @@ async function onInsufficientAllowance(log, iface) {
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
   if (subscriber?.email) {
     const merchantName = await getMerchantName(sub.merchant_address);
-    await sendEmail({
-      to: subscriber.email,
-      subject: `Action required: USDC approval expired for ${merchantName}`,
-      html: `
-        <p>Hi ${subscriber.name || "there"},</p>
-        <p>Your USDC approval for <strong>${merchantName}</strong> has expired or was insufficient.</p>
-        <p>Please re-approve your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
+    const allowTpl2 = templates.paymentFailedAllowance({ name: subscriber.name, merchantName });
+    await sendEmail({ to: subscriber.email, subject: templates.subjects.paymentFailedAllowance(merchantName), ...allowTpl2 });
+    if (false) { await sendEmail({ to: subscriber.email, subject: "", html: `
+        <p>REPLACED</p>
+        <p>REPLACED</p>
+        <p>REPLACED</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
@@ -613,12 +569,11 @@ async function onInsufficientAllowance(log, iface) {
   // Email merchant
   const merchantEmail = await getMerchantEmail(sub.merchant_address);
   if (merchantEmail) {
-    await sendEmail({
-      to: merchantEmail,
-      subject: `Payment failed — subscriber approval expired`,
-      html: `
-        <p>A subscriber's USDC approval has expired or was insufficient.</p>
-        <p>Their subscription has been paused. The subscriber has been notified and asked to re-approve.</p>
+    const allowMerchantTpl2 = templates.merchantPaymentFailed({ requiredUsdc: sub.amount ? (Number(sub.amount) / 1e6).toFixed(2) : "0.00", graceDate: "see dashboard", reason: "insufficient_allowance", subscriptionId: id.toString(), productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: null });
+    await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantPaymentFailed(), ...allowMerchantTpl2 });
+    if (false) { await sendEmail({ to: merchantEmail, subject: "", html: `
+        <p>REPLACED</p>
+        <p>REPLACED</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
       `,
@@ -666,12 +621,11 @@ async function onSubscriptionCancelled(log, iface) {
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
   if (subscriber?.email) {
     const merchantName = await getMerchantName(sub.merchant_address);
-    await sendEmail({
-      to: subscriber.email,
-      subject: `Subscription cancelled — ${merchantName}`,
-      html: `
-        <p>Hi ${subscriber.name || "there"},</p>
-        <p>Your subscription to <strong>${merchantName}</strong> has been cancelled. No further payments will be collected.</p>
+    const cancelledTpl = templates.subscriptionCancelled({ name: subscriber.name, merchantName });
+    await sendEmail({ to: subscriber.email, subject: templates.subjects.subscriptionCancelled(merchantName), ...cancelledTpl });
+    // REPLACED_CANCEL_SUB
+    if (false) { await sendEmail({ to: subscriber.email, subject: "", html: `
+        <p>REPLACED</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
@@ -705,13 +659,11 @@ async function onSubscriptionExpired(log, iface) {
   if (subscriber?.email) {
     const merchantName = await getMerchantName(sub.merchant_address);
     const expiredDate  = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    await sendEmail({
-      to: subscriber.email,
-      subject: `Subscription expired — ${merchantName}`,
-      html: `
-        <p>Hi ${subscriber.name || "there"},</p>
-        <p>Your subscription to <strong>${merchantName}</strong> expired on <strong>${expiredDate}</strong> because the grace period ended without a successful payment.</p>
-        <p>If you'd like to resubscribe, visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
+    const expiredSubTpl = templates.subscriptionExpired({ name: subscriber.name, merchantName, expiredDate });
+    await sendEmail({ to: subscriber.email, subject: templates.subjects.subscriptionExpired(merchantName), ...expiredSubTpl });
+    if (false) { await sendEmail({ to: subscriber.email, subject: "", html: `
+        <p>REPLACED_EXPIRED_SUB</p>
+        <p>REPLACED</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
@@ -723,12 +675,11 @@ async function onSubscriptionExpired(log, iface) {
   const merchantEmail = await getMerchantEmail(sub.merchant_address);
   if (merchantEmail) {
     const expiredDate = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    await sendEmail({
-      to: merchantEmail,
-      subject: `Subscription expired — grace period ended`,
-      html: `
-        <p>A subscriber's subscription expired on <strong>${expiredDate}</strong> after the grace period ended without a successful payment.</p>
-        <p>No further payments will be collected for this subscription.</p>
+    const expiredMerchantTpl = templates.merchantExpired({ subscriptionId: id.toString(), expiredDate, productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: subscriber?.email || null });
+    await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantExpired(), ...expiredMerchantTpl });
+    if (false) { await sendEmail({ to: merchantEmail, subject: "", html: `
+        <p>REPLACED_EXPIRED_MERCHANT</p>
+        <p>REPLACED</p>
         <hr/>
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
       `,
