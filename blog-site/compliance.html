@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USDC Subscription Billing Compliance: Why No CASP or VASP License Is Required | AuthOnce</title>
+<meta name="description" content="AuthOnce's software-only legal posture explained. How BSL 1.1 licensing, non-custody, and protocol architecture eliminate CASP and VASP regulatory exposure.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="USDC Subscription Billing Compliance: Why No CASP License Is Required">
+<meta property="og:image" content="https://authonce.io/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://authonce.io/og-image.png">
+<meta property="og:type" content="article"><meta property="og:url" content="https://blog.authonce.io/compliance">
+<link rel="canonical" href="https://blog.authonce.io/compliance">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"USDC Subscription Billing Compliance: Why No CASP or VASP License Is Required","description":"AuthOnce's software-only legal posture. How BSL 1.1 licensing and non-custody eliminate CASP and VASP regulatory exposure.","author":{"@type":"Organization","name":"AuthOnce"},"publisher":{"@type":"Organization","name":"AuthOnce","url":"https://authonce.io"},"datePublished":"2026-06-20","dateModified":"2026-06-20","mainEntityOfPage":{"@type":"WebPage","@id":"https://blog.authonce.io/compliance"},"keywords":["CASP license","VASP license","crypto billing compliance","non-custodial compliance","BSL license","software-only crypto","MiCA compliance","Base Network compliance"]}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}:root{--ink:#0D0F14;--ink-2:#3A3D47;--ink-3:#7A7E8C;--rule:#E8E9ED;--surface:#F6F7F9;--white:#FFFFFF;--base-blue:#0052FF;--base-dim:#E8EEFF}html{font-size:16px;scroll-behavior:smooth}body{font-family: 'DM Sans', system-ui, sans-serif;background:var(--white);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6}
+nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 2rem;height:60px;display:flex;align-items:center;justify-content:space-between}.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}.nav-logo{width:28px;height:28px;background:var(--base-blue);border-radius:6px;display:flex;align-items:center;justify-content:center}.nav-logo span{color:white;font-weight:700;font-size:14px;font-family: 'DM Sans', sans-serif;font-weight:700;font-size:17px;letter-spacing:-0.02em}.nav-brand-text em{color:var(--base-blue);font-style:normal}.nav-links{display:flex;align-items:center;gap:2rem}.nav-links a{text-decoration:none;color:var(--ink-2);font-size:14px;font-weight:500}.nav-links a:hover{color:var(--base-blue)}.nav-cta{background:var(--base-blue);color:white;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none}
+.article-layout{max-width:1160px;margin:0 auto;padding:60px 2rem;display:grid;grid-template-columns:1fr 300px;gap:64px;align-items:start}.article-header{margin-bottom:40px}.breadcrumb{display:flex;align-items:center;gap:8px;margin-bottom:20px}.breadcrumb a{font-size:13px;color:var(--ink-3);text-decoration:none}.breadcrumb span{color:var(--rule)}.article-tag{display:inline-block;background:#FFF8E8;color:#92400E;padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}.article-header h1{font-family: 'DM Sans', sans-serif;font-size:clamp(1.75rem,4vw,2.5rem);font-weight:800;letter-spacing:-0.03em;color:var(--ink);line-height:1.1;margin-bottom:20px}.article-meta{display:flex;align-items:center;gap:20px;flex-wrap:wrap}.article-meta span{font-size:13px;color:var(--ink-3)}.article-meta strong{color:var(--ink-2)}
+.article-body{font-size:1.025rem;line-height:1.8;color:var(--ink-2)}.article-body h2{font-family: 'DM Sans', sans-serif;font-size:1.4rem;font-weight:700;letter-spacing:-0.02em;color:var(--ink);margin:48px 0 16px}.article-body p{margin-bottom:20px}.article-body strong{color:var(--ink);font-weight:600}
+.ilink{color:var(--base-blue);text-decoration:none;font-weight:500;border-bottom:1px solid rgba(0,82,255,.3)}.ilink:hover{border-color:var(--base-blue)}
+.callout{border-left:3px solid var(--base-blue);background:var(--base-dim);padding:20px 24px;border-radius:0 10px 10px 0;margin:32px 0}.callout-title{font-size:11px;font-weight:700;color:var(--base-blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}.callout p{margin:0;font-size:.9rem;color:var(--ink-2)}
+.legal-disclaimer{background:#FFF8E8;border:1px solid #FDE68A;border-radius:12px;padding:20px 24px;margin:28px 0}.legal-disclaimer-title{font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}.legal-disclaimer p{margin:0;font-size:.875rem;color:#78350F}
+.posture-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:28px 0}.posture-card{background:var(--surface);border-radius:12px;padding:20px;border-left:3px solid var(--base-blue)}.posture-card h4{font-weight:700;color:var(--ink);font-size:.9rem;margin-bottom:8px}.posture-card p{font-size:.85rem;color:var(--ink-2);margin:0;line-height:1.6}
+.related-inline{background:var(--surface);border-radius:12px;padding:24px;margin:40px 0}.related-inline h4{font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px}.related-links{display:flex;flex-direction:column;gap:8px}.related-links a{font-size:.9rem;color:var(--ink-2);text-decoration:none;display:flex;align-items:center;gap:8px}.related-links a::before{content:'→';color:var(--base-blue);font-size:.8rem}.related-links a:hover{color:var(--base-blue)}
+.article-cta{background:var(--ink);border-radius:16px;padding:40px;margin-top:60px;text-align:center}.article-cta h3{font-family: 'DM Sans', sans-serif;font-size:1.4rem;font-weight:800;color:white;margin-bottom:10px}.article-cta p{color:rgba(255,255,255,.6);font-size:.9rem;margin-bottom:24px}.article-cta-btns{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}.btn-blue{background:var(--base-blue);color:white;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none}.btn-ghost{border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);padding:12px 24px;border-radius:10px;font-size:14px;text-decoration:none;font-weight:500}
+.sidebar{position:sticky;top:80px}.sidebar-card{background:var(--surface);border-radius:14px;padding:24px;margin-bottom:20px}.sidebar-card h4{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px}.toc-list{list-style:none;display:flex;flex-direction:column;gap:4px}.toc-list a{font-size:.85rem;color:var(--ink-2);text-decoration:none;padding:5px 0;border-bottom:1px solid var(--rule);display:block}.toc-list a:hover{color:var(--base-blue)}.toc-list li:last-child a{border-bottom:none}.sidebar-cta{background:var(--base-blue);border-radius:14px;padding:24px;text-align:center}.sidebar-cta h4{font-family: 'DM Sans', sans-serif;font-size:1rem;font-weight:700;color:white;margin-bottom:8px}.sidebar-cta p{font-size:.8rem;color:rgba(255,255,255,.7);margin-bottom:16px;line-height:1.5}.sidebar-btn{display:block;background:white;color:var(--base-blue);padding:10px;border-radius:8px;font-weight:600;font-size:13px;text-decoration:none}.related-card-list{display:flex;flex-direction:column;gap:12px}.related-card-item{text-decoration:none;display:block;padding:12px;background:white;border-radius:10px;border:1px solid var(--rule);transition:border-color .15s}.related-card-item:hover{border-color:var(--base-blue)}.related-card-item .rtag{font-size:10px;font-weight:700;color:var(--base-blue);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}.related-card-item .rtitle{font-size:.85rem;font-weight:600;color:var(--ink);line-height:1.3}
+footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}.footer-brand{font-family: 'DM Sans', sans-serif;font-weight:700;color:var(--ink)}.footer-brand em{color:var(--base-blue);font-style:normal}.footer-links{display:flex;gap:20px}.footer-links a{font-size:13px;color:var(--ink-3);text-decoration:none}.footer-note{font-size:12px;color:var(--ink-3)}
+@media(max-width:768px){nav{padding:0 1rem}.nav-links{display:none}.article-layout{grid-template-columns:1fr;padding:32px 1rem}.sidebar{display:none}.posture-grid{grid-template-columns:1fr}}
+</style>
+<link rel="icon" type="image/x-icon" href="https://authonce.io/favicon.ico">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5NE0QK40WZ');
+</script>
+</head>
+<body>
+<nav><a href="index.html" class="nav-brand"><div class="nav-logo"><span>A</span></div><span class="nav-brand-text">Auth<em>Once</em> Blog</span></a><div class="nav-links"><a href="index.html#guides">Guides</a><a href="index.html#developer">Developer</a><a href="index.html#dao">DAO & Web3</a><a href="https://authonce.io">← AuthOnce</a><a href="https://authonce.io" class="nav-cta">Start Free</a></div></nav>
+<div class="article-layout">
+  <article>
+    <header class="article-header">
+      <nav class="breadcrumb"><a href="index.html">Blog</a><span>/</span><a href="index.html#guides">Compliance</a><span>/</span><span>No CASP Required</span></nav>
+      <span class="article-tag">Compliance · Legal Posture</span>
+      <h1>USDC Subscription Billing Compliance: Why No CASP or VASP License Is Required</h1>
+      <div class="article-meta"><span>By <strong>AuthOnce</strong></span><span>·</span><span>June 20, 2026</span><span>·</span><span>6 min read</span></div>
+    </header>
+    <div class="article-body">
+      <div class="legal-disclaimer"><div class="legal-disclaimer-title">Not Legal Advice</div><p>This article describes AuthOnce's design rationale and general compliance posture. It is not legal advice. Merchants should consult qualified legal counsel for their specific jurisdiction and use case before deploying billing infrastructure.</p></div>
+
+      <p>One of the most common questions we receive from merchants and developers evaluating AuthOnce is about regulatory exposure. Does operating a USDC subscription billing protocol require a Crypto Asset Service Provider (CASP) license under MiCA? Does it trigger VASP registration requirements? The answer, by design, is no — and this article explains the architectural decisions that make that true.</p>
+
+      <h2>The Two Licensing Frameworks That Matter</h2>
+      <p><strong>VASP (Virtual Asset Service Provider)</strong> — The FATF framework defines VASPs as entities that conduct exchanges, transfers, safekeeping, or financial services related to virtual assets. The trigger is providing these services as a business activity.</p>
+      <p><strong>CASP (Crypto Asset Service Provider)</strong> — Under MiCA (EU Markets in Crypto Assets regulation), CASPs are entities that provide crypto asset services including custody, exchange, transfer, and advisory services on behalf of clients.</p>
+      <p>Both frameworks share a critical threshold: they apply to entities that hold, transfer, or provide services over client assets. An entity that merely provides the <strong>software tools</strong> for parties to transact directly with each other occupies a different regulatory position.</p>
+
+      <h2>AuthOnce's Software-Only Architecture</h2>
+      <p>AuthOnce is a software protocol. It publishes smart contracts on Base Network. It provides a merchant dashboard and subscriber interface. It operates a Keeper that triggers contract execution. It does not, at any point, hold, custody, or control subscriber or merchant funds.</p>
+
+      <div class="posture-grid">
+        <div class="posture-card"><h4>Non-Custodial By Design</h4><p>Funds move directly from subscriber wallet to merchant wallet via on-chain smart contract execution. AuthOnce never holds funds in transit or in escrow.</p></div>
+        <div class="posture-card"><h4>No Fiat Touchpoints</h4><p>AuthOnce does not convert, receive, or transmit fiat currency. All protocol activity is USDC on Base Network. Fiat settlement where applicable is offloaded to a licensed payment processor.</p></div>
+        <div class="posture-card"><h4>BSL 1.1 Licensed Contracts</h4><p>Protocol contracts are published under Business Source License 1.1. The license protects the codebase while allowing independent verification of protocol mechanics.</p></div>
+        <div class="posture-card"><h4>Open Execution Flow</h4><p>The Keeper triggers <a href="eip2612-explained.html" class="ilink">EIP-2612 permit</a> execution but does not authorize or approve transfers. Authorization comes from the subscriber's cryptographic signature — executed by the USDC smart contract directly.</p></div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">The Key Distinction</div>
+        <p>CASP and VASP licensing applies to entities providing services <em>over</em> crypto assets on behalf of clients. Providing open-source software infrastructure that enables parties to transact directly on-chain occupies a categorically different position — analogous to a wallet software provider rather than an exchange or custodian.</p>
+      </div>
+
+      <h2>Why Non-Custody Is the Legal Foundation</h2>
+      <p>The most important regulatory threshold in both FATF and MiCA frameworks is custody. An entity that controls or holds client assets is providing a custody service and is squarely within regulatory scope. An entity that provides software tools for users to control their own assets does not cross this threshold — provided the software genuinely does not control or access funds independently.</p>
+      <p>In AuthOnce's architecture, the subscriber controls their USDC at all times until the moment of authorized execution. The <a href="what-is-noncustodial-billing.html" class="ilink">non-custodial design</a> means no AuthOnce-controlled address ever holds subscriber funds. The Keeper triggers contract execution but cannot redirect funds — the smart contract enforces the recipient address as the merchant's registered wallet, hardcoded at subscription creation.</p>
+
+      <h2>Fiat Offloading Architecture</h2>
+      <p>Where AuthOnce operates a fiat onramp, the fiat settlement flow is handled entirely by a licensed payment processor. This cleanly separates the on-chain crypto subscription billing (AuthOnce's domain, software-only) from any fiat money transmission (the processor's domain, fully licensed). The architectural decision to route fiat flows through a regulated intermediary eliminates any ambiguity about AuthOnce operating as a payment service provider in the fiat dimension.</p>
+
+      <h2>BSL 1.1 Licensing</h2>
+      <p>The Business Source License 1.1 governing AuthOnce's smart contracts serves two functions: it protects the protocol from unauthorized commercial forks in the near term, and it provides full code transparency for audit, verification, and regulatory review. Any regulator, auditor, or merchant can read the complete protocol logic via the <a href="https://authonce.io" class="ilink">AuthOnce developer portal</a> and verify that the custody claims above are accurate at the contract level. Protocol transparency is itself a compliance tool.</p>
+
+      <h2>Pre-Mainnet Safety Cap</h2>
+      <p>During the pre-audit period, AuthOnce enforces a $200 per-transaction cap hardcoded in the protocol. This is a risk management measure, not a regulatory requirement — it limits potential impact of any undiscovered contract vulnerability before the formal security audit is complete. The cap will be reviewed and potentially raised at mainnet launch following audit completion.</p>
+
+      <div class="related-inline">
+        <h4>Related Reading</h4>
+        <div class="related-links">
+          <a href="what-is-noncustodial-billing.html">Non-custodial billing architecture explained</a>
+          <a href="eip2612-explained.html">EIP-2612: subscriber-controlled authorization</a>
+          <a href="base-network-subscriptions.html">Why Base Network for protocol deployment</a>
+          <a href="integration-guide.html">Merchant integration guide</a>
+        </div>
+      </div>
+
+      <div class="article-cta">
+        <h3>Deploy with confidence</h3>
+        <p>Software-only protocol. Non-custodial. BSL 1.1 licensed. Full code transparency on GitHub.</p>
+        <div class="article-cta-btns"><a href="https://authonce.io" class="btn-blue">Start with AuthOnce</a><a href="https://github.com/authonce-protocol" class="btn-ghost">Read the Code →</a></div>
+      </div>
+    </div>
+  </article>
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <h4>Table of Contents</h4>
+      <ul class="toc-list">
+        <li><a href="#">VASP vs CASP frameworks</a></li>
+        <li><a href="#">Software-only architecture</a></li>
+        <li><a href="#">Non-custody as legal foundation</a></li>
+        <li><a href="#">Fiat offloading architecture</a></li>
+        <li><a href="#">BSL 1.1 licensing</a></li>
+        <li><a href="#">Pre-mainnet safety cap</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-cta">
+      <h4>Software-only. No license required.</h4>
+      <p>Non-custodial architecture. BSL 1.1. Full on-chain transparency.</p>
+      <a href="https://authonce.io" class="sidebar-btn">Get Started →</a>
+    </div>
+    <div class="sidebar-card">
+      <h4>Related Articles</h4>
+      <div class="related-card-list">
+        <a href="what-is-noncustodial-billing.html" class="related-card-item"><div class="rtag">Merchant</div><div class="rtitle">Non-Custodial Billing Explained</div></a>
+        <a href="eip2612-explained.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">EIP-2612 Explained</div></a>
+        <a href="integration-guide.html" class="related-card-item"><div class="rtag">Merchant</div><div class="rtitle">Integration Guide</div></a>
+        <a href="real-cost-custodial.html" class="related-card-item"><div class="rtag">DAO Treasury</div><div class="rtitle">Real Cost of Custodial Billing</div></a>
+      </div>
+    </div>
+  </aside>
+</div>
+<footer><span class="footer-brand">Auth<em>Once</em></span><div class="footer-links"><a href="index.html">Blog</a><a href="https://authonce.io">Protocol</a><a href="https://github.com/authonce-protocol">GitHub</a><a href="complete-guide.html">Complete Guide</a></div><span class="footer-note">© 2026 AuthOnce · Built on Base Network · BSL 1.1</span></footer>
+</body>
+</html>

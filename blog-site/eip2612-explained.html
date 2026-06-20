@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EIP-2612 Explained: Gasless USDC Subscriptions Without Pre-Approvals | AuthOnce</title>
+<meta name="description" content="How EIP-2612 off-chain permit signatures replace on-chain approvals for gasless USDC subscription billing — and why this changes the economics of subscriber onboarding on Base Network.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="EIP-2612 Explained: Gasless USDC Subscriptions Without Pre-Approvals">
+<meta property="og:image" content="https://authonce.io/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://authonce.io/og-image.png">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://blog.authonce.io/eip2612-explained">
+<link rel="canonical" href="https://blog.authonce.io/eip2612-explained">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "EIP-2612 Explained: Gasless USDC Subscriptions Without Pre-Approvals",
+  "description": "How EIP-2612 off-chain permit signatures replace on-chain approvals for gasless USDC subscription billing on Base Network.",
+  "author": { "@type": "Organization", "name": "AuthOnce" },
+  "publisher": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io" },
+  "datePublished": "2026-06-20",
+  "dateModified": "2026-06-20",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://blog.authonce.io/eip2612-explained" },
+  "keywords": ["EIP-2612", "gasless USDC", "permit signature", "EIP-712", "USDC subscription", "non-custodial billing", "Base Network", "crypto subscription"]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --ink: #0D0F14; --ink-2: #3A3D47; --ink-3: #7A7E8C; --rule: #E8E9ED; --surface: #F6F7F9; --white: #FFFFFF; --base-blue: #0052FF; --base-dim: #E8EEFF; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--white); color: var(--ink); -webkit-font-smoothing: antialiased; line-height: 1.6; }
+  nav { position: sticky; top: 0; z-index: 100; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--rule); padding: 0 2rem; height: 60px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+  .nav-logo { width: 28px; height: 28px; background: var(--base-blue); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .nav-logo span { color: white; font-weight: 700; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+  .nav-brand-text { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+  .nav-brand-text em { color: var(--base-blue); font-style: normal; }
+  .nav-links { display: flex; align-items: center; gap: 2rem; }
+  .nav-links a { text-decoration: none; color: var(--ink-2); font-size: 14px; font-weight: 500; }
+  .nav-links a:hover { color: var(--base-blue); }
+  .nav-cta { background: var(--base-blue); color: white; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; }
+  .article-layout { max-width: 1160px; margin: 0 auto; padding: 60px 2rem; display: grid; grid-template-columns: 1fr 300px; gap: 64px; align-items: start; }
+  .article-header { margin-bottom: 40px; }
+  .breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  .breadcrumb a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .breadcrumb span { color: var(--rule); }
+  .article-tag { display: inline-block; background: var(--base-dim); color: var(--base-blue); padding: 5px 12px; border-radius: 100px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 16px; }
+  .article-header h1 { font-family: 'DM Sans', sans-serif; font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; color: var(--ink); line-height: 1.1; margin-bottom: 20px; }
+  .article-meta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .article-meta span { font-size: 13px; color: var(--ink-3); }
+  .article-meta strong { color: var(--ink-2); }
+  .article-body { font-size: 1.025rem; line-height: 1.8; color: var(--ink-2); }
+  .article-body h2 { font-family: 'DM Sans', sans-serif; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); margin: 48px 0 16px; }
+  .article-body h3 { font-family: 'DM Sans', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--ink); margin: 32px 0 12px; }
+  .article-body p { margin-bottom: 20px; }
+  .article-body strong { color: var(--ink); font-weight: 600; }
+  .ilink { color: var(--base-blue); text-decoration: none; font-weight: 500; border-bottom: 1px solid rgba(0,82,255,.3); }
+  .ilink:hover { border-color: var(--base-blue); }
+  .callout { border-left: 3px solid var(--base-blue); background: var(--base-dim); padding: 20px 24px; border-radius: 0 10px 10px 0; margin: 32px 0; }
+  .callout-title { font-size: 11px; font-weight: 700; color: var(--base-blue); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .callout p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+  .callout code { background: rgba(0,82,255,.12); padding: 2px 6px; border-radius: 4px; font-size: .85em; font-family: 'SF Mono', monospace; color: var(--base-blue); }
+  .flow-steps { display: flex; flex-direction: column; gap: 0; margin: 28px 0; }
+  .flow-step { display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: start; padding: 20px 0; border-bottom: 1px solid var(--rule); }
+  .flow-step:last-child { border-bottom: none; }
+  .step-num { width: 40px; height: 40px; background: var(--base-blue); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'DM Sans', sans-serif; font-weight: 800; font-size: 15px; flex-shrink: 0; margin-top: 2px; }
+  .step-content h4 { font-weight: 700; color: var(--ink); margin-bottom: 6px; font-size: .95rem; }
+  .step-content p { font-size: .875rem; color: var(--ink-2); margin: 0; line-height: 1.6; }
+  .code-block { background: var(--ink); border-radius: 12px; padding: 24px; margin: 28px 0; overflow-x: auto; }
+  .code-label { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .code-block pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .8rem; line-height: 1.7; color: rgba(255,255,255,.85); }
+  .related-inline { background: var(--surface); border-radius: 12px; padding: 24px; margin: 40px 0; }
+  .related-inline h4 { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .related-links { display: flex; flex-direction: column; gap: 8px; }
+  .related-links a { font-size: .9rem; color: var(--ink-2); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+  .related-links a::before { content: '→'; color: var(--base-blue); font-size: .8rem; }
+  .related-links a:hover { color: var(--base-blue); }
+  .article-cta { background: var(--ink); border-radius: 16px; padding: 40px; margin-top: 60px; text-align: center; }
+  .article-cta h3 { font-family: 'DM Sans', sans-serif; font-size: 1.4rem; font-weight: 800; color: white; margin-bottom: 10px; }
+  .article-cta p { color: rgba(255,255,255,.6); font-size: .9rem; margin-bottom: 24px; }
+  .article-cta-btns { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn-blue { background: var(--base-blue); color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; }
+  .btn-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.8); padding: 12px 24px; border-radius: 10px; font-size: 14px; text-decoration: none; font-weight: 500; }
+  .sidebar { position: sticky; top: 80px; }
+  .sidebar-card { background: var(--surface); border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+  .sidebar-card h4 { font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .toc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .toc-list a { font-size: .85rem; color: var(--ink-2); text-decoration: none; padding: 5px 0; border-bottom: 1px solid var(--rule); display: block; }
+  .toc-list a:hover { color: var(--base-blue); }
+  .toc-list li:last-child a { border-bottom: none; }
+  .sidebar-cta { background: var(--base-blue); border-radius: 14px; padding: 24px; text-align: center; }
+  .sidebar-cta h4 { font-family: 'DM Sans', sans-serif; font-size: 1rem; font-weight: 700; color: white; margin-bottom: 8px; }
+  .sidebar-cta p { font-size: .8rem; color: rgba(255,255,255,.7); margin-bottom: 16px; line-height: 1.5; }
+  .sidebar-btn { display: block; background: white; color: var(--base-blue); padding: 10px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; }
+  .related-card-list { display: flex; flex-direction: column; gap: 12px; }
+  .related-card-item { text-decoration: none; display: block; padding: 12px; background: white; border-radius: 10px; border: 1px solid var(--rule); transition: border-color .15s; }
+  .related-card-item:hover { border-color: var(--base-blue); }
+  .related-card-item .rtag { font-size: 10px; font-weight: 700; color: var(--base-blue); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .related-card-item .rtitle { font-size: .85rem; font-weight: 600; color: var(--ink); line-height: 1.3; }
+  footer { border-top: 1px solid var(--rule); padding: 32px 2rem; max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .footer-brand { font-family: 'DM Sans', sans-serif; font-weight: 700; color: var(--ink); }
+  .footer-brand em { color: var(--base-blue); font-style: normal; }
+  .footer-links { display: flex; gap: 20px; }
+  .footer-links a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .footer-note { font-size: 12px; color: var(--ink-3); }
+  @media (max-width: 768px) { nav { padding: 0 1rem; } .nav-links { display: none; } .article-layout { grid-template-columns: 1fr; padding: 32px 1rem; } .sidebar { display: none; } }
+</style>
+<link rel="icon" type="image/x-icon" href="https://authonce.io/favicon.ico">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5NE0QK40WZ');
+</script>
+</head>
+<body>
+<nav>
+  <a href="index.html" class="nav-brand"><div class="nav-logo"><span>A</span></div><span class="nav-brand-text">Auth<em>Once</em> Blog</span></a>
+  <div class="nav-links"><a href="index.html#guides">Guides</a><a href="index.html#developer">Developer</a><a href="index.html#dao">DAO & Web3</a><a href="https://authonce.io">← AuthOnce</a><a href="https://authonce.io" class="nav-cta">Start Free</a></div>
+</nav>
+<div class="article-layout">
+  <article>
+    <header class="article-header">
+      <nav class="breadcrumb"><a href="index.html">Blog</a><span>/</span><a href="index.html#developer">Developer</a><span>/</span><span>EIP-2612 Explained</span></nav>
+      <span class="article-tag">Developer · Protocol</span>
+      <h1>EIP-2612 Explained: Gasless USDC Subscriptions Without Pre-Approvals</h1>
+      <div class="article-meta"><span>By <strong>AuthOnce</strong></span><span>·</span><span>June 20, 2026</span><span>·</span><span>7 min read</span></div>
+    </header>
+    <div class="article-body">
+      <p>Standard ERC-20 token flows have a well-known friction problem. To authorize a smart contract to spend tokens on your behalf, you must submit an <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">approve()</code> transaction on-chain. That transaction costs gas. It requires the user to have ETH in their wallet before they have done anything else. It adds a step that breaks subscription onboarding UX before the user has even confirmed they want to subscribe.</p>
+      <p>EIP-2612 solves this entirely. It replaces the on-chain approval transaction with an off-chain signed message — zero gas, zero pre-funding requirement, cryptographically equivalent security. AuthOnce builds its entire authorization model on EIP-2612 permits, making subscriber onboarding gasless from day one.</p>
+
+      <h2>The Problem With Standard ERC-20 Approvals</h2>
+      <p>Before EIP-2612, every USDC subscription protocol faced the same UX problem. A subscriber wanting to authorize recurring billing had to:</p>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="step-num">1</div><div class="step-content"><h4>Fund their wallet with ETH</h4><p>Before doing anything, the subscriber needs ETH to pay gas — even if they only want to pay in USDC. This is a hard barrier for new crypto users.</p></div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-content"><h4>Submit an approve() transaction</h4><p>The subscriber sends an on-chain transaction authorizing the billing contract to pull USDC. This transaction costs gas and takes time to confirm.</p></div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-content"><h4>Confirm the subscription</h4><p>Only after approval confirmation can the subscription actually start. Two transactions, two gas fees, two confirmation waits — before the first payment.</p></div></div>
+      </div>
+      <p>This two-transaction flow kills conversion. Users unfamiliar with blockchain patterns abandon at the approval step. EIP-2612 eliminates steps 1 and 2 entirely.</p>
+
+      <h2>How EIP-2612 Works</h2>
+      <p>EIP-2612 introduces a <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">permit()</code> function to ERC-20 tokens. Instead of submitting an on-chain <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">approve()</code> transaction, the user signs a structured message off-chain using EIP-712 typed data. This signature encodes:</p>
+      <ul style="margin: 0 0 20px 24px; display:flex; flex-direction:column; gap:8px;">
+        <li><strong>Owner</strong> — the subscriber's wallet address</li>
+        <li><strong>Spender</strong> — the AuthOnce SubscriptionVault contract address</li>
+        <li><strong>Value</strong> — the maximum permitted USDC amount</li>
+        <li><strong>Deadline</strong> — the timestamp after which the permit is invalid</li>
+        <li><strong>Nonce</strong> — prevents replay attacks</li>
+        <li><strong>v, r, s</strong> — the ECDSA signature components</li>
+      </ul>
+      <p>The signature is stored off-chain by the AuthOnce Keeper. On each billing cycle, the Keeper submits the permit signature alongside <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">executePull()</code>. The USDC contract verifies the signature on-chain and executes the transfer atomically.</p>
+
+      <div class="callout">
+        <div class="callout-title">Security Model</div>
+        <p>The permit signature only authorizes transfers to the specific <code>spender</code> address (SubscriptionVault). It cannot be used to transfer tokens to any other address. The <code>deadline</code> field ensures signatures expire and cannot be replayed indefinitely. The <code>nonce</code> ensures each permit can only be used once in its authorized form.</p>
+      </div>
+
+      <div class="code-block">
+        <div class="code-label">EIP-2612 Permit Signature — Subscriber Side (simplified)</div>
+        <pre>// Subscriber signs this off-chain. Zero gas. Zero transactions.
+const permit = {
+  owner: subscriberAddress,
+  spender: SUBSCRIPTION_VAULT_ADDRESS,
+  value: ethers.utils.parseUnits(monthlyAmount, 6), // USDC has 6 decimals
+  nonce: await usdc.nonces(subscriberAddress),
+  deadline: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60 // 1 year
+};
+
+const signature = await subscriber._signTypedData(
+  { name: 'USD Coin', version: '2', chainId: 8453, verifyingContract: USDC_ADDRESS },
+  { Permit: [
+    { name: 'owner', type: 'address' },
+    { name: 'spender', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' }
+  ]},
+  permit
+);
+
+// Keeper stores { permit, signature } off-chain.
+// No on-chain transaction at authorization. Zero gas for subscriber.</pre>
+      </div>
+
+      <h2>How AuthOnce Uses the Permit at Execution Time</h2>
+      <p>When the Keeper runs <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">executePull()</code> on each billing cycle, it submits the stored permit signature alongside the pull request. SubscriptionVault calls <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">USDC.permit()</code> to validate and execute the approval atomically within the same transaction as the transfer. The subscriber's USDC moves directly to the merchant wallet. The 0.5% protocol fee is deducted atomically.</p>
+      <p>The entire pull — authorization verification, transfer, and fee — happens in a single on-chain transaction. The subscriber signed once. They pay zero gas for the subscription authorization. The Keeper pays the (sub-cent) gas for execution on <a href="base-network-subscriptions.html" class="ilink">Base Network</a>.</p>
+
+      <h2>Permit Revocation: Subscriber Control</h2>
+      <p>A subscriber can cancel at any time by revoking the permit. This is done by incrementing their nonce on the USDC contract — which invalidates all outstanding permits from that address to the SubscriptionVault. The Keeper detects the nonce change on the next execution attempt and transitions the subscription to Cancelled state. No merchant cooperation required. Revocation is unilateral and immediate.</p>
+      <p>This is a critical subscriber protection. Unlike custodial billing where cancellation requires a merchant to stop charging, <a href="what-is-noncustodial-billing.html" class="ilink">non-custodial billing</a> gives subscribers cryptographic control over their own authorization. A subscriber can always stop payments — even if the merchant does not cooperate.</p>
+
+      <div class="related-inline">
+        <h4>Related Reading</h4>
+        <div class="related-links">
+          <a href="grace-periods.html">How permit signatures interact with grace period logic</a>
+          <a href="ai-agent-payments.html">ERC-1271: extending permit authorization to AI agents</a>
+          <a href="base-network-subscriptions.html">Why Base Network for gasless USDC subscriptions</a>
+          <a href="what-is-noncustodial-billing.html">Non-custodial billing explained for merchants</a>
+        </div>
+      </div>
+
+      <h2>ERC-1271: Extending to Smart Contract Wallets</h2>
+      <p>Standard EIP-2612 handles EOA (Externally Owned Account) signatures. For smart contract wallets — Safe multisigs, ERC-4337 accounts, and AI agent wallets — signature verification requires ERC-1271. AuthOnce implements ERC-1271 support, allowing any smart contract wallet to authorize subscriptions natively. For a full treatment, see our article on <a href="ai-agent-payments.html" class="ilink">AI agent payments and ERC-1271</a>.</p>
+
+      <h2>Contract Addresses</h2>
+      <p><strong>Base Sepolia Testnet:</strong><br>
+      SubscriptionVault: <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--ink-2)">0xeb068B47731261F7B4A5ae8535686D67D7f72321</code><br>
+      MerchantRegistry: <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--ink-2)">0xAE681E431c353f5930dDFfBC74037d3f2afE3264</code></p>
+      <p>Full source via the <a href="https://authonce.io" class="ilink">AuthOnce developer portal</a>. Mainnet Q3 2026.</p>
+
+      <div class="article-cta">
+        <h3>Build gasless subscriptions on Base</h3>
+        <p>EIP-2612 permits. Zero gas onboarding. Sub-cent execution. Open source contracts.</p>
+        <div class="article-cta-btns">
+          <a href="https://authonce.io" class="btn-blue">Get Started</a>
+          <a href="https://github.com/authonce-protocol" class="btn-ghost">View on GitHub →</a>
+        </div>
+      </div>
+    </div>
+  </article>
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <h4>Table of Contents</h4>
+      <ul class="toc-list">
+        <li><a href="#">The ERC-20 approval problem</a></li>
+        <li><a href="#">How EIP-2612 works</a></li>
+        <li><a href="#">Execution flow</a></li>
+        <li><a href="#">Permit revocation</a></li>
+        <li><a href="#">ERC-1271 extension</a></li>
+        <li><a href="#">Contract addresses</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-cta">
+      <h4>Zero gas onboarding</h4>
+      <p>Subscribers sign once. No ETH required. No approval transactions.</p>
+      <a href="https://authonce.io" class="sidebar-btn">Start Building →</a>
+    </div>
+    <div class="sidebar-card">
+      <h4>Related Articles</h4>
+      <div class="related-card-list">
+        <a href="grace-periods.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">Programmable Grace Periods</div></a>
+        <a href="ai-agent-payments.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">AI Agent Payments & ERC-1271</div></a>
+        <a href="base-network-subscriptions.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">Why Base Network</div></a>
+        <a href="what-is-noncustodial-billing.html" class="related-card-item"><div class="rtag">Merchant</div><div class="rtitle">Non-Custodial Billing Explained</div></a>
+      </div>
+    </div>
+  </aside>
+</div>
+<footer>
+  <span class="footer-brand">Auth<em>Once</em></span>
+  <div class="footer-links"><a href="index.html">Blog</a><a href="https://authonce.io">Protocol</a><a href="https://github.com/authonce-protocol">GitHub</a><a href="complete-guide.html">Complete Guide</a></div>
+  <span class="footer-note">© 2026 AuthOnce · Built on Base Network · BSL 1.1</span>
+</footer>
+</body>
+</html>

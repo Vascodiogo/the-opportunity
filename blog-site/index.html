@@ -1,160 +1,566 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AuthOnce Blog — Non-Custodial Crypto Subscriptions on Base</title>
-  <meta name="description" content="Insights on non-custodial USDC subscription billing, on-chain recurring payments, and building Web3 infrastructure on Base Network." />
-  <meta name="keywords" content="non-custodial crypto subscriptions, on-chain recurring payments, USDC subscription protocol, Base Network, Web3 billing infrastructure" />
-  <meta name="author" content="Vasco Diogo" />
-  <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="https://blog.authonce.io/" />
-  <link rel="icon" type="image/svg+xml" href="https://authonce.io/favicon.svg" />
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-5NE0QK40WZ');
-  </script>
-
-  <meta property="og:title" content="AuthOnce Blog — Non-Custodial Crypto Subscriptions on Base" />
-  <meta property="og:description" content="Insights on non-custodial USDC subscription billing, on-chain recurring payments, and building Web3 infrastructure on Base Network." />
-  <meta property="og:url" content="https://blog.authonce.io/" />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="AuthOnce" />
-  <meta property="og:image" content="https://authonce.io/og-image.png" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:site" content="@AuthOnce" />
-  <meta name="twitter:creator" content="@VascoBuilds" />
-  <meta name="twitter:title" content="AuthOnce Blog — Non-Custodial Crypto Subscriptions on Base" />
-  <meta name="twitter:description" content="Insights on non-custodial USDC subscription billing and on-chain recurring payments." />
-  <meta name="twitter:image" content="https://authonce.io/og-image.png" />
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Blog",
-    "name": "AuthOnce Blog",
-    "url": "https://blog.authonce.io/",
-    "description": "Insights on non-custodial USDC subscription billing, on-chain recurring payments, and building Web3 infrastructure on Base Network.",
-    "publisher": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io", "logo": "https://authonce.io/logo.svg" },
-    "blogPost": [
-      {
-        "@type": "BlogPosting",
-        "headline": "Non-Custodial Crypto Subscriptions on Base — How We Built What Didn't Exist",
-        "url": "https://blog.authonce.io/why-onchain-recurring-payments-are-broken",
-        "datePublished": "2026-06-08",
-        "author": { "@type": "Person", "name": "Vasco Diogo" }
-      },
-      {
-        "@type": "BlogPosting",
-        "headline": "Non-Custodial vs Custodial Crypto Subscriptions: Why Web3 Merchants Are Switching",
-        "url": "https://blog.authonce.io/vs-custodial",
-        "datePublished": "2026-06-10",
-        "author": { "@type": "Person", "name": "Vasco Diogo" }
-      }
-    ]
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AuthOnce Blog — USDC Subscription Billing on Base Network</title>
+<meta name="description" content="Expert guides on non-custodial USDC subscription billing, EIP-2612 permits, programmable grace periods, and Web3 recurring payments on Base Network.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="AuthOnce Blog — USDC Subscription Billing on Base Network">
+<meta property="og:description" content="Expert guides on non-custodial USDC subscription billing, EIP-2612 permits, programmable grace periods, and Web3 recurring payments on Base Network.">
+<meta property="og:image" content="https://authonce.io/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://authonce.io/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://blog.authonce.io">
+<link rel="canonical" href="https://blog.authonce.io">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  "name": "AuthOnce Blog",
+  "description": "Expert guides on non-custodial USDC subscription billing on Base Network",
+  "url": "https://blog.authonce.io",
+  "publisher": {
+    "@type": "Organization",
+    "name": "AuthOnce",
+    "url": "https://authonce.io",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://authonce.io/logo.png"
+    }
   }
-  </script>
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+  :root {
+    --ink:       #0D0F14;
+    --ink-2:     #3A3D47;
+    --ink-3:     #7A7E8C;
+    --rule:      #E8E9ED;
+    --surface:   #F6F7F9;
+    --white:     #FFFFFF;
+    --base-blue: #0052FF;
+    --base-dim:  #E8EEFF;
+    --tag-bg:    #EEF0F5;
+  }
 
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --ink: #0D1117; --ink-2: #1C2333; --ink-3: #2D3748;
-      --mist: #8892A4; --fog: #C8D0DC; --paper: #F5F7FA; --white: #FFFFFF;
-      --green: #10B981; --green-lt: #34D399; --red: #EF4444; --blue: #1A56DB;
-    }
-    html { scroll-behavior: smooth; }
-    body { font-family: 'DM Sans', sans-serif; background: var(--white); color: var(--ink); line-height: 1.75; font-size: 17px; font-weight: 300; }
+  html { font-size: 16px; scroll-behavior: smooth; }
 
-    nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; height: 58px; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); border-bottom: 0.5px solid var(--fog); }
-    .nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
-    .nav-logo span { color: var(--green); }
-    .nav-links { display: flex; gap: 24px; align-items: center; }
-    .nav-links a { text-decoration: none; color: var(--mist); font-size: 13px; transition: color 0.2s; }
-    .nav-links a:hover { color: var(--ink); }
-    .nav-cta { background: var(--green); color: var(--white) !important; padding: 7px 16px; border-radius: 8px; font-weight: 500 !important; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--white);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
 
-    .hero { max-width: 760px; margin: 80px auto 0; padding: 0 24px 40px; }
-    .hero-tag { display: inline-flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mist); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 24px; }
-    .hero-tag::before { content: ''; width: 20px; height: 1px; background: var(--fog); }
-    h1 { font-family: 'DM Serif Display', serif; font-size: clamp(32px, 5vw, 48px); line-height: 1.15; letter-spacing: -0.02em; color: var(--ink); margin-bottom: 20px; font-weight: 400; }
-    h1 span { color: var(--green); }
-    .hero-sub { font-size: 18px; color: var(--ink-3); max-width: 600px; }
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--rule);
+    padding: 0 2rem;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    text-decoration: none; color: var(--ink);
+  }
+  .nav-logo {
+    width: 28px; height: 28px;
+    background: var(--base-blue);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-logo span { color: white; font-weight: 700; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+  .nav-brand-text { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+  .nav-brand-text em { color: var(--base-blue); font-style: normal; }
+  .nav-links { display: flex; align-items: center; gap: 2rem; }
+  .nav-links a { text-decoration: none; color: var(--ink-2); font-size: 14px; font-weight: 500; transition: color .15s; }
+  .nav-links a:hover { color: var(--base-blue); }
+  .nav-cta {
+    background: var(--base-blue); color: white;
+    padding: 8px 18px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; text-decoration: none;
+    transition: opacity .15s;
+  }
+  .nav-cta:hover { opacity: .85; color: white; }
 
-    .posts { max-width: 760px; margin: 0 auto; padding: 0 24px 100px; }
-    .post-card { display: block; text-decoration: none; color: inherit; padding: 32px 0; border-bottom: 0.5px solid var(--fog); transition: opacity 0.2s; }
-    .post-card:hover { opacity: 0.75; }
-    .post-card:last-child { border-bottom: none; }
-    .post-meta-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .post-date { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mist); letter-spacing: 0.06em; }
-    .post-tag { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); background: #F0FDF8; padding: 3px 8px; border-radius: 4px; }
-    .post-title { font-family: 'DM Serif Display', serif; font-size: 24px; font-weight: 400; color: var(--ink); margin-bottom: 10px; letter-spacing: -0.01em; line-height: 1.3; }
-    .post-desc { font-size: 15px; color: var(--ink-3); max-width: 660px; }
-    .post-arrow { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--green); margin-top: 14px; display: inline-block; }
+  /* HERO */
+  .hero {
+    padding: 80px 2rem 60px;
+    max-width: 960px; margin: 0 auto;
+    text-align: center;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--base-dim); color: var(--base-blue);
+    padding: 6px 14px; border-radius: 100px;
+    font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .hero-eyebrow::before {
+    content: ''; width: 6px; height: 6px;
+    background: var(--base-blue); border-radius: 50%;
+  }
+  .hero h1 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+  .hero h1 em { color: var(--base-blue); font-style: normal; }
+  .hero p {
+    font-size: 1.1rem; color: var(--ink-2);
+    max-width: 560px; margin: 0 auto 36px;
+    line-height: 1.7;
+  }
+  .hero-stats {
+    display: flex; justify-content: center; gap: 48px;
+    padding: 28px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    margin-top: 48px;
+  }
+  .stat-item { text-align: center; }
+  .stat-value {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 2rem; font-weight: 800;
+    color: var(--ink); letter-spacing: -0.04em;
+    display: block;
+  }
+  .stat-label { font-size: 12px; color: var(--ink-3); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; margin-top: 4px; }
 
-    footer { max-width: 760px; margin: 0 auto; padding: 32px 24px 60px; display: flex; align-items: center; justify-content: space-between; border-top: 0.5px solid var(--fog); font-size: 13px; color: var(--mist); flex-wrap: wrap; gap: 12px; }
-    footer a { color: var(--mist); text-decoration: none; }
-    footer a:hover { color: var(--ink); }
+  /* FEATURED */
+  .section { max-width: 1160px; margin: 0 auto; padding: 60px 2rem; }
+  .section-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; }
+  .section-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.1rem; font-weight: 700;
+    letter-spacing: -0.01em; color: var(--ink);
+  }
+  .section-link { font-size: 13px; color: var(--base-blue); font-weight: 600; text-decoration: none; }
+  .section-link:hover { text-decoration: underline; }
 
-    @media (max-width: 600px) {
-      nav { padding: 0 20px; }
-      .nav-links { gap: 16px; }
-    }
-  </style>
+  /* FEATURED CARD */
+  .featured-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card-featured {
+    grid-column: 1 / -1;
+    background: var(--ink);
+    border-radius: 16px;
+    padding: 48px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center;
+    text-decoration: none;
+    transition: transform .2s;
+  }
+  .card-featured:hover { transform: translateY(-2px); }
+  .card-featured-tag {
+    display: inline-block;
+    background: rgba(255,255,255,.12); color: rgba(255,255,255,.8);
+    padding: 4px 12px; border-radius: 100px;
+    font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .card-featured h2 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(1.3rem, 2.5vw, 1.75rem);
+    font-weight: 800; letter-spacing: -0.03em;
+    color: white; line-height: 1.15; margin-bottom: 16px;
+  }
+  .card-featured p { color: rgba(255,255,255,.65); font-size: .95rem; line-height: 1.65; margin-bottom: 24px; }
+  .card-featured-meta { display: flex; align-items: center; gap: 16px; }
+  .card-featured-meta span { color: rgba(255,255,255,.45); font-size: 12px; }
+  .card-featured-meta .read-time { color: rgba(255,255,255,.7); font-weight: 500; }
+  .card-featured-visual {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px; padding: 32px;
+  }
+  .fee-compare { display: flex; flex-direction: column; gap: 16px; }
+  .fee-row { display: flex; align-items: center; justify-content: space-between; }
+  .fee-label { color: rgba(255,255,255,.5); font-size: 13px; }
+  .fee-bar-wrap { flex: 1; margin: 0 16px; background: rgba(255,255,255,.08); border-radius: 4px; height: 8px; overflow: hidden; }
+  .fee-bar { height: 100%; border-radius: 4px; }
+  .fee-bar.high { background: #FF4E4E; width: 100%; }
+  .fee-bar.low { background: #00D4A0; width: 17%; }
+  .fee-val { color: white; font-weight: 700; font-size: 14px; font-family: 'DM Sans', sans-serif; min-width: 36px; text-align: right; }
+  .fee-saving { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.1); }
+  .fee-saving-label { color: rgba(255,255,255,.4); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .fee-saving-val { font-family: 'DM Sans', sans-serif; font-size: 1.5rem; font-weight: 800; color: #00D4A0; letter-spacing: -0.03em; }
+
+  /* REGULAR CARDS */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 28px;
+    text-decoration: none;
+    display: flex; flex-direction: column;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+  }
+  .card:hover { border-color: var(--base-blue); box-shadow: 0 4px 24px rgba(0,82,255,.08); transform: translateY(-2px); }
+  .card-tag {
+    display: inline-block;
+    background: var(--tag-bg); color: var(--ink-2);
+    padding: 4px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+    margin-bottom: 14px; align-self: flex-start;
+  }
+  .card-tag.developer { background: var(--base-dim); color: var(--base-blue); }
+  .card-tag.dao { background: #F0E8FF; color: #6B21A8; }
+  .card-tag.merchant { background: #E8FFF6; color: #065F46; }
+  .card-tag.compliance { background: #FFF8E8; color: #92400E; }
+  .card h3 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.1rem; font-weight: 700;
+    letter-spacing: -0.02em; color: var(--ink);
+    line-height: 1.25; margin-bottom: 10px;
+  }
+  .card p { font-size: .875rem; color: var(--ink-2); line-height: 1.6; flex: 1; margin-bottom: 20px; }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 20px; border-top: 1px solid var(--rule); }
+  .card-read { font-size: 12px; color: var(--ink-3); }
+  .card-arrow { color: var(--base-blue); font-size: 18px; font-weight: 300; }
+
+  /* TOPIC GRID */
+  .topic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+
+  /* PILLAR SECTION */
+  .pillar-section { background: var(--surface); }
+  .pillar-inner { max-width: 1160px; margin: 0 auto; padding: 60px 2rem; }
+  .pillar-card {
+    background: white;
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+    padding: 40px;
+    display: grid; grid-template-columns: 1fr 320px; gap: 48px; align-items: start;
+    text-decoration: none;
+    transition: box-shadow .2s;
+  }
+  .pillar-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,.08); }
+  .pillar-eyebrow { font-size: 11px; font-weight: 600; color: var(--base-blue); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; }
+  .pillar-card h2 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.6rem; font-weight: 800;
+    letter-spacing: -0.03em; color: var(--ink);
+    line-height: 1.2; margin-bottom: 16px;
+  }
+  .pillar-card > div > p { color: var(--ink-2); line-height: 1.7; margin-bottom: 24px; }
+  .pillar-toc { list-style: none; }
+  .pillar-toc li {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: .875rem;
+  }
+  .pillar-toc li:last-child { border-bottom: none; }
+  .pillar-toc a { color: var(--ink-2); text-decoration: none; display: flex; align-items: center; justify-content: space-between; }
+  .pillar-toc a:hover { color: var(--base-blue); }
+  .pillar-toc a::after { content: '→'; color: var(--base-blue); opacity: 0; transition: opacity .15s; }
+  .pillar-toc a:hover::after { opacity: 1; }
+  .pillar-sidebar { background: var(--surface); border-radius: 12px; padding: 28px; }
+  .pillar-sidebar h4 { font-size: .8rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .pillar-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .pillar-links a { font-size: .875rem; color: var(--ink-2); text-decoration: none; padding: 8px 12px; background: white; border-radius: 8px; border: 1px solid var(--rule); display: block; transition: border-color .15s; }
+  .pillar-links a:hover { border-color: var(--base-blue); color: var(--base-blue); }
+
+  /* CTA BANNER */
+  .cta-banner { background: var(--base-blue); padding: 60px 2rem; text-align: center; }
+  .cta-banner h2 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-weight: 800; letter-spacing: -0.03em;
+    color: white; margin-bottom: 12px;
+  }
+  .cta-banner p { color: rgba(255,255,255,.75); font-size: 1rem; margin-bottom: 28px; }
+  .cta-group { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn-white { background: white; color: var(--base-blue); padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; transition: opacity .15s; }
+  .btn-white:hover { opacity: .9; }
+  .btn-outline { border: 1.5px solid rgba(255,255,255,.4); color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; transition: border-color .15s; }
+  .btn-outline:hover { border-color: white; }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 40px 2rem;
+    max-width: 1160px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 20px;
+  }
+  .footer-brand { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 15px; color: var(--ink); }
+  .footer-brand em { color: var(--base-blue); font-style: normal; }
+  .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+  .footer-links a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .footer-links a:hover { color: var(--base-blue); }
+  .footer-note { font-size: 12px; color: var(--ink-3); }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    nav { padding: 0 1rem; }
+    .nav-links { display: none; }
+    .hero { padding: 48px 1rem 40px; }
+    .hero-stats { gap: 24px; }
+    .stat-value { font-size: 1.5rem; }
+    .section { padding: 40px 1rem; }
+    .featured-grid { grid-template-columns: 1fr; }
+    .card-featured { grid-template-columns: 1fr; padding: 28px; }
+    .card-featured-visual { display: none; }
+    .pillar-card { grid-template-columns: 1fr; }
+    .pillar-sidebar { display: none; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+<link rel="icon" type="image/x-icon" href="https://authonce.io/favicon.ico">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5NE0QK40WZ');
+</script>
 </head>
 <body>
 
+<!-- NAV -->
 <nav>
-  <a href="https://authonce.io" class="nav-logo">Auth<span>Once</span></a>
+  <a href="https://blog.authonce.io" class="nav-brand">
+    <div class="nav-logo"><span>A</span></div>
+    <span class="nav-brand-text">Auth<em>Once</em> Blog</span>
+  </a>
   <div class="nav-links">
-    <a href="https://authonce.io">Home</a>
-    <a href="https://authonce.io/pricing">Pricing</a>
-    <a href="https://blog.authonce.io/" style="color: var(--ink);">Blog</a>
-    <a href="https://authonce.io/#contact" class="nav-cta">Get started</a>
+    <a href="#guides">Guides</a>
+    <a href="#developer">Developer</a>
+    <a href="#dao">DAO & Web3</a>
+    <a href="#merchant">Merchants</a>
+    <a href="https://authonce.io">← Back to AuthOnce</a>
+    <a href="https://authonce.io" class="nav-cta">Start Free</a>
   </div>
 </nav>
 
-<div class="hero">
-  <div class="hero-tag">AuthOnce Blog</div>
-  <h1>Notes on building <span>non-custodial</span> infrastructure</h1>
-  <p class="hero-sub">Thoughts on on-chain recurring payments, USDC subscription billing, and the architecture decisions behind AuthOnce on Base Network.</p>
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-eyebrow">Base Network · USDC · Non-Custodial</div>
+  <h1>The authoritative resource for <em>USDC subscription billing</em></h1>
+  <p>Protocol-level guides, technical deep-dives, and business strategy for teams building recurring revenue on Base Network.</p>
+  <div class="hero-stats">
+    <div class="stat-item">
+      <span class="stat-value">0.5%</span>
+      <div class="stat-label">Protocol Fee</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">1–30</span>
+      <div class="stat-label">Day Grace Period</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">$0</span>
+      <div class="stat-label">Gas to Subscribe</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">100%</span>
+      <div class="stat-label">Non-Custodial</div>
+    </div>
+  </div>
+</header>
+
+<!-- FEATURED + CARDS -->
+<section class="section" id="guides">
+  <div class="section-header">
+    <span class="section-title">Featured Articles</span>
+  </div>
+  <div class="featured-grid">
+
+    <!-- FEATURED BIG CARD -->
+    <a href="why-switched.html" class="card-featured">
+      <div>
+        <span class="card-featured-tag">Case Study · Web3 SaaS</span>
+        <h2>We Were Losing $8,000 a Month in Billing Fees. Here's How We Fixed It.</h2>
+        <p>At $400K MRR, custodial billing fees compound silently. One merchant's move to non-custodial USDC billing — and the math behind the decision.</p>
+        <div class="card-featured-meta">
+          <span class="read-time">6 min read</span>
+          <span>·</span>
+          <span>Web3 SaaS Founders</span>
+        </div>
+      </div>
+      <div class="card-featured-visual">
+        <div class="fee-compare">
+          <div class="fee-row">
+            <span class="fee-label">Custodial billing</span>
+            <div class="fee-bar-wrap"><div class="fee-bar high"></div></div>
+            <span class="fee-val">3%+</span>
+          </div>
+          <div class="fee-row">
+            <span class="fee-label">AuthOnce</span>
+            <div class="fee-bar-wrap"><div class="fee-bar low"></div></div>
+            <span class="fee-val">0.5%</span>
+          </div>
+          <div class="fee-saving">
+            <div class="fee-saving-label">Annual saving at $400K MRR</div>
+            <div class="fee-saving-val">$124,800</div>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <!-- CARD 2 -->
+    <a href="real-cost-custodial.html" class="card">
+      <span class="card-tag dao">DAO Treasury</span>
+      <h3>The Real Cost of Custodial Billing: A Framework for DAO Finance Teams</h3>
+      <p>How custodial payment processors silently extract treasury value — and a framework for calculating the true cost at any MRR level.</p>
+      <div class="card-footer">
+        <span class="card-read">7 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+    <!-- CARD 3 -->
+    <a href="grace-periods.html" class="card">
+      <span class="card-tag developer">Developer</span>
+      <h3>Programmable Grace Periods: The Subscription Primitive Crypto Was Missing</h3>
+      <p>Why blockchains have no native retry logic — and how AuthOnce implements programmable grace periods as a first-class on-chain primitive.</p>
+      <div class="card-footer">
+        <span class="card-read">8 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+  </div>
+</section>
+
+<!-- ALL TOPICS GRID -->
+<section class="section" id="developer">
+  <div class="section-header">
+    <span class="section-title">All Articles</span>
+  </div>
+  <div class="topic-grid">
+
+    <a href="what-is-noncustodial-billing.html" class="card">
+      <span class="card-tag merchant">Merchant</span>
+      <h3>What Is Non-Custodial Subscription Billing — And Why It Matters</h3>
+      <p>The difference between custodial and non-custodial billing, explained for merchants making the move to USDC.</p>
+      <div class="card-footer">
+        <span class="card-read">5 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+    <a href="eip2612-explained.html" class="card">
+      <span class="card-tag developer">Developer</span>
+      <h3>EIP-2612 Explained: Gasless USDC Subscriptions Without Pre-Approvals</h3>
+      <p>How off-chain permit signatures replace on-chain approvals — and why this changes the economics of subscriber onboarding.</p>
+      <div class="card-footer">
+        <span class="card-read">7 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+    <a href="base-network-subscriptions.html" class="card">
+      <span class="card-tag developer">Developer</span>
+      <h3>Why Base Network Is the Right Chain for Recurring Payments</h3>
+      <p>Gas costs, smart contract compatibility, ecosystem depth, and why Base beats mainnet Ethereum for subscription infrastructure.</p>
+      <div class="card-footer">
+        <span class="card-read">6 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+    <a href="integration-guide.html" class="card">
+      <span class="card-tag merchant">Merchant</span>
+      <h3>How to Set Up USDC Subscription Billing in Under 2 Hours</h3>
+      <p>Step-by-step integration guide for WooCommerce and PrestaShop merchants. From merchant registration to first live subscription.</p>
+      <div class="card-footer">
+        <span class="card-read">9 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+    <a href="compliance.html" class="card">
+      <span class="card-tag compliance">Compliance</span>
+      <h3>USDC Subscription Billing Compliance: Why No CASP License Is Required</h3>
+      <p>AuthOnce's software-only legal posture explained. How BSL 1.1 licensing and non-custody eliminate regulatory exposure.</p>
+      <div class="card-footer">
+        <span class="card-read">6 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+    <a href="ai-agent-payments.html" class="card">
+      <span class="card-tag developer">Developer</span>
+      <h3>AI Agent Payments: How ERC-1271 Makes Autonomous Subscriptions Possible</h3>
+      <p>Smart contract wallets, ERC-4337 accounts, and how AuthOnce supports AI agents authorizing recurring payments natively.</p>
+      <div class="card-footer">
+        <span class="card-read">7 min read</span>
+        <span class="card-arrow">→</span>
+      </div>
+    </a>
+
+  </div>
+</section>
+
+<!-- PILLAR PAGE -->
+<div class="pillar-section" id="dao">
+  <div class="pillar-inner">
+    <div class="section-header">
+      <span class="section-title">Complete Guide</span>
+    </div>
+    <a href="complete-guide.html" class="pillar-card">
+      <div>
+        <div class="pillar-eyebrow">Pillar Resource · 10,000 words</div>
+        <h2>The Complete Guide to USDC Subscription Billing on Base Network</h2>
+        <p>Everything you need to understand, implement, and scale non-custodial recurring payments — from EIP-2612 permit flows to Keeper automation, grace period configuration, and compliance posture.</p>
+        <ul class="pillar-toc">
+          <li><a href="what-is-noncustodial-billing.html">What is non-custodial USDC subscription billing?</a></li>
+          <li><a href="eip2612-explained.html">How EIP-2612 permits enable gasless subscriptions</a></li>
+          <li><a href="base-network-subscriptions.html">Why Base Network for recurring payments</a></li>
+          <li><a href="grace-periods.html">Programmable grace periods and dunning logic</a></li>
+          <li><a href="integration-guide.html">Integration guide: WooCommerce & PrestaShop</a></li>
+          <li><a href="compliance.html">Compliance: software-only, no CASP required</a></li>
+          <li><a href="ai-agent-payments.html">AI agent payments and ERC-1271 support</a></li>
+          <li><a href="real-cost-custodial.html">Fee comparison and treasury economics</a></li>
+        </ul>
+      </div>
+      <div class="pillar-sidebar">
+        <h4>Related Articles</h4>
+        <ul class="pillar-links">
+          <li><a href="why-switched.html">Case Study: $8K/month in savings →</a></li>
+          <li><a href="grace-periods.html">Grace Period technical deep-dive →</a></li>
+          <li><a href="eip2612-explained.html">EIP-2612 permit flow explained →</a></li>
+          <li><a href="real-cost-custodial.html">DAO billing cost framework →</a></li>
+          <li><a href="ai-agent-payments.html">AI agent subscriptions →</a></li>
+          <li><a href="compliance.html">No-license compliance posture →</a></li>
+        </ul>
+      </div>
+    </a>
+  </div>
 </div>
 
-<div class="posts">
-
-  <a href="https://blog.authonce.io/vs-custodial" class="post-card">
-    <div class="post-meta-row">
-      <span class="post-date">JUNE 10, 2026</span>
-      <span class="post-tag">Comparison</span>
-    </div>
-    <div class="post-title">Non-Custodial vs Custodial Crypto Subscriptions</div>
-    <p class="post-desc">Why Web3 merchants are switching from custodial crypto payment gateways to non-custodial subscription protocols — fees, security, and control compared.</p>
-    <span class="post-arrow">Read more →</span>
-  </a>
-
-  <a href="https://blog.authonce.io/why-onchain-recurring-payments-are-broken" class="post-card">
-    <div class="post-meta-row">
-      <span class="post-date">JUNE 8, 2026</span>
-      <span class="post-tag">Technical</span>
-    </div>
-    <div class="post-title">How We Built What Didn't Exist</div>
-    <p class="post-desc">Every Web3 subscription protocol has the same fatal flaw. Here's what we built instead — and why the architecture of recurring payments matters more than most people realise.</p>
-    <span class="post-arrow">Read more →</span>
-  </a>
-
+<!-- CTA -->
+<div class="cta-banner" id="merchant">
+  <h2>Ready to cut your billing fees by 83%?</h2>
+  <p>AuthOnce is live on Base Sepolia testnet. Mainnet launch Q3 2026.</p>
+  <div class="cta-group">
+    <a href="https://authonce.io" class="btn-white">Start with AuthOnce</a>
+    <a href="integration-guide.html" class="btn-outline">Read the Integration Guide</a>
+  </div>
 </div>
 
+<!-- FOOTER -->
 <footer>
-  <span>© 2026 AuthOnce</span>
-  <span><a href="https://authonce.io/privacy">Privacy</a> · <a href="https://authonce.io/terms">Terms</a> · <a href="https://authonce.io">authonce.io</a></span>
+  <span class="footer-brand">Auth<em>Once</em></span>
+  <div class="footer-links">
+    <a href="https://authonce.io">Protocol</a>
+    <a href="https://github.com/authonce-protocol">GitHub</a>
+    <a href="https://authonce.io/docs">Docs</a>
+    <a href="complete-guide.html">Complete Guide</a>
+    <a href="compliance.html">Compliance</a>
+  </div>
+  <span class="footer-note">© 2026 AuthOnce · Built on Base Network · BSL 1.1</span>
 </footer>
 
 </body>

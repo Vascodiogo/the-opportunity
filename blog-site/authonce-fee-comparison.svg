@@ -1,0 +1,57 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>AuthOnce vs custodial billing fee comparison</title>
+<desc>Fee comparison showing AuthOnce at 0.5% vs custodial billing at 3%+, with annual savings at $400K MRR</desc>
+<!-- White background for social sharing -->
+<rect width="1200" height="630" fill="#FFFFFF"/>
+
+<!-- Left panel: Custodial -->
+<rect x="60" y="60" width="490" height="510" rx="16" fill="#F6F7F9" stroke="#E8E9ED" stroke-width="1"/>
+
+<!-- Right panel: AuthOnce -->
+<rect x="650" y="60" width="490" height="510" rx="16" fill="#EEF4FF" stroke="#0052FF" stroke-width="2.5"/>
+
+<!-- Recommended badge -->
+<rect x="760" y="44" width="270" height="36" rx="18" fill="#0052FF"/>
+<text x="895" y="68" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff" letter-spacing="1">RECOMMENDED</text>
+
+<!-- Left: heading -->
+<text x="305" y="128" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="15" font-weight="500" fill="#7A7E8C" letter-spacing="3">CUSTODIAL BILLING</text>
+<text x="305" y="210" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="80" font-weight="700" fill="#0D0F14">3%</text>
+<text x="305" y="244" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="16" fill="#7A7E8C">per transaction + fixed per-charge fees</text>
+
+<line x1="90" y1="268" x2="520" y2="268" stroke="#E8E9ED" stroke-width="1"/>
+
+<text x="105" y="308" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#3A3D47">✗  Funds held in third-party custody</text>
+<text x="105" y="344" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#3A3D47">✗  2–5 day settlement delay</text>
+<text x="105" y="380" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#3A3D47">✗  Chargebacks and disputes</text>
+<text x="105" y="416" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#3A3D47">✗  No on-chain verifiability</text>
+<text x="105" y="452" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#3A3D47">✗  Counterparty risk on treasury</text>
+
+<rect x="90" y="482" width="440" height="68" rx="10" fill="#FFECEC"/>
+<text x="310" y="511" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="14" fill="#A32D2D">At $400K MRR</text>
+<text x="310" y="538" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="22" font-weight="700" fill="#A32D2D">−$12,000 per month in fees</text>
+
+<!-- Right: heading -->
+<text x="895" y="128" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="15" font-weight="500" fill="#0052FF" letter-spacing="3">AUTHONCE</text>
+<text x="895" y="210" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="80" font-weight="700" fill="#0052FF">0.5%</text>
+<text x="895" y="244" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="16" fill="#185FA5">flat protocol fee · no fixed per-charge fees</text>
+
+<line x1="680" y1="268" x2="1110" y2="268" stroke="#C5D6FF" stroke-width="1"/>
+
+<text x="695" y="308" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#0D0F14">✓  Non-custodial — funds go direct to wallet</text>
+<text x="695" y="344" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#0D0F14">✓  Instant on-chain settlement</text>
+<text x="695" y="380" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#0D0F14">✓  No chargebacks by design</text>
+<text x="695" y="416" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#0D0F14">✓  Every payment verifiable on Base Network</text>
+<text x="695" y="452" font-family="'DM Sans', system-ui, sans-serif" font-size="17" fill="#0D0F14">✓  Zero counterparty risk</text>
+
+<rect x="680" y="482" width="440" height="68" rx="10" fill="#0052FF"/>
+<text x="900" y="511" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="14" fill="rgba(255,255,255,0.8)">At $400K MRR</text>
+<text x="900" y="538" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="22" font-weight="700" fill="#ffffff">Save $124,800 per year</text>
+
+<!-- VS circle -->
+<circle cx="600" cy="310" r="36" fill="#ffffff" stroke="#E8E9ED" stroke-width="1"/>
+<text x="600" y="318" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="20" font-weight="700" fill="#3A3D47">vs</text>
+
+<!-- Footer -->
+<text x="600" y="608" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="13" fill="#7A7E8C">AuthOnce · Non-custodial USDC subscription protocol on Base Network · authonce.io</text>
+</svg>

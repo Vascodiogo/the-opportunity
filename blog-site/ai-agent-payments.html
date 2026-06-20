@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Payments: How ERC-1271 Makes Autonomous Subscriptions Possible | AuthOnce</title>
+<meta name="description" content="Smart contract wallets, ERC-4337 accounts, and how AuthOnce's ERC-1271 support enables AI agents to authorize and manage USDC recurring payments natively on Base Network.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="AI Agent Payments: How ERC-1271 Makes Autonomous Subscriptions Possible">
+<meta property="og:image" content="https://authonce.io/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://authonce.io/og-image.png">
+<meta property="og:type" content="article"><meta property="og:url" content="https://blog.authonce.io/ai-agent-payments">
+<link rel="canonical" href="https://blog.authonce.io/ai-agent-payments">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"AI Agent Payments: How ERC-1271 Makes Autonomous Subscriptions Possible","description":"How ERC-1271 enables AI agents and smart contract wallets to authorize USDC subscriptions natively on Base Network.","author":{"@type":"Organization","name":"AuthOnce"},"publisher":{"@type":"Organization","name":"AuthOnce","url":"https://authonce.io"},"datePublished":"2026-06-20","dateModified":"2026-06-20","mainEntityOfPage":{"@type":"WebPage","@id":"https://blog.authonce.io/ai-agent-payments"},"keywords":["ERC-1271","AI agent payments","autonomous payments","ERC-4337","smart contract wallet","USDC subscription","Base Network","agentic commerce"]}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}:root{--ink:#0D0F14;--ink-2:#3A3D47;--ink-3:#7A7E8C;--rule:#E8E9ED;--surface:#F6F7F9;--white:#FFFFFF;--base-blue:#0052FF;--base-dim:#E8EEFF}html{font-size:16px;scroll-behavior:smooth}body{font-family: 'DM Sans', system-ui, sans-serif;background:var(--white);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6}
+nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule);padding:0 2rem;height:60px;display:flex;align-items:center;justify-content:space-between}.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}.nav-logo{width:28px;height:28px;background:var(--base-blue);border-radius:6px;display:flex;align-items:center;justify-content:center}.nav-logo span{color:white;font-weight:700;font-size:14px;font-family: 'DM Sans', sans-serif;font-weight:700;font-size:17px;letter-spacing:-0.02em}.nav-brand-text em{color:var(--base-blue);font-style:normal}.nav-links{display:flex;align-items:center;gap:2rem}.nav-links a{text-decoration:none;color:var(--ink-2);font-size:14px;font-weight:500}.nav-links a:hover{color:var(--base-blue)}.nav-cta{background:var(--base-blue);color:white;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none}
+.article-layout{max-width:1160px;margin:0 auto;padding:60px 2rem;display:grid;grid-template-columns:1fr 300px;gap:64px;align-items:start}.article-header{margin-bottom:40px}.breadcrumb{display:flex;align-items:center;gap:8px;margin-bottom:20px}.breadcrumb a{font-size:13px;color:var(--ink-3);text-decoration:none}.breadcrumb span{color:var(--rule)}.article-tag{display:inline-block;background:var(--base-dim);color:var(--base-blue);padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}.article-header h1{font-family: 'DM Sans', sans-serif;font-size:clamp(1.75rem,4vw,2.5rem);font-weight:800;letter-spacing:-0.03em;color:var(--ink);line-height:1.1;margin-bottom:20px}.article-meta{display:flex;align-items:center;gap:20px;flex-wrap:wrap}.article-meta span{font-size:13px;color:var(--ink-3)}.article-meta strong{color:var(--ink-2)}
+.article-body{font-size:1.025rem;line-height:1.8;color:var(--ink-2)}.article-body h2{font-family: 'DM Sans', sans-serif;font-size:1.4rem;font-weight:700;letter-spacing:-0.02em;color:var(--ink);margin:48px 0 16px}.article-body p{margin-bottom:20px}.article-body strong{color:var(--ink);font-weight:600}
+.ilink{color:var(--base-blue);text-decoration:none;font-weight:500;border-bottom:1px solid rgba(0,82,255,.3)}.ilink:hover{border-color:var(--base-blue)}
+.callout{border-left:3px solid var(--base-blue);background:var(--base-dim);padding:20px 24px;border-radius:0 10px 10px 0;margin:32px 0}.callout-title{font-size:11px;font-weight:700;color:var(--base-blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}.callout p{margin:0;font-size:.9rem;color:var(--ink-2)}
+.code-block{background:var(--ink);border-radius:12px;padding:24px;margin:28px 0;overflow-x:auto}.code-label{font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}.code-block pre{font-family:'SF Mono','Fira Code',monospace;font-size:.8rem;line-height:1.7;color:rgba(255,255,255,.85)}
+.agent-types{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:28px 0}.agent-card{background:var(--surface);border-radius:12px;padding:20px;text-align:center}.agent-card h4{font-weight:700;color:var(--ink);font-size:.9rem;margin-bottom:8px}.agent-card p{font-size:.8rem;color:var(--ink-2);margin:0;line-height:1.5}
+.related-inline{background:var(--surface);border-radius:12px;padding:24px;margin:40px 0}.related-inline h4{font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px}.related-links{display:flex;flex-direction:column;gap:8px}.related-links a{font-size:.9rem;color:var(--ink-2);text-decoration:none;display:flex;align-items:center;gap:8px}.related-links a::before{content:'→';color:var(--base-blue);font-size:.8rem}.related-links a:hover{color:var(--base-blue)}
+.article-cta{background:var(--ink);border-radius:16px;padding:40px;margin-top:60px;text-align:center}.article-cta h3{font-family: 'DM Sans', sans-serif;font-size:1.4rem;font-weight:800;color:white;margin-bottom:10px}.article-cta p{color:rgba(255,255,255,.6);font-size:.9rem;margin-bottom:24px}.article-cta-btns{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}.btn-blue{background:var(--base-blue);color:white;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none}.btn-ghost{border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);padding:12px 24px;border-radius:10px;font-size:14px;text-decoration:none;font-weight:500}
+.sidebar{position:sticky;top:80px}.sidebar-card{background:var(--surface);border-radius:14px;padding:24px;margin-bottom:20px}.sidebar-card h4{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px}.toc-list{list-style:none;display:flex;flex-direction:column;gap:4px}.toc-list a{font-size:.85rem;color:var(--ink-2);text-decoration:none;padding:5px 0;border-bottom:1px solid var(--rule);display:block}.toc-list a:hover{color:var(--base-blue)}.toc-list li:last-child a{border-bottom:none}.sidebar-cta{background:var(--base-blue);border-radius:14px;padding:24px;text-align:center}.sidebar-cta h4{font-family: 'DM Sans', sans-serif;font-size:1rem;font-weight:700;color:white;margin-bottom:8px}.sidebar-cta p{font-size:.8rem;color:rgba(255,255,255,.7);margin-bottom:16px;line-height:1.5}.sidebar-btn{display:block;background:white;color:var(--base-blue);padding:10px;border-radius:8px;font-weight:600;font-size:13px;text-decoration:none}.related-card-list{display:flex;flex-direction:column;gap:12px}.related-card-item{text-decoration:none;display:block;padding:12px;background:white;border-radius:10px;border:1px solid var(--rule);transition:border-color .15s}.related-card-item:hover{border-color:var(--base-blue)}.related-card-item .rtag{font-size:10px;font-weight:700;color:var(--base-blue);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}.related-card-item .rtitle{font-size:.85rem;font-weight:600;color:var(--ink);line-height:1.3}
+footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}.footer-brand{font-family: 'DM Sans', sans-serif;font-weight:700;color:var(--ink)}.footer-brand em{color:var(--base-blue);font-style:normal}.footer-links{display:flex;gap:20px}.footer-links a{font-size:13px;color:var(--ink-3);text-decoration:none}.footer-note{font-size:12px;color:var(--ink-3)}
+@media(max-width:768px){nav{padding:0 1rem}.nav-links{display:none}.article-layout{grid-template-columns:1fr;padding:32px 1rem}.sidebar{display:none}.agent-types{grid-template-columns:1fr}}
+</style>
+<link rel="icon" type="image/x-icon" href="https://authonce.io/favicon.ico">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5NE0QK40WZ');
+</script>
+</head>
+<body>
+<nav><a href="index.html" class="nav-brand"><div class="nav-logo"><span>A</span></div><span class="nav-brand-text">Auth<em>Once</em> Blog</span></a><div class="nav-links"><a href="index.html#guides">Guides</a><a href="index.html#developer">Developer</a><a href="index.html#dao">DAO & Web3</a><a href="https://authonce.io">← AuthOnce</a><a href="https://authonce.io" class="nav-cta">Start Free</a></div></nav>
+<div class="article-layout">
+  <article>
+    <header class="article-header">
+      <nav class="breadcrumb"><a href="index.html">Blog</a><span>/</span><a href="index.html#developer">Developer</a><span>/</span><span>AI Agent Payments</span></nav>
+      <span class="article-tag">Developer · Agentic Commerce</span>
+      <h1>AI Agent Payments: How ERC-1271 Makes Autonomous Subscriptions Possible</h1>
+      <div class="article-meta"><span>By <strong>AuthOnce</strong></span><span>·</span><span>June 20, 2026</span><span>·</span><span>7 min read</span></div>
+    </header>
+    <div class="article-body">
+      <p>AI agents are acquiring spending capability. Autonomous systems operating through smart contract wallets — Safe multisigs, ERC-4337 accounts, and purpose-built agent wallets — are beginning to manage budgets, execute purchases, and maintain subscriptions to services they depend on. This is not a future scenario. It is a present engineering reality, and the subscription billing infrastructure most protocols provide was not designed for it.</p>
+      <p>Standard <a href="eip2612-explained.html" class="ilink">EIP-2612 permit authorization</a> works for Externally Owned Accounts (EOAs) — wallets controlled by a single private key. An AI agent operating through a smart contract wallet does not have a single private key in the same sense. It produces signatures differently, and verifying those signatures requires a different standard: ERC-1271.</p>
+      <p>AuthOnce implements ERC-1271 from day one. This article explains why it matters and how it works.</p>
+
+      <h2>The Signature Verification Problem for Smart Contract Wallets</h2>
+      <p>When an EOA signs an EIP-2612 permit, the signature is an ECDSA signature verifiable against the owner's public key. Any smart contract can verify this signature using <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">ecrecover()</code> — the recovered address either matches or it does not.</p>
+      <p>Smart contract wallets do not have a single private key. A Safe multisig might require 2-of-3 signers. A Kernel account might use WebAuthn passkeys. An ERC-4337 account abstraction wallet might implement custom validation logic. There is no single ECDSA key to recover against.</p>
+      <p>ERC-1271 solves this by defining a standard interface for smart contracts to validate signatures on their own behalf. Instead of <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">ecrecover()</code>, the verifier calls <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">isValidSignature(bytes32 hash, bytes memory signature)</code> on the wallet contract itself. The wallet implements its own validation logic and returns a magic value if the signature is valid.</p>
+
+      <h2>How AuthOnce Implements ERC-1271</h2>
+      <p>When SubscriptionVault processes a permit from a smart contract wallet address, it detects that the address has contract code deployed and calls <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">isValidSignature()</code> on that address instead of using <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">ecrecover()</code>. The wallet contract responds with the ERC-1271 magic value (<code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">0x1626ba7e</code>) if the authorization is valid under the wallet's own logic. This allows any ERC-1271-compliant smart contract wallet to authorize subscriptions natively.</p>
+
+      <div class="code-block">
+        <div class="code-label">ERC-1271 Signature Verification — SubscriptionVault (simplified)</div>
+        <pre>function _isValidPermit(address owner, bytes32 permitHash, bytes memory sig) 
+    internal view returns (bool) {
+    
+    // EOA path: standard ECDSA recovery
+    if (owner.code.length == 0) {
+        address recovered = ECDSA.recover(permitHash, sig);
+        return recovered == owner;
+    }
+    
+    // Smart contract wallet path: ERC-1271
+    try IERC1271(owner).isValidSignature(permitHash, sig) 
+        returns (bytes4 magic) {
+        return magic == IERC1271.isValidSignature.selector; // 0x1626ba7e
+    } catch {
+        return false;
+    }
+}</pre>
+      </div>
+
+      <h2>AI Agent Use Cases</h2>
+      <p>ERC-1271 support means the following agent wallet types can authorize and manage AuthOnce subscriptions without modification:</p>
+
+      <div class="agent-types">
+        <div class="agent-card"><h4>Safe Multisig</h4><p>Multi-party agent authorization. Requires M-of-N signers to approve a subscription. Useful for high-value agent treasury operations.</p></div>
+        <div class="agent-card"><h4>ERC-4337 Accounts</h4><p>Account abstraction wallets with custom validation logic. AI agents can implement spending limits and approval policies at the wallet level.</p></div>
+        <div class="agent-card"><h4>Kernel / Modular Wallets</h4><p>Plugin-based smart contract wallets where subscription authorization can be handled by a dedicated validator module.</p></div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">What This Enables</div>
+        <p>An AI agent can subscribe to a SaaS API, maintain that subscription autonomously, handle <a href="grace-periods.html" class="ilink">grace period retries</a> without human intervention, and revoke the subscription when the service is no longer needed — all through its smart contract wallet, without any human in the loop for routine billing operations.</p>
+      </div>
+
+      <h2>Grace Periods and Autonomous Recovery</h2>
+      <p>The <a href="grace-periods.html" class="ilink">programmable grace period</a> is particularly valuable for agent-managed subscriptions. An agent wallet's USDC balance fluctuates based on its operational treasury — it may run low during a period of high activity. A 7–14 day grace period gives the agent's treasury management logic time to replenish the balance and allow the protocol to retry automatically, without the subscription being cancelled and requiring re-authorization.</p>
+
+      <h2>Revocation for Smart Contract Wallets</h2>
+      <p>Just as EOA subscribers can revoke permits by incrementing their nonce, smart contract wallets can revoke authorization by implementing revocation logic through their ERC-1271 <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">isValidSignature()</code> response. Returning a non-magic value for a previously authorized permit hash effectively cancels the subscription. The Keeper detects the invalid signature on next execution and transitions the subscription to Cancelled state.</p>
+      <p>This gives agent developers fine-grained control over subscription lifecycle without requiring interaction with AuthOnce's contracts directly — the wallet's own logic determines what subscriptions remain active.</p>
+
+      <div class="related-inline">
+        <h4>Related Reading</h4>
+        <div class="related-links">
+          <a href="eip2612-explained.html">EIP-2612: the EOA permit flow ERC-1271 extends</a>
+          <a href="grace-periods.html">Grace periods for autonomous agent billing recovery</a>
+          <a href="base-network-subscriptions.html">Why Base Network for agent payment infrastructure</a>
+          <a href="what-is-noncustodial-billing.html">Non-custodial billing: the architecture agents need</a>
+        </div>
+      </div>
+
+      <h2>The Broader Agentic Commerce Picture</h2>
+      <p>Subscription billing for AI agents is not a niche feature. As autonomous systems acquire spending capability, they need billing infrastructure that matches their architecture. EOA-only billing protocols cannot serve agents operating through smart contract wallets — which is the architecture that provides the safety, auditability, and multi-party authorization that enterprise agent deployments require.</p>
+      <p>AuthOnce's ERC-1271 support was built in from day one because the agentic commerce use case was identified as a primary growth vector — not retrofitted later. The protocol is ready for agents today.</p>
+
+      <div class="article-cta">
+        <h3>Build agent-ready subscription infrastructure</h3>
+        <p>ERC-1271 native. EIP-2612 gasless. Base Network. Open source contracts.</p>
+        <div class="article-cta-btns"><a href="https://authonce.io" class="btn-blue">Get Started</a><a href="https://github.com/authonce-protocol" class="btn-ghost">View on GitHub →</a></div>
+      </div>
+    </div>
+  </article>
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <h4>Table of Contents</h4>
+      <ul class="toc-list">
+        <li><a href="#">The signature verification problem</a></li>
+        <li><a href="#">How AuthOnce implements ERC-1271</a></li>
+        <li><a href="#">AI agent use cases</a></li>
+        <li><a href="#">Grace periods for agents</a></li>
+        <li><a href="#">Revocation for smart wallets</a></li>
+        <li><a href="#">Agentic commerce picture</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-cta">
+      <h4>Agent-ready from day one</h4>
+      <p>ERC-1271 native. Safe, ERC-4337, and Kernel wallet support.</p>
+      <a href="https://authonce.io" class="sidebar-btn">Start Building →</a>
+    </div>
+    <div class="sidebar-card">
+      <h4>Related Articles</h4>
+      <div class="related-card-list">
+        <a href="eip2612-explained.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">EIP-2612 Explained</div></a>
+        <a href="grace-periods.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">Programmable Grace Periods</div></a>
+        <a href="base-network-subscriptions.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">Why Base Network</div></a>
+        <a href="what-is-noncustodial-billing.html" class="related-card-item"><div class="rtag">Merchant</div><div class="rtitle">Non-Custodial Billing Explained</div></a>
+      </div>
+    </div>
+  </aside>
+</div>
+<footer><span class="footer-brand">Auth<em>Once</em></span><div class="footer-links"><a href="index.html">Blog</a><a href="https://authonce.io">Protocol</a><a href="https://github.com/authonce-protocol">GitHub</a><a href="complete-guide.html">Complete Guide</a></div><span class="footer-note">© 2026 AuthOnce · Built on Base Network · BSL 1.1</span></footer>
+</body>
+</html>

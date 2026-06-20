@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Programmable Grace Periods: The Subscription Primitive Crypto Was Missing | AuthOnce</title>
+<meta name="description" content="Why blockchains have no native retry logic — and how AuthOnce implements programmable grace periods as a first-class on-chain primitive to reduce involuntary churn.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Programmable Grace Periods: The Subscription Primitive Crypto Was Missing">
+<meta property="og:description" content="How AuthOnce's 1–30 day programmable grace periods solve the biggest failure mode in recurring crypto billing.">
+<meta property="og:image" content="https://authonce.io/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://authonce.io/og-image.png">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://blog.authonce.io/grace-periods">
+<link rel="canonical" href="https://blog.authonce.io/grace-periods">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Programmable Grace Periods: The Subscription Primitive Crypto Was Missing",
+  "description": "Why blockchains have no native retry logic — and how AuthOnce implements programmable grace periods as a first-class on-chain primitive.",
+  "author": { "@type": "Organization", "name": "AuthOnce" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "AuthOnce",
+    "url": "https://authonce.io",
+    "logo": { "@type": "ImageObject", "url": "https://authonce.io/logo.png" }
+  },
+  "datePublished": "2026-06-20",
+  "dateModified": "2026-06-20",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://blog.authonce.io/grace-periods" },
+  "keywords": ["programmable grace period", "crypto subscription billing", "USDC recurring payments", "dunning logic blockchain", "failed crypto payments", "EIP-2612", "Base Network"],
+  "articleSection": "Developer"
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #0D0F14; --ink-2: #3A3D47; --ink-3: #7A7E8C;
+    --rule: #E8E9ED; --surface: #F6F7F9; --white: #FFFFFF;
+    --base-blue: #0052FF; --base-dim: #E8EEFF; --tag-bg: #EEF0F5;
+  }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--white); color: var(--ink); -webkit-font-smoothing: antialiased; line-height: 1.6; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--rule);
+    padding: 0 2rem; height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+  .nav-logo { width: 28px; height: 28px; background: var(--base-blue); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .nav-logo span { color: white; font-weight: 700; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+  .nav-brand-text { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+  .nav-brand-text em { color: var(--base-blue); font-style: normal; }
+  .nav-links { display: flex; align-items: center; gap: 2rem; }
+  .nav-links a { text-decoration: none; color: var(--ink-2); font-size: 14px; font-weight: 500; }
+  .nav-links a:hover { color: var(--base-blue); }
+  .nav-cta { background: var(--base-blue); color: white; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; }
+  .nav-cta:hover { opacity: .85; color: white; }
+
+  .article-layout { max-width: 1160px; margin: 0 auto; padding: 60px 2rem; display: grid; grid-template-columns: 1fr 300px; gap: 64px; align-items: start; }
+
+  /* ARTICLE HEADER */
+  .article-header { margin-bottom: 40px; }
+  .breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  .breadcrumb a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--base-blue); }
+  .breadcrumb span { color: var(--rule); }
+  .article-tag {
+    display: inline-block;
+    background: var(--base-dim); color: var(--base-blue);
+    padding: 5px 12px; border-radius: 100px;
+    font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .article-header h1 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: 800; letter-spacing: -0.03em;
+    color: var(--ink); line-height: 1.1; margin-bottom: 20px;
+  }
+  .article-meta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .article-meta span { font-size: 13px; color: var(--ink-3); }
+  .article-meta strong { color: var(--ink-2); }
+
+  /* ARTICLE BODY */
+  .article-body { font-size: 1.025rem; line-height: 1.8; color: var(--ink-2); }
+  .article-body h2 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.4rem; font-weight: 700;
+    letter-spacing: -0.02em; color: var(--ink);
+    margin: 48px 0 16px; line-height: 1.2;
+  }
+  .article-body h3 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.1rem; font-weight: 700;
+    color: var(--ink); margin: 32px 0 12px;
+  }
+  .article-body p { margin-bottom: 20px; }
+  .article-body strong { color: var(--ink); font-weight: 600; }
+
+  /* INTERNAL LINK CALLOUT */
+  .ilink {
+    display: inline;
+    color: var(--base-blue);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(0,82,255,.3);
+    transition: border-color .15s;
+  }
+  .ilink:hover { border-color: var(--base-blue); }
+
+  /* CALLOUT BOXES */
+  .callout {
+    border-left: 3px solid var(--base-blue);
+    background: var(--base-dim); padding: 20px 24px;
+    border-radius: 0 10px 10px 0; margin: 32px 0;
+  }
+  .callout-title { font-size: 11px; font-weight: 700; color: var(--base-blue); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .callout p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+  .callout code { background: rgba(0,82,255,.12); padding: 2px 6px; border-radius: 4px; font-size: .85em; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--base-blue); }
+
+  /* STATE TABLE */
+  .state-table { width: 100%; border-collapse: collapse; margin: 28px 0; font-size: .9rem; }
+  .state-table th { background: var(--surface); padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); border-bottom: 2px solid var(--rule); }
+  .state-table td { padding: 12px 16px; border-bottom: 1px solid var(--rule); color: var(--ink-2); vertical-align: top; }
+  .state-table tr:last-child td { border-bottom: none; }
+  .state-badge { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; }
+  .state-badge.active { background: #E8FFF6; color: #065F46; }
+  .state-badge.grace { background: #FFF8E8; color: #92400E; }
+  .state-badge.suspended { background: #FFE8E8; color: #991B1B; }
+  .state-badge.cancelled { background: var(--tag-bg); color: var(--ink-3); }
+
+  /* CODE BLOCK */
+  .code-block { background: var(--ink); border-radius: 12px; padding: 24px; margin: 28px 0; overflow-x: auto; }
+  .code-block pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .8rem; line-height: 1.7; color: rgba(255,255,255,.85); }
+  .code-label { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+
+  /* RELATED ARTICLES IN BODY */
+  .related-inline { background: var(--surface); border-radius: 12px; padding: 24px; margin: 40px 0; }
+  .related-inline h4 { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .related-links { display: flex; flex-direction: column; gap: 8px; }
+  .related-links a { font-size: .9rem; color: var(--ink-2); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+  .related-links a::before { content: '→'; color: var(--base-blue); font-size: .8rem; }
+  .related-links a:hover { color: var(--base-blue); }
+
+  /* SIDEBAR */
+  .sidebar { position: sticky; top: 80px; }
+  .sidebar-card { background: var(--surface); border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+  .sidebar-card h4 { font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .toc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .toc-list a { font-size: .85rem; color: var(--ink-2); text-decoration: none; padding: 5px 0; border-bottom: 1px solid var(--rule); display: block; }
+  .toc-list a:hover { color: var(--base-blue); }
+  .toc-list li:last-child a { border-bottom: none; }
+  .sidebar-cta { background: var(--base-blue); border-radius: 14px; padding: 24px; text-align: center; }
+  .sidebar-cta h4 { font-family: 'DM Sans', sans-serif; font-size: 1rem; font-weight: 700; color: white; margin-bottom: 8px; }
+  .sidebar-cta p { font-size: .8rem; color: rgba(255,255,255,.7); margin-bottom: 16px; line-height: 1.5; }
+  .sidebar-btn { display: block; background: white; color: var(--base-blue); padding: 10px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; }
+  .sidebar-btn:hover { opacity: .9; }
+  .related-card-list { display: flex; flex-direction: column; gap: 12px; }
+  .related-card-item { text-decoration: none; display: block; padding: 12px; background: white; border-radius: 10px; border: 1px solid var(--rule); transition: border-color .15s; }
+  .related-card-item:hover { border-color: var(--base-blue); }
+  .related-card-item .rtag { font-size: 10px; font-weight: 700; color: var(--base-blue); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .related-card-item .rtitle { font-size: .85rem; font-weight: 600; color: var(--ink); line-height: 1.3; }
+
+  /* ARTICLE CTA */
+  .article-cta { background: var(--ink); border-radius: 16px; padding: 40px; margin-top: 60px; text-align: center; }
+  .article-cta h3 { font-family: 'DM Sans', sans-serif; font-size: 1.4rem; font-weight: 800; color: white; margin-bottom: 10px; letter-spacing: -0.02em; }
+  .article-cta p { color: rgba(255,255,255,.6); font-size: .9rem; margin-bottom: 24px; }
+  .article-cta-btns { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn-blue { background: var(--base-blue); color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; }
+  .btn-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.8); padding: 12px 24px; border-radius: 10px; font-size: 14px; text-decoration: none; font-weight: 500; }
+
+  footer { border-top: 1px solid var(--rule); padding: 32px 2rem; max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .footer-brand { font-family: 'DM Sans', sans-serif; font-weight: 700; color: var(--ink); }
+  .footer-brand em { color: var(--base-blue); font-style: normal; }
+  .footer-links { display: flex; gap: 20px; }
+  .footer-links a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .footer-links a:hover { color: var(--base-blue); }
+  .footer-note { font-size: 12px; color: var(--ink-3); }
+
+  @media (max-width: 768px) {
+    nav { padding: 0 1rem; }
+    .nav-links { display: none; }
+    .article-layout { grid-template-columns: 1fr; padding: 32px 1rem; }
+    .sidebar { display: none; }
+  }
+</style>
+<link rel="icon" type="image/x-icon" href="https://authonce.io/favicon.ico">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5NE0QK40WZ');
+</script>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-brand">
+    <div class="nav-logo"><span>A</span></div>
+    <span class="nav-brand-text">Auth<em>Once</em> Blog</span>
+  </a>
+  <div class="nav-links">
+    <a href="index.html#guides">Guides</a>
+    <a href="index.html#developer">Developer</a>
+    <a href="index.html#dao">DAO & Web3</a>
+    <a href="https://authonce.io">← AuthOnce</a>
+    <a href="https://authonce.io" class="nav-cta">Start Free</a>
+  </div>
+</nav>
+
+<div class="article-layout">
+  <article>
+    <header class="article-header">
+      <nav class="breadcrumb" aria-label="breadcrumb">
+        <a href="index.html">Blog</a>
+        <span>/</span>
+        <a href="index.html#developer">Developer</a>
+        <span>/</span>
+        <span>Grace Periods</span>
+      </nav>
+      <span class="article-tag">Developer · Protocol</span>
+      <h1>Programmable Grace Periods: The Subscription Primitive Crypto Was Missing</h1>
+      <div class="article-meta">
+        <span>By <strong>AuthOnce</strong></span>
+        <span>·</span>
+        <span>June 20, 2026</span>
+        <span>·</span>
+        <span>8 min read</span>
+      </div>
+    </header>
+
+    <div class="article-body">
+
+      <p>Subscription billing on-chain has a well-documented failure mode. A subscriber's wallet runs low. The pull payment fails. The subscription cancels. The subscriber is offboarded — not because they intended to cancel, but because their USDC balance was $2.00 short at 00:00 UTC on billing day.</p>
+
+      <p>This is <strong>involuntary churn</strong>. It is the single largest source of silent revenue loss in recurring crypto billing. And until now, the on-chain tooling to handle it simply did not exist.</p>
+
+      <p>AuthOnce introduces programmable grace periods as a first-class protocol primitive. This article explains how it works technically, and why it matters for any team building <a href="what-is-noncustodial-billing.html" class="ilink">non-custodial USDC subscription billing</a> on EVM chains.</p>
+
+      <h2>The Root Problem: Blockchains Have No Native Retry Logic</h2>
+
+      <p>Traditional payment processors implement dunning logic at the infrastructure layer. A failed charge triggers a retry schedule — typically at 3, 5, and 7 days after initial failure — with automatic subscriber communication and access management throughout.</p>
+
+      <p>Blockchains have none of this natively. A failed transaction is a failed transaction. There is no built-in scheduler, no retry queue, no grace state. The EVM executes or reverts. That is the full vocabulary.</p>
+
+      <p>Early crypto subscription protocols addressed this by pushing retry logic entirely off-chain. The problem: off-chain retry logic introduces custodial risk and centralization — the same structural vulnerabilities that make custodial billing unattractive in the first place. To understand why this distinction matters at a treasury level, see our article on <a href="real-cost-custodial.html" class="ilink">the real cost of custodial billing for DAOs</a>.</p>
+
+      <p>AuthOnce implements grace period logic at the contract level, enforced on-chain, with off-chain execution triggering handled by the Keeper.</p>
+
+      <h2>The Four On-Chain Subscription States</h2>
+
+      <p>AuthOnce's subscription lifecycle is defined by four discrete states, each enforced by <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">SubscriptionVault.sol</code>:</p>
+
+      <table class="state-table">
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Condition</th>
+            <th>Subscriber Access</th>
+            <th>Next Transition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="state-badge active">Active</span></td>
+            <td>Permit valid, payments executing on schedule</td>
+            <td>Full access</td>
+            <td>→ Grace (on failed pull)</td>
+          </tr>
+          <tr>
+            <td><span class="state-badge grace">Grace</span></td>
+            <td>Payment failed, within configured grace window</td>
+            <td>Maintained</td>
+            <td>→ Active (retry succeeds) or Suspended (window expires)</td>
+          </tr>
+          <tr>
+            <td><span class="state-badge suspended">Suspended</span></td>
+            <td>Grace period expired, no successful pull</td>
+            <td>Revoked</td>
+            <td>→ Active (subscriber tops up + retry) or Cancelled</td>
+          </tr>
+          <tr>
+            <td><span class="state-badge cancelled">Cancelled</span></td>
+            <td>Permit revoked by subscriber or merchant</td>
+            <td>Revoked</td>
+            <td>Terminal state</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>The grace period duration (1–30 days) is set by the merchant at subscription plan creation. It is stored in <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">MerchantRegistry.sol</code> and enforced by <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">SubscriptionVault</code> at execution time.</p>
+
+      <div class="callout">
+        <div class="callout-title">Protocol Detail</div>
+        <p>When <code>executePull()</code> fails due to insufficient balance, the Keeper records the failure timestamp on-chain and transitions the subscription to Grace state. No merchant intervention required. No off-chain database update. State is canonical and verifiable.</p>
+      </div>
+
+      <h2>How It Connects to EIP-2612 Permit Authorization</h2>
+
+      <p>Grace period logic works because AuthOnce's authorization model gives the protocol the right tools. Subscribers sign an <a href="eip2612-explained.html" class="ilink">EIP-2612 permit</a> — an off-chain cryptographic authorization — during onboarding. This permit remains valid throughout the grace period. The Keeper retries <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">executePull()</code> against the same permit. If the subscriber's wallet balance recovers, the retry succeeds and the subscription returns to Active without any re-authorization step.</p>
+
+      <p>This is the architectural advantage of <a href="eip2612-explained.html" class="ilink">gasless permit authorization</a>: the subscriber's original intent is cryptographically preserved for the duration of the permit's validity. A failed payment does not invalidate the authorization — only an explicit revocation does.</p>
+
+      <div class="code-block">
+        <div class="code-label">SubscriptionVault.sol — Grace State Transition (simplified)</div>
+        <pre>function executePull(address merchant, address subscriber) external {
+    Subscription storage sub = subscriptions[merchant][subscriber];
+    require(sub.status == Status.Active || sub.status == Status.Grace, "Invalid state");
+
+    bool success = _attemptTransfer(subscriber, merchant, sub.amount);
+
+    if (!success && sub.status == Status.Active) {
+        sub.status = Status.Grace;
+        sub.graceStart = block.timestamp;
+        emit GracePeriodInitiated(merchant, subscriber, block.timestamp);
+    }
+
+    if (!success && sub.status == Status.Grace) {
+        uint256 gracePeriod = merchantRegistry.getGracePeriod(merchant);
+        if (block.timestamp > sub.graceStart + gracePeriod) {
+            sub.status = Status.Suspended;
+            emit SubscriptionSuspended(merchant, subscriber);
+        }
+    }
+
+    if (success) {
+        sub.status = Status.Active;
+        sub.lastPull = block.timestamp;
+        emit PaymentExecuted(merchant, subscriber, sub.amount);
+    }
+}</pre>
+      </div>
+
+      <h2>The Keeper: Execution Without Centralization</h2>
+
+      <p>The Keeper is AuthOnce's off-chain execution layer. It monitors subscription schedules and triggers <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">executePull()</code> at each billing cycle and on retry attempts during grace periods.</p>
+
+      <p>Current Keeper architecture scales in three tiers: sequential execution up to 20 active merchants; 25 parallel workers up to 50 merchants; and Gelato Network or Chainlink Automation as the decentralized path beyond that. The Keeper is the only centralized component in the current architecture — and its decentralization is the explicit post-mainnet roadmap.</p>
+
+      <div class="related-inline">
+        <h4>Related Reading</h4>
+        <div class="related-links">
+          <a href="base-network-subscriptions.html">Why Base Network is the right chain for recurring payments</a>
+          <a href="eip2612-explained.html">EIP-2612: gasless USDC subscriptions without pre-approvals</a>
+          <a href="ai-agent-payments.html">ERC-1271 and AI agent subscription payments</a>
+          <a href="real-cost-custodial.html">The real cost of custodial billing for DAOs</a>
+        </div>
+      </div>
+
+      <h2>ERC-1271: AI Agent Compatibility</h2>
+
+      <p>AuthOnce implements ERC-1271 for smart contract wallet signature verification. This means AI agents operating through smart contract wallets can authorize and manage subscriptions — including navigating grace period retries — natively. For a full treatment of this capability, see our article on <a href="ai-agent-payments.html" class="ilink">AI agent payments and ERC-1271 support</a>.</p>
+
+      <h2>Why This Is a Protocol Primitive, Not a Feature</h2>
+
+      <p>Programmable grace periods are infrastructure, not a product differentiator that can be toggled off. Any team building subscription protocols on EVM chains needs a defined answer to one question: what happens when a pull payment fails?</p>
+
+      <p>The options are: cancel immediately (high involuntary churn, poor subscriber experience); retry off-chain (custodial risk, centralization, no on-chain auditability); or encode grace logic at the contract level (trustless, verifiable, subscriber-friendly).</p>
+
+      <p>AuthOnce chose the third path. The contracts are open. The architecture is documented. <a href="https://github.com/authonce-protocol" class="ilink">Source is available on GitHub</a>. Builders can read every line before integrating.</p>
+
+      <h2>Configuring Grace Periods for Your Use Case</h2>
+
+      <p>Merchants set grace period duration at plan creation via the <a href="integration-guide.html" class="ilink">AuthOnce merchant dashboard</a>. The configurable range is 1–30 days. Recommended configurations by use case:</p>
+
+      <ul style="margin: 0 0 20px 24px; display:flex; flex-direction:column; gap:10px;">
+        <li><strong>SaaS tools (monthly billing):</strong> 7–14 days. Balances recovery time against access risk.</li>
+        <li><strong>DAO membership dues:</strong> 14–30 days. Member wallet balances fluctuate with market conditions. Extended grace reduces governance disruption.</li>
+        <li><strong>Creator platforms (weekly billing):</strong> 3–7 days. Shorter cycles need tighter windows.</li>
+        <li><strong>High-value B2B contracts:</strong> 14–30 days. Enterprise treasury operations may have deliberate settlement timing.</li>
+      </ul>
+
+      <p>Grace period configuration is stored on-chain in <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">MerchantRegistry.sol</code> at plan creation. It cannot be retroactively changed for existing active subscriptions — only for new subscriber authorizations. This protects subscribers from unilateral merchant changes to agreed billing terms.</p>
+
+      <h2>Contract Addresses</h2>
+      <p><strong>Base Sepolia Testnet (current):</strong><br>
+      SubscriptionVault: <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--ink-2)">0xeb068B47731261F7B4A5ae8535686D67D7f72321</code><br>
+      MerchantRegistry: <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--ink-2)">0xAE681E431c353f5930dDFfBC74037d3f2afE3264</code></p>
+
+      <p>Mainnet deployment targeting Q3 2026. Contracts are frozen pre-audit. <a href="compliance.html" class="ilink">Audit status and compliance posture →</a></p>
+
+      <div class="article-cta">
+        <h3>Ready to implement grace periods?</h3>
+        <p>AuthOnce is live on Base Sepolia. Mainnet launches Q3 2026. Read the integration guide or start building now.</p>
+        <div class="article-cta-btns">
+          <a href="https://authonce.io" class="btn-blue">Start with AuthOnce</a>
+          <a href="integration-guide.html" class="btn-ghost">Integration Guide →</a>
+        </div>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <h4>Table of Contents</h4>
+      <ul class="toc-list">
+        <li><a href="#root-problem">The root problem</a></li>
+        <li><a href="#four-states">Four on-chain states</a></li>
+        <li><a href="#eip2612">EIP-2612 connection</a></li>
+        <li><a href="#keeper">The Keeper</a></li>
+        <li><a href="#erc1271">ERC-1271 & AI agents</a></li>
+        <li><a href="#primitive">A protocol primitive</a></li>
+        <li><a href="#configuration">Configuration guide</a></li>
+        <li><a href="#contracts">Contract addresses</a></li>
+      </ul>
+    </div>
+
+    <div class="sidebar-cta">
+      <h4>Start billing in USDC</h4>
+      <p>Non-custodial. 0.5% fee. Programmable grace periods. Live on Base Sepolia.</p>
+      <a href="https://authonce.io" class="sidebar-btn">Get Started →</a>
+    </div>
+
+    <div class="sidebar-card">
+      <h4>Related Articles</h4>
+      <div class="related-card-list">
+        <a href="eip2612-explained.html" class="related-card-item">
+          <div class="rtag">Developer</div>
+          <div class="rtitle">EIP-2612: Gasless USDC Subscriptions</div>
+        </a>
+        <a href="real-cost-custodial.html" class="related-card-item">
+          <div class="rtag">DAO Treasury</div>
+          <div class="rtitle">The Real Cost of Custodial Billing</div>
+        </a>
+        <a href="why-switched.html" class="related-card-item">
+          <div class="rtag">Case Study</div>
+          <div class="rtitle">$8K/Month in Billing Fees Fixed</div>
+        </a>
+        <a href="base-network-subscriptions.html" class="related-card-item">
+          <div class="rtag">Developer</div>
+          <div class="rtitle">Why Base Network for Subscriptions</div>
+        </a>
+        <a href="ai-agent-payments.html" class="related-card-item">
+          <div class="rtag">Developer</div>
+          <div class="rtitle">AI Agent Payments & ERC-1271</div>
+        </a>
+        <a href="compliance.html" class="related-card-item">
+          <div class="rtag">Compliance</div>
+          <div class="rtitle">No CASP License Required</div>
+        </a>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<footer>
+  <span class="footer-brand">Auth<em>Once</em></span>
+  <div class="footer-links">
+    <a href="index.html">Blog</a>
+    <a href="https://authonce.io">Protocol</a>
+    <a href="https://github.com/authonce-protocol">GitHub</a>
+    <a href="complete-guide.html">Complete Guide</a>
+  </div>
+  <span class="footer-note">© 2026 AuthOnce · Built on Base Network · BSL 1.1</span>
+</footer>
+
+</body>
+</html>

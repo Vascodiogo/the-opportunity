@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>We Were Losing $8,000 a Month in Billing Fees. Here's How We Fixed It. | AuthOnce</title>
+<meta name="description" content="At $400K MRR, custodial billing fees compound silently. One Web3 SaaS merchant's move to non-custodial USDC billing on Base Network — and the math behind saving $124,800 per year.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="We Were Losing $8,000 a Month in Billing Fees. Here's How We Fixed It.">
+<meta property="og:description" content="The economics of switching from custodial to non-custodial USDC subscription billing on Base Network.">
+<meta property="og:image" content="https://authonce.io/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://authonce.io/og-image.png">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://blog.authonce.io/why-switched">
+<link rel="canonical" href="https://blog.authonce.io/why-switched">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "We Were Losing $8,000 a Month in Billing Fees. Here's How We Fixed It.",
+  "description": "At $400K MRR, custodial billing fees compound silently. One merchant's move to non-custodial USDC billing and the math behind $124,800 in annual savings.",
+  "author": { "@type": "Organization", "name": "AuthOnce" },
+  "publisher": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io" },
+  "datePublished": "2026-06-20",
+  "dateModified": "2026-06-20",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://blog.authonce.io/why-switched" },
+  "keywords": ["USDC subscription billing", "non-custodial billing", "Web3 SaaS payments", "Base Network", "crypto recurring payments", "billing fees"]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #0D0F14; --ink-2: #3A3D47; --ink-3: #7A7E8C;
+    --rule: #E8E9ED; --surface: #F6F7F9; --white: #FFFFFF;
+    --base-blue: #0052FF; --base-dim: #E8EEFF; --tag-bg: #EEF0F5;
+  }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--white); color: var(--ink); -webkit-font-smoothing: antialiased; line-height: 1.6; }
+  nav { position: sticky; top: 0; z-index: 100; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--rule); padding: 0 2rem; height: 60px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+  .nav-logo { width: 28px; height: 28px; background: var(--base-blue); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .nav-logo span { color: white; font-weight: 700; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+  .nav-brand-text { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+  .nav-brand-text em { color: var(--base-blue); font-style: normal; }
+  .nav-links { display: flex; align-items: center; gap: 2rem; }
+  .nav-links a { text-decoration: none; color: var(--ink-2); font-size: 14px; font-weight: 500; }
+  .nav-links a:hover { color: var(--base-blue); }
+  .nav-cta { background: var(--base-blue); color: white; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; }
+  .article-layout { max-width: 1160px; margin: 0 auto; padding: 60px 2rem; display: grid; grid-template-columns: 1fr 300px; gap: 64px; align-items: start; }
+  .article-header { margin-bottom: 40px; }
+  .breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  .breadcrumb a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--base-blue); }
+  .breadcrumb span { color: var(--rule); }
+  .article-tag { display: inline-block; background: #E8FFF6; color: #065F46; padding: 5px 12px; border-radius: 100px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 16px; }
+  .article-header h1 { font-family: 'DM Sans', sans-serif; font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; color: var(--ink); line-height: 1.1; margin-bottom: 20px; }
+  .article-meta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .article-meta span { font-size: 13px; color: var(--ink-3); }
+  .article-meta strong { color: var(--ink-2); }
+  .article-body { font-size: 1.025rem; line-height: 1.8; color: var(--ink-2); }
+  .article-body h2 { font-family: 'DM Sans', sans-serif; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); margin: 48px 0 16px; line-height: 1.2; }
+  .article-body h3 { font-family: 'DM Sans', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--ink); margin: 32px 0 12px; }
+  .article-body p { margin-bottom: 20px; }
+  .article-body strong { color: var(--ink); font-weight: 600; }
+  .ilink { color: var(--base-blue); text-decoration: none; font-weight: 500; border-bottom: 1px solid rgba(0,82,255,.3); }
+  .ilink:hover { border-color: var(--base-blue); }
+  .callout { border-left: 3px solid var(--base-blue); background: var(--base-dim); padding: 20px 24px; border-radius: 0 10px 10px 0; margin: 32px 0; }
+  .callout-title { font-size: 11px; font-weight: 700; color: var(--base-blue); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .callout p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+  .fee-table { width: 100%; border-collapse: collapse; margin: 28px 0; font-size: .9rem; }
+  .fee-table th { background: var(--surface); padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); border-bottom: 2px solid var(--rule); }
+  .fee-table td { padding: 12px 16px; border-bottom: 1px solid var(--rule); color: var(--ink-2); }
+  .fee-table tr:last-child td { border-bottom: none; }
+  .fee-table .saving { color: #065F46; font-weight: 600; }
+  .highlight-box { background: var(--ink); border-radius: 14px; padding: 32px; margin: 40px 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; text-align: center; }
+  .highlight-val { font-family: 'DM Sans', sans-serif; font-size: 2rem; font-weight: 800; color: white; letter-spacing: -0.04em; display: block; }
+  .highlight-label { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .related-inline { background: var(--surface); border-radius: 12px; padding: 24px; margin: 40px 0; }
+  .related-inline h4 { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .related-links { display: flex; flex-direction: column; gap: 8px; }
+  .related-links a { font-size: .9rem; color: var(--ink-2); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+  .related-links a::before { content: '→'; color: var(--base-blue); font-size: .8rem; }
+  .related-links a:hover { color: var(--base-blue); }
+  .article-cta { background: var(--ink); border-radius: 16px; padding: 40px; margin-top: 60px; text-align: center; }
+  .article-cta h3 { font-family: 'DM Sans', sans-serif; font-size: 1.4rem; font-weight: 800; color: white; margin-bottom: 10px; letter-spacing: -0.02em; }
+  .article-cta p { color: rgba(255,255,255,.6); font-size: .9rem; margin-bottom: 24px; }
+  .article-cta-btns { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn-blue { background: var(--base-blue); color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; }
+  .btn-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.8); padding: 12px 24px; border-radius: 10px; font-size: 14px; text-decoration: none; font-weight: 500; }
+  .sidebar { position: sticky; top: 80px; }
+  .sidebar-card { background: var(--surface); border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+  .sidebar-card h4 { font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+  .toc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .toc-list a { font-size: .85rem; color: var(--ink-2); text-decoration: none; padding: 5px 0; border-bottom: 1px solid var(--rule); display: block; }
+  .toc-list a:hover { color: var(--base-blue); }
+  .toc-list li:last-child a { border-bottom: none; }
+  .sidebar-cta { background: var(--base-blue); border-radius: 14px; padding: 24px; text-align: center; }
+  .sidebar-cta h4 { font-family: 'DM Sans', sans-serif; font-size: 1rem; font-weight: 700; color: white; margin-bottom: 8px; }
+  .sidebar-cta p { font-size: .8rem; color: rgba(255,255,255,.7); margin-bottom: 16px; line-height: 1.5; }
+  .sidebar-btn { display: block; background: white; color: var(--base-blue); padding: 10px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; }
+  .related-card-list { display: flex; flex-direction: column; gap: 12px; }
+  .related-card-item { text-decoration: none; display: block; padding: 12px; background: white; border-radius: 10px; border: 1px solid var(--rule); transition: border-color .15s; }
+  .related-card-item:hover { border-color: var(--base-blue); }
+  .related-card-item .rtag { font-size: 10px; font-weight: 700; color: var(--base-blue); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .related-card-item .rtitle { font-size: .85rem; font-weight: 600; color: var(--ink); line-height: 1.3; }
+  footer { border-top: 1px solid var(--rule); padding: 32px 2rem; max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .footer-brand { font-family: 'DM Sans', sans-serif; font-weight: 700; color: var(--ink); }
+  .footer-brand em { color: var(--base-blue); font-style: normal; }
+  .footer-links { display: flex; gap: 20px; }
+  .footer-links a { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .footer-links a:hover { color: var(--base-blue); }
+  .footer-note { font-size: 12px; color: var(--ink-3); }
+  @media (max-width: 768px) { nav { padding: 0 1rem; } .nav-links { display: none; } .article-layout { grid-template-columns: 1fr; padding: 32px 1rem; } .sidebar { display: none; } .highlight-box { grid-template-columns: 1fr; } }
+</style>
+<link rel="icon" type="image/x-icon" href="https://authonce.io/favicon.ico">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5NE0QK40WZ');
+</script>
+</head>
+<body>
+<nav>
+  <a href="index.html" class="nav-brand"><div class="nav-logo"><span>A</span></div><span class="nav-brand-text">Auth<em>Once</em> Blog</span></a>
+  <div class="nav-links">
+    <a href="index.html#guides">Guides</a><a href="index.html#developer">Developer</a><a href="index.html#dao">DAO & Web3</a><a href="https://authonce.io">← AuthOnce</a>
+    <a href="https://authonce.io" class="nav-cta">Start Free</a>
+  </div>
+</nav>
+<div class="article-layout">
+  <article>
+    <header class="article-header">
+      <nav class="breadcrumb"><a href="index.html">Blog</a><span>/</span><a href="index.html#guides">Case Studies</a><span>/</span><span>Why We Switched</span></nav>
+      <span class="article-tag">Case Study · Web3 SaaS</span>
+      <h1>We Were Losing $8,000 a Month in Billing Fees. Here's How We Fixed It.</h1>
+      <div class="article-meta"><span>By <strong>AuthOnce</strong></span><span>·</span><span>June 20, 2026</span><span>·</span><span>6 min read</span></div>
+    </header>
+    <div class="article-body">
+      <p>Every month, a significant portion of revenue was disappearing before it ever reached the treasury. Not to fraud. Not to intentional churn. To billing infrastructure fees — a silent tax on every successful payment.</p>
+      <p>At $400,000 in monthly recurring revenue, a standard custodial billing fee of 3% costs over $12,000 per month. That is $144,000 per year paid to infrastructure that adds no product value and introduces counterparty custody risk on top of the fee.</p>
+      <p>This is the economic reality of custodial billing for <a href="what-is-noncustodial-billing.html" class="ilink">Web3 SaaS products</a> whose users hold USDC. You are running a crypto-native product through fiat-era infrastructure — and paying fiat-era margins for it.</p>
+
+      <h2>The Problem With Custodial Billing for Crypto-Native Teams</h2>
+      <p>When you use custodial payment infrastructure to bill crypto users, you introduce a structural mismatch. Your users hold USDC in self-custodied wallets. But collecting a recurring payment forces them through a processor's custody layer — one that charges a percentage, introduces settlement delays, and requires trusting a third party with your revenue flow every billing cycle.</p>
+      <p>The custodian takes a cut. Every month. On every transaction. Without exception. And that fee is baked into your unit economics in a way that is easy to normalize and very difficult to see clearly until you do the annual math.</p>
+
+      <div class="highlight-box">
+        <div><span class="highlight-val">$12,400</span><div class="highlight-label">Monthly custodial fees at $400K MRR</div></div>
+        <div><span class="highlight-val">$2,000</span><div class="highlight-label">AuthOnce fees at same MRR</div></div>
+        <div><span class="highlight-val">$124,800</span><div class="highlight-label">Annual saving returned to treasury</div></div>
+      </div>
+
+      <h2>Fee Comparison Across MRR Levels</h2>
+      <p>The math scales linearly. Here is the comparison at four common MRR levels, using a 3% custodial fee and AuthOnce's hardcoded 0.5% protocol fee plus 0.5% application fee:</p>
+
+      <table class="fee-table">
+        <thead><tr><th>Monthly MRR</th><th>Custodial (3%)</th><th>AuthOnce (1% total)</th><th>Monthly Saving</th><th>Annual Saving</th></tr></thead>
+        <tbody>
+          <tr><td>$10,000</td><td>$300</td><td>$100</td><td>$200</td><td class="saving">$2,400</td></tr>
+          <tr><td>$50,000</td><td>$1,500</td><td>$500</td><td>$1,000</td><td class="saving">$12,000</td></tr>
+          <tr><td>$100,000</td><td>$3,000</td><td>$1,000</td><td>$2,000</td><td class="saving">$24,000</td></tr>
+          <tr><td>$400,000</td><td>$12,000</td><td>$4,000</td><td>$8,000</td><td class="saving">$96,000</td></tr>
+        </tbody>
+      </table>
+
+      <p>These figures use a conservative 3% custodial rate. Many processors charge additional per-transaction fees, which push the effective rate higher on smaller ticket sizes.</p>
+
+      <div class="callout">
+        <div class="callout-title">Protocol Transparency</div>
+        <p>AuthOnce's 0.5% protocol fee is hardcoded and immutable in <code>executePull()</code>. It cannot be changed by governance, operations, or any admin function. Every fee collection is recorded on-chain and independently verifiable.</p>
+      </div>
+
+      <h2>Non-Custodial Billing: How It Works</h2>
+      <p>AuthOnce is a non-custodial USDC subscription billing protocol built on Base Network. When a subscriber authorizes a subscription, they sign an <a href="eip2612-explained.html" class="ilink">EIP-2612 permit</a> — a cryptographic authorization that requires no gas and no pre-approval transaction. No funds move at authorization. No custodian holds anything.</p>
+      <p>On each billing cycle, the Keeper executes a pull payment directly from the subscriber's wallet to the merchant's wallet. The full settlement flow runs on-chain. The merchant receives USDC directly. Nothing passes through a third-party custodian.</p>
+      <p>For a full technical breakdown of the authorization model, see our article on <a href="eip2612-explained.html" class="ilink">EIP-2612 gasless subscriptions</a>.</p>
+
+      <h2>The Churn Problem That Gets Solved Automatically</h2>
+      <p>Fee reduction was the primary goal. What many merchants do not anticipate is how much the <a href="grace-periods.html" class="ilink">programmable grace period</a> changes subscriber retention.</p>
+      <p>In custodial billing, a failed payment is often binary. The charge fails. The subscription cancels. The subscriber churns — frequently involuntarily, because of a wallet balance timing issue rather than genuine intent to cancel.</p>
+      <p>AuthOnce implements a 1–30 day programmable grace period, configurable per merchant. If a pull payment fails, the subscriber retains access during the grace window. The protocol retries automatically. Most subscribers top up their wallet and continue without ever noticing the issue.</p>
+      <p>Involuntary churn from failed payments drops significantly after migration. Revenue that would have been permanently lost is recovered automatically, on-chain, without manual intervention.</p>
+
+      <div class="related-inline">
+        <h4>Related Reading</h4>
+        <div class="related-links">
+          <a href="grace-periods.html">How programmable grace periods work technically</a>
+          <a href="real-cost-custodial.html">DAO treasury cost framework for custodial billing</a>
+          <a href="what-is-noncustodial-billing.html">What is non-custodial subscription billing?</a>
+          <a href="integration-guide.html">How to integrate AuthOnce in under 2 hours</a>
+        </div>
+      </div>
+
+      <h2>Integration Timeline</h2>
+      <p>The <a href="integration-guide.html" class="ilink">WooCommerce plugin</a> connects in under two hours. Merchant dashboard setup takes minutes. Vanity pay links at <code style="background:var(--surface);padding:2px 7px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">pay.authonce.io/yourhandle</code> go live immediately after merchant registration. For custom integrations, the protocol contracts are open source and available via the <a href="https://authonce.io" class="ilink">AuthOnce developer portal</a>.</p>
+
+      <h2>What This Means at Scale</h2>
+      <p>If your users hold USDC, you should be billing in USDC. The infrastructure now exists to do it non-custodially, at a fraction of the cost, with better subscriber retention built directly into the protocol.</p>
+      <p>The economics of subscription billing have shifted. For Web3 SaaS products, DAOs, and digital-native subscription businesses, the question is no longer whether to move to non-custodial USDC billing — it is whether to do it before or after competitors do.</p>
+      <p>For the compliance posture that makes this possible without regulatory exposure, see our article on <a href="compliance.html" class="ilink">USDC billing compliance and the software-only legal stance</a>.</p>
+
+      <div class="article-cta">
+        <h3>Run the numbers for your MRR</h3>
+        <p>AuthOnce is live on Base Sepolia. Mainnet launches Q3 2026. Integration takes under two hours.</p>
+        <div class="article-cta-btns">
+          <a href="https://authonce.io" class="btn-blue">Start with AuthOnce</a>
+          <a href="real-cost-custodial.html" class="btn-ghost">Full Cost Framework →</a>
+        </div>
+      </div>
+    </div>
+  </article>
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <h4>Table of Contents</h4>
+      <ul class="toc-list">
+        <li><a href="#">The custodial billing problem</a></li>
+        <li><a href="#">Fee comparison table</a></li>
+        <li><a href="#">How non-custodial billing works</a></li>
+        <li><a href="#">Grace periods & churn reduction</a></li>
+        <li><a href="#">Integration timeline</a></li>
+        <li><a href="#">What this means at scale</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-cta">
+      <h4>Cut your billing fees by 83%</h4>
+      <p>0.5% protocol fee. Hardcoded. Immutable. Verifiable on-chain.</p>
+      <a href="https://authonce.io" class="sidebar-btn">Get Started →</a>
+    </div>
+    <div class="sidebar-card">
+      <h4>Related Articles</h4>
+      <div class="related-card-list">
+        <a href="real-cost-custodial.html" class="related-card-item"><div class="rtag">DAO Treasury</div><div class="rtitle">The Real Cost of Custodial Billing</div></a>
+        <a href="grace-periods.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">Programmable Grace Periods</div></a>
+        <a href="eip2612-explained.html" class="related-card-item"><div class="rtag">Developer</div><div class="rtitle">EIP-2612 Gasless Subscriptions</div></a>
+        <a href="integration-guide.html" class="related-card-item"><div class="rtag">Merchant</div><div class="rtitle">Integration Guide: 2 Hours to Live</div></a>
+        <a href="compliance.html" class="related-card-item"><div class="rtag">Compliance</div><div class="rtitle">No CASP License Required</div></a>
+      </div>
+    </div>
+  </aside>
+</div>
+<footer>
+  <span class="footer-brand">Auth<em>Once</em></span>
+  <div class="footer-links"><a href="index.html">Blog</a><a href="https://authonce.io">Protocol</a><a href="https://github.com/authonce-protocol">GitHub</a><a href="complete-guide.html">Complete Guide</a></div>
+  <span class="footer-note">© 2026 AuthOnce · Built on Base Network · BSL 1.1</span>
+</footer>
+</body>
+</html>
