@@ -10,7 +10,8 @@
 
 require("dotenv").config();
 const crypto = require("crypto");
-const { getMerchantWebhook, logWebhookDelivery } = require("./db");
+const { getMerchantWebhook, logWebhookDelivery, getMerchant } = require("./db");
+const { templates } = require("./email-templates");
 
 const RETRY_DELAYS_MS = [10_000, 60_000, 300_000, 1_800_000, 7_200_000];
 const WEBHOOK_TIMEOUT_MS = 10_000;
@@ -133,10 +134,23 @@ async function dispatchWebhook(merchantAddress, event, data) {
 
 async function sendEmailFallback(merchantAddress, event, data) {
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const NOTIFY_EMAIL   = process.env.NOTIFY_EMAIL;
 
-  if (!RESEND_API_KEY || !NOTIFY_EMAIL) {
+  if (!RESEND_API_KEY) {
     console.log(`[EMAIL] No Resend key configured — skipping email fallback`);
+    return;
+  }
+
+  // Get merchant email dynamically — send to actual merchant, not a fixed address
+  let merchantEmail = process.env.NOTIFY_EMAIL; // admin fallback only
+  try {
+    const merchant = await getMerchant(merchantAddress);
+    if (merchant?.email) merchantEmail = merchant.email;
+  } catch (err) {
+    console.warn(`[EMAIL] Could not fetch merchant email for ${merchantAddress}:`, err.message);
+  }
+
+  if (!merchantEmail) {
+    console.log(`[EMAIL] No email found for merchant ${merchantAddress} — skipping`);
     return;
   }
 
@@ -149,16 +163,16 @@ async function sendEmailFallback(merchantAddress, event, data) {
       badge:       "success",
     },
     "payment.success": {
-      subject:     `Payment received — $${data.amount_usdc || "?"} USDC`,
-      description: `A subscription payment was collected successfully. $${data.merchant_received_usdc || data.amount_usdc || "?"} USDC was transferred directly to your wallet after the 0.5% protocol fee.`,
+      subject:     `Payment received — $${data.merchant_received_usdc || data.amount_usdc || "?"} USDC`,
+      description: `Payment collected for subscription #${data.subscription_id || "?"}${data.product_name ? ` (${data.product_name})` : ""}. $${data.merchant_received_usdc || data.amount_usdc || "?"} USDC transferred to your wallet after the 0.5% protocol fee.`,
       action:      null,
       badge:       "success",
     },
     "payment.failed": {
-      subject:     `⚠️ Payment failed — subscriber needs to act`,
+      subject:     `⚠️ Payment failed — subscription #${data.subscription_id || "?"}`,
       description: data.reason === "insufficient_allowance"
-        ? "The subscriber's USDC approval has expired or was revoked. The keeper cannot pull funds without it. The subscriber has been notified by email and asked to re-approve."
-        : `The subscriber's wallet did not have enough USDC at the time of the pull (required: $${data.required_usdc || "?"}, available: $${data.available_usdc || "?"}). The subscription has entered the grace period. The keeper will retry automatically once they top up. The subscriber has been notified.`,
+        ? `Subscription #${data.subscription_id || "?"}: the subscriber's USDC approval has expired or was revoked. The keeper cannot pull funds without it. The subscriber has been notified by email and asked to re-approve.`
+        : `Subscription #${data.subscription_id || "?"}: the subscriber's wallet did not have enough USDC (required: $${data.required_usdc || "?"}, available: $${data.available_usdc || "?"}). The subscription has entered the grace period. The keeper will retry automatically once they top up. The subscriber has been notified.`,
       action:      `No action needed from you. Grace period ends: ${data.grace_period_ends_at ? new Date(data.grace_period_ends_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "see event data"}. If the subscriber does not act before then, the subscription will expire automatically.`,
       badge:       "warning",
     },
@@ -175,14 +189,14 @@ async function sendEmailFallback(merchantAddress, event, data) {
       badge:       "warning",
     },
     "subscription.cancelled": {
-      subject:     `Subscription cancelled`,
-      description: "A subscriber has cancelled their subscription. No further payments will be collected. This action was taken by the subscriber or their guardian — merchants cannot cancel subscriptions on AuthOnce.",
+      subject:     `Subscription #${data.subscription_id || "?"} cancelled`,
+      description: `Subscription #${data.subscription_id || "?"} has been cancelled. No further payments will be collected. Cancelled by: ${data.cancelled_by || "subscriber or guardian"} — merchants cannot cancel subscriptions on AuthOnce.`,
       action:      null,
       badge:       "danger",
     },
     "subscription.expired": {
-      subject:     `Subscription expired — grace period ended`,
-      description: "The grace period ended without a successful payment. The subscription has been permanently closed. No further payments will be collected. The subscriber was notified by email.",
+      subject:     `Subscription #${data.subscription_id || "?"} expired`,
+      description: `Subscription #${data.subscription_id || "?"} expired — the grace period ended without a successful payment. The subscription has been permanently closed. No further payments will be collected. The subscriber was notified by email.`,
       action:      null,
       badge:       "danger",
     },
@@ -229,8 +243,8 @@ async function sendEmailFallback(merchantAddress, event, data) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "AuthOnce <notifications@authonce.io>",
-        to:   [NOTIFY_EMAIL],
+        from: "AuthOnce <noreply@authonce.io>", replyTo: "support@authonce.io",
+        to:   [merchantEmail],
         subject: info.subject,
         html: `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/></head>
@@ -258,6 +272,7 @@ async function sendEmailFallback(merchantAddress, event, data) {
   </div>
   <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 28px;text-align:center;">
     <p style="margin:0;font-size:11px;color:#94a3b8;">AuthOnce Protocol · <a href="https://authonce.io" style="color:#64748b;text-decoration:none;">authonce.io</a> · <a href="mailto:support@authonce.io" style="color:#64748b;text-decoration:none;">support@authonce.io</a></p>
+    <p style="margin:4px 0 0;font-size:11px;color:#94a3b8;">This is an automated message. For help, contact <a href="mailto:support@authonce.io" style="color:#64748b;">support@authonce.io</a></p>
     <p style="margin:4px 0 0;font-size:11px;color:#94a3b8;">© 2026 AuthOnce · BUSL-1.1 · Base Network</p>
   </div>
 </div>
