@@ -40,6 +40,7 @@ function emailWrapper({ preheader, body, footerNote = "", tier = "starter", bran
     : isGrowthPlus && brandName
     ? `<p>${brandName} · <span style="opacity:0.6;">Powered by <a href="https://authonce.io" style="color:#64748b;">AuthOnce</a></span></p>`
     : `<p><a href="https://authonce.io">authonce.io</a> &nbsp;·&nbsp; <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+       <p style="margin-top:6px;">This is an automated message. For help, contact <a href="mailto:support@authonce.io">support@authonce.io</a></p>
        <p style="margin-top:8px;">© 2026 AuthOnce Protocol · BUSL-1.1 · Base Network</p>`;
 
   // Header background: brand color for whitelabel, dark for standard
@@ -133,7 +134,7 @@ function emailWrapper({ preheader, body, footerNote = "", tier = "starter", bran
 const subjects = {
   // Subscriber subjects
   subscriptionConfirmed:   (merchantName) => `Your ${merchantName} subscription is active`,
-  paymentReceipt:          (amount, merchantName) => `Payment confirmed — $${amount} USDC to ${merchantName}`,
+  paymentReceipt:          (amount, merchantName, token = 'USDC') => `Payment confirmed — ${amount} ${token} to ${merchantName}`,
   paymentReminder:         (amount, daysUntil) => `Payment reminder: $${amount} USDC due ${daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`}`,
   paymentFailedFunds:      (merchantName) => `Action required: payment failed for ${merchantName}`,
   paymentFailedAllowance:  (merchantName) => `Action required: approval expired for ${merchantName}`,
@@ -145,11 +146,12 @@ const subjects = {
 
   // Merchant subjects
   merchantNewSubscriber:   (amount, interval) => `New subscriber — $${amount} USDC/${interval}`,
-  merchantPaymentReceived: (amount) => `Payment received — $${amount} USDC`,
+  merchantPaymentReceived: (amount, token = 'USDC') => `Payment received — ${amount} ${token}`,
   merchantPaymentFailed:   () => `Payment failed — subscriber needs to act`,
   merchantCancellation:    () => `A subscriber has cancelled`,
   merchantExpired:         () => `Subscription expired — grace period ended`,
   merchantResumed:         () => `Subscription resumed`,
+  merchantFiatPaymentReceived: (amount, currency) => `Card payment received — ${amount} ${(currency || 'EUR').toUpperCase()}`,
 };
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -157,7 +159,7 @@ const subjects = {
 const templates = {
 
   // ── Subscriber: subscription confirmed ──────────────────────────────────────
-  subscriptionConfirmed({ name, merchantName, amountUsdc, interval, trialDays, introAmount, introPulls }) {
+  subscriptionConfirmed({ name, merchantName, amountUsdc, interval, trialDays, introAmount, introPulls, gracePeriodDays = 7, paymentMethod = 'crypto' }) {
     const hasTrial = trialDays > 0;
     const hasIntro = introAmount && introPulls > 0;
 
@@ -177,14 +179,14 @@ const templates = {
       <div style="margin: 20px 0;">
         <div class="detail-row"><span class="detail-label">Merchant</span><span class="detail-value">${merchantName}</span></div>
         <div class="detail-row"><span class="detail-label">Billing interval</span><span class="detail-value">${interval}</span></div>
-        <div class="detail-row"><span class="detail-label">Grace period</span><span class="detail-value">7 days on failed payment</span></div>
+        <div class="detail-row"><span class="detail-label">Grace period</span><span class="detail-value">${gracePeriodDays} days on failed payment</span></div>
         <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-success">Active</span></div>
       </div>
 
       <a href="https://authonce.io/my-subscriptions" class="cta-button">Manage your subscription →</a>
 
       <div class="divider"></div>
-      <p style="font-size:13px;color:#64748b;">You can cancel anytime from your subscription portal. AuthOnce never holds your funds — your wallet stays in your control.</p>
+      <p style="font-size:13px;color:#64748b;">${paymentMethod === 'card' ? 'You can cancel anytime from your subscription portal.' : 'You can cancel anytime from your subscription portal. AuthOnce never holds your funds — your wallet stays in your control.'}</p>
     `;
 
     const text = `Your ${merchantName} subscription is active. Amount: $${amountUsdc} USDC/${interval}. Manage at authonce.io/my-subscriptions`;
@@ -370,7 +372,7 @@ const templates = {
   },
 
   // ── Subscriber: price change notice ──────────────────────────────────────────
-  priceChangeNotice({ name, merchantName, amountUsdc, expiryDate, daysUntil }) {
+  priceChangeNotice({ name, merchantName, amountUsdc, newAmountUsdc = null, expiryDate, daysUntil }) {
     const body = `
       <p class="greeting">Hi ${name || "there"},</p>
       <p>Your subscription to <strong>${merchantName}</strong> will be changing on <strong>${expiryDate}</strong>.</p>
@@ -380,6 +382,10 @@ const templates = {
         <p class="amount-value">$${amountUsdc} USDC</p>
         <p class="amount-sub">Changes on ${expiryDate} (${daysUntil} days from now)</p>
       </div>
+      ${newAmountUsdc ? `<div class="amount-box" style="border-color:#fde68a;background:#fffbeb;">
+        <p class="amount-label" style="color:#92400e;">New price from ${expiryDate}</p>
+        <p class="amount-value" style="color:#92400e;">$${newAmountUsdc} USDC</p>
+      </div>` : ""}
 
       <div class="notice">
         <strong>You have ${daysUntil} days to decide.</strong> If you'd like to cancel before the price changes, you can do so from your subscription portal at no cost.
@@ -393,7 +399,7 @@ const templates = {
   },
 
   // ── Merchant: new subscriber ──────────────────────────────────────────────────
-  merchantNewSubscriber({ amountUsdc, interval, subscriptionId, vaultAddress, txHash, basescanUrl }) {
+  merchantNewSubscriber({ amountUsdc, interval, subscriptionId, vaultAddress, txHash, basescanUrl, productName = null, subscriberWallet = null, subscriberEmail = null, paymentMethod = 'crypto' }) {
     const body = `
       <p style="margin:0 0 20px;color:#0f172a;">A new subscriber has joined.</p>
 
@@ -404,8 +410,12 @@ const templates = {
       </div>
 
       <div style="margin: 20px 0;">
+        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
         <div class="detail-row"><span class="detail-label">Interval</span><span class="detail-value">${interval}</span></div>
+        <div class="detail-row"><span class="detail-label">Payment method</span><span class="detail-value">${paymentMethod === 'card' ? 'Card (fiat)' : 'Crypto wallet'}</span></div>
+        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber email</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
+        ${subscriberWallet ? `<div class="detail-row"><span class="detail-label">Subscriber wallet</span><span class="detail-value">${subscriberWallet.slice(0,6)}...${subscriberWallet.slice(-4)}</span></div>` : ""}
         <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-success">Active</span></div>
       </div>
 
@@ -417,21 +427,26 @@ const templates = {
   },
 
   // ── Merchant: payment received ────────────────────────────────────────────────
-  merchantPaymentReceived({ amountUsdc, merchantReceivedUsdc, merchantReceivedEur, date, subscriptionId, txHash, basescanUrl }) {
+  merchantPaymentReceived({ amountUsdc, merchantReceivedUsdc, merchantReceivedEur, date, subscriptionId, txHash, basescanUrl, productName = null, subscriberWallet = null, subscriberEmail = null, paymentMethod = 'crypto', token = 'USDC' }) {
     const eurStr = merchantReceivedEur ? ` (≈ €${merchantReceivedEur})` : "";
+    const isFiat = paymentMethod === 'card';
     const body = `
       <p style="margin:0 0 20px;color:#0f172a;">A subscription payment has been collected.</p>
 
       <div class="amount-box">
         <p class="amount-label">You received</p>
-        <p class="amount-value">$${merchantReceivedUsdc} USDC${eurStr}</p>
+        <p class="amount-value">${isFiat ? `€${merchantReceivedEur || merchantReceivedUsdc}` : `$${merchantReceivedUsdc} ${token}${eurStr}`}</p>
         <p class="amount-sub">${date}</p>
       </div>
 
       <div style="margin: 20px 0;">
+        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
-        <div class="detail-row"><span class="detail-label">Total collected</span><span class="detail-value">$${amountUsdc} USDC</span></div>
-        <div class="detail-row"><span class="detail-label">Protocol fee (0.5%)</span><span class="detail-value">$${(parseFloat(amountUsdc) - parseFloat(merchantReceivedUsdc)).toFixed(4)} USDC</span></div>
+        <div class="detail-row"><span class="detail-label">Payment method</span><span class="detail-value">${isFiat ? 'Card (fiat)' : `Crypto (${token})`}</span></div>
+        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
+        ${subscriberWallet && !isFiat ? `<div class="detail-row"><span class="detail-label">Wallet</span><span class="detail-value">${subscriberWallet.slice(0,6)}...${subscriberWallet.slice(-4)}</span></div>` : ""}
+        <div class="detail-row"><span class="detail-label">Total collected</span><span class="detail-value">$${amountUsdc} ${isFiat ? 'fiat' : token}</span></div>
+        ${!isFiat ? `<div class="detail-row"><span class="detail-label">Protocol fee (0.5%)</span><span class="detail-value">$${(parseFloat(amountUsdc) - parseFloat(merchantReceivedUsdc)).toFixed(4)} ${token}</span></div>` : ""}
         <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-success">Confirmed</span></div>
       </div>
 
@@ -442,8 +457,38 @@ const templates = {
     return { html: emailWrapper({ preheader: `Payment received — $${merchantReceivedUsdc} USDC`, body }), text };
   },
 
+
+  // ── Merchant: fiat payment received (card/Stripe) ────────────────────────────
+  merchantFiatPaymentReceived({ amountFiat, currency, date, subscriptionId, productName = null, subscriberEmail = null, stripeSessionId = null }) {
+    const currencyUpper = (currency || 'EUR').toUpperCase();
+    const body = `
+      <p style="margin:0 0 20px;color:#0f172a;">A card payment subscription has been collected.</p>
+
+      <div class="amount-box">
+        <p class="amount-label">You received</p>
+        <p class="amount-value">${amountFiat} ${currencyUpper}</p>
+        <p class="amount-sub">${date} · via card payment</p>
+      </div>
+
+      <div style="margin: 20px 0;">
+        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
+        <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
+        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
+        <div class="detail-row"><span class="detail-label">Payment method</span><span class="detail-value">Card (fiat)</span></div>
+        <div class="detail-row"><span class="detail-label">Currency</span><span class="detail-value">${currencyUpper}</span></div>
+        ${stripeSessionId ? `<div class="detail-row"><span class="detail-label">Stripe session</span><span class="detail-value" style="font-family:monospace;font-size:11px;">${stripeSessionId.slice(0,20)}...</span></div>` : ""}
+        <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-success">Confirmed</span></div>
+      </div>
+
+      <p style="font-size:13px;color:#64748b;">Funds will be settled to your connected bank account via your payment processor. Check your payment processor dashboard for payout timing.</p>
+    `;
+
+    const text = `Fiat payment received: ${amountFiat} ${currencyUpper} for subscription #${subscriptionId}. Check your payment processor dashboard for settlement.`;
+    return { html: emailWrapper({ preheader: `Card payment received — ${amountFiat} ${currencyUpper}`, body }), text };
+  },
+
   // ── Merchant: payment failed ──────────────────────────────────────────────────
-  merchantPaymentFailed({ requiredUsdc, graceDate, reason, subscriptionId }) {
+  merchantPaymentFailed({ requiredUsdc, graceDate, reason, subscriptionId, productName = null, subscriberWallet = null, subscriberEmail = null }) {
     const reasonText = reason === "insufficient_allowance"
       ? "The subscriber's USDC approval has expired."
       : "The subscriber's wallet had insufficient USDC.";
@@ -456,7 +501,10 @@ const templates = {
       </div>
 
       <div style="margin: 20px 0;">
+        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
+        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
+        ${subscriberWallet ? `<div class="detail-row"><span class="detail-label">Wallet</span><span class="detail-value">${subscriberWallet.slice(0,6)}...${subscriberWallet.slice(-4)}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-value">$${requiredUsdc} USDC</span></div>
         <div class="detail-row"><span class="detail-label">Grace period ends</span><span class="detail-value">${graceDate}</span></div>
         <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-warning">Grace period</span></div>
@@ -470,12 +518,16 @@ const templates = {
   },
 
   // ── Merchant: cancellation ────────────────────────────────────────────────────
-  merchantCancellation({ subscriptionId, cancelledBy }) {
+  merchantCancellation({ subscriptionId, cancelledBy, productName = null, subscriberWallet = null, subscriberEmail = null }) {
     const body = `
       <p style="margin:0 0 20px;color:#0f172a;">A subscriber has cancelled their subscription.</p>
 
       <div style="margin: 20px 0;">
+        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
+        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
+        ${subscriberWallet ? `<div class="detail-row"><span class="detail-label">Wallet</span><span class="detail-value">${subscriberWallet.slice(0,6)}...${subscriberWallet.slice(-4)}</span></div>` : ""}
+        <div class="detail-row"><span class="detail-label">Cancelled by</span><span class="detail-value">${cancelledBy === 'subscriber' ? 'Subscriber' : cancelledBy === 'guardian' ? 'Guardian' : cancelledBy === 'admin' ? 'AuthOnce Admin' : cancelledBy || 'Unknown'}</span></div>
         <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-danger">Cancelled</span></div>
       </div>
 
@@ -487,12 +539,15 @@ const templates = {
   },
 
   // ── Merchant: subscription expired ───────────────────────────────────────────
-  merchantExpired({ subscriptionId, expiredDate }) {
+  merchantExpired({ subscriptionId, expiredDate, productName = null, subscriberWallet = null, subscriberEmail = null }) {
     const body = `
       <p style="margin:0 0 20px;color:#0f172a;">A subscription has expired after the grace period ended.</p>
 
       <div style="margin: 20px 0;">
+        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
+        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
+        ${subscriberWallet ? `<div class="detail-row"><span class="detail-label">Wallet</span><span class="detail-value">${subscriberWallet.slice(0,6)}...${subscriberWallet.slice(-4)}</span></div>` : ""}
         <div class="detail-row"><span class="detail-label">Expired on</span><span class="detail-value">${expiredDate}</span></div>
         <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-danger">Expired</span></div>
       </div>
