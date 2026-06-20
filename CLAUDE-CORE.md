@@ -838,3 +838,80 @@ MerchantRegistry v4 fixes:
 - `API_URL`: `https://the-opportunity-production.up.railway.app`
 
 *Last updated: 2026-06-16*
+
+## 23. Session Summary — June 20 2026
+
+**Outreach:**
+- ✅ DeepDAO tool listing request sent to info@deepdao.io (Treasury category)
+- ✅ Base Ecosystem Fund — ecosystem-fund@coinbase.com confirmed dead (bounces); Jesse Pollak DM drafted via Farcaster (@jessepollak / warpcast.com/jessepollak); identity: authonce.base.eth
+- ✅ Cuatrecasas Acelera — already applied previously, skipped
+
+**v7 Stress Test — PASSED:**
+- stress-test-setup.js run against v7 contracts with approve() fix
+- 10 fresh EOA subscriptions created (IDs 6-15), all with correct USDC allowance
+- Keeper executed 9 successful executePull() transactions on v7 SubscriptionVault
+- First confirmed tx: 0xecb088969850a2ae3d881e9e52c18c2fff51e6aa235163ec3e19b15b1347fb2e (block 43101529)
+- Subscriptions #12 and #13 failed (approve() timing issue) — isolated, not a keeper bug
+- IDs 0-4 (original weekly subs) also failing — created on v6, don't exist on v7 vault
+- RPC rate limiting hit once under load — confirmed need for paid Alchemy RPC pre-mainnet
+
+**Social:**
+- ✅ First on-chain proof post published on @AuthOnce (X + Farcaster)
+- Images: Railway keeper logs + Basescan transaction showing 0.995 USDC to merchant + 0.005 USDC to treasury
+- Tagged @base and @jessepollak
+- @VascoBuilds repost drafted
+
+**Blog — 11 new posts fixed and deployed:**
+- Files: index.html, grace-periods.html, why-switched.html, real-cost-custodial.html, what-is-noncustodial-billing.html, eip2612-explained.html, base-network-subscriptions.html, integration-guide.html, compliance.html, ai-agent-payments.html, complete-guide.html
+- Fixes applied: GA4 (G-5NE0QK40WZ), DM Sans font, og:image, Stripe removed, v7 contract addresses, favicon
+
+**SEO improvements:**
+- HSTS enabled on Cloudflare (6 months, includeSubDomains, Preload, No-Sniff) ✅
+- Meta title trimmed: "AuthOnce — USDC Subscription Payments on Base" (46 chars) ✅
+- Keywords added: stablecoin subscriptions, Web3 billing, Base Network payments ✅
+- Email protected in index.html noscript block ✅
+- SEO score: 89/100
+
+**LandingPage.jsx audit and fixes:**
+- "Audited contracts" → "Audit Q3 2026" (trust bar + card detail)
+- All vasco@authonce.io and support@authonce.io plain HTML links removed
+- Founding offer consistent: First 10 get 0% fees, First 5 get lifetime Growth
+- Embeddable Widget tagged "Coming Soon"
+- SDK removed from Developer API card
+- Card payment mention added to How It Works section
+- PayPage.jsx currency symbol fix (FIAT_SYMBOLS lookup) included in same commit
+
+**Email system overhaul:**
+- email-templates.js: added productName + subscriberWallet + subscriberEmail to all merchant templates; fiat-aware merchantPaymentReceived (uses merchant preferred currency CHF/EUR/USD); merchantFiatPaymentReceived new template for card payments; priceChangeNotice shows new price; gracePeriodDays dynamic; cancelledBy displayed; noreply footer added
+- notifier.js: fully migrated all 11 email types from raw HTML to email-templates.js; FROM changed to noreply@authonce.io with reply-to support@authonce.io; merchant preferred currency passed to payment received template
+- webhook.js: fallback emails now sent to merchant's registered email (not NOTIFY_EMAIL); getMerchant imported; subscription ID in all subjects; noreply from address; automated message footer
+
+**Zoho email setup:**
+- Aliases created: notification@authonce.io, noreply@authonce.io
+- Filters created: Notifications (→ Alerts, mark read), Merchant Applications (→ folder, flag important), Payment Failed (→ Alerts, flag important), Low ETH Alert (→ Alerts, flag important)
+
+**DB subscriptions status (June 20):**
+- IDs 0-4: failing (v6 subs on v7 vault — expected, will expire)
+- ID 5: grace period
+- IDs 6-15: stress test subs, 9 pulled successfully, 2 failed (approve timing)
+- stress-test-keys.json and stress-test-results.json in .gitignore ✅
+
+**Video demo — still pending (tomorrow June 21):**
+- Script ready: 6 scenes, 90 seconds max, Loom
+- Use existing Pro Plan product (do NOT create new products on camera)
+- Basescan tx ready: 0xecb088969850a2ae3d881e9e52c18c2fff51e6aa235163ec3e19b15b1347fb2e
+- Rabby wallet subscriber: 0x128cE652... (Base Sepolia, check USDC balance before recording)
+- MetaMask Deployer as merchant: 0xbb6d960b...
+
+**Jesse DM (send tomorrow):**
+- Platform: Farcaster @jessepollak (warpcast.com/jessepollak)
+- Message: "Hi Jesse — I'm Vasco, building AuthOnce (authonce.base.eth), a non-custodial USDC subscription protocol on Base. Applied to the Base Ecosystem Fund in April and sent a follow-up in May, but just discovered ecosystem-fund@coinbase.com bounced both times. Didn't want to fall through the cracks — is there a right person or channel to reach? Happy to share the deck."
+
+**Commits this session:**
+- 48b0ae8 — email: add product name, subscriber identity, fiat template, fix grace period
+- 81981d1 — emails: merchant dynamic routing, noreply from, templates migration, preferred currency
+- webhook commit — webhook: merchant dynamic email routing, noreply from, subscription ID in subjects
+- LandingPage + PayPage commit
+- blog + index.html SEO commit
+
+*Last updated: 2026-06-20*
