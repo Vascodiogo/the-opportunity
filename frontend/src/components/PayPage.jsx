@@ -209,6 +209,10 @@ export default function PayPage() {
   const selectedTokenAddress = NETWORK_TOKENS[selectedToken] || USDC_ADDRESS;
   const selectedTokenMeta    = TOKEN_META[selectedToken] || TOKEN_META.usdc;
 
+  const fiatCurrency = (product?.fiat_currency || "usd").toLowerCase();
+  const FIAT_SYMBOLS = { usd: "$", eur: "€", gbp: "£", chf: "Fr ", sek: "kr ", nok: "kr ", dkk: "kr ", aud: "A$", cad: "C$", brl: "R$", sgd: "S$", hkd: "HK$", inr: "₹", jpy: "¥", krw: "₩" };
+  const fiatSymbol   = FIAT_SYMBOLS[fiatCurrency] || "$";
+
   // Crypto tokens this product accepts, in display order.
   // Uses product.payment_methods directly — NOT filtered by SELECTABLE_TOKENS,
   // which is a network contract whitelist, not a UI filter.
@@ -503,14 +507,14 @@ export default function PayPage() {
               {/* Price */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                 <span style={{ fontSize: 32, fontWeight: 800, color: "var(--green)", fontFamily: "monospace", letterSpacing: "-0.03em" }}>
-                  ${activeAmount?.toFixed(2)}
+                  {paymentMethod === "crypto" ? "" : fiatSymbol}{activeAmount?.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {paymentMethod === "crypto" ? selectedTokenMeta.label : (product.fiat_currency || "eur").toUpperCase()}</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {paymentMethod === "crypto" ? selectedTokenMeta.label : (product.fiat_currency || "usd").toUpperCase()}</span>
               </div>
 
-              {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>${(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
-              {!isYearly && hasTrial && !hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Free for {trialDays} days, then ${product.amount?.toFixed(2)}/{intervalLabel}</div>}
-              {!isYearly && !hasTrial && hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>${product.intro_amount.toFixed(2)}/{intervalLabel} for {product.intro_pulls} {intervalPlural}, then ${product.amount?.toFixed(2)}</div>}
+              {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{paymentMethod === "crypto" ? "" : fiatSymbol}{(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
+              {!isYearly && hasTrial && !hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Free for {trialDays} days, then {paymentMethod === "crypto" ? "" : fiatSymbol}{product.amount?.toFixed(2)}/{intervalLabel}</div>}
+              {!isYearly && !hasTrial && hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{paymentMethod === "crypto" ? "" : fiatSymbol}{product.intro_amount.toFixed(2)}/{intervalLabel} for {product.intro_pulls} {intervalPlural}, then {paymentMethod === "crypto" ? "" : fiatSymbol}{product.amount?.toFixed(2)}</div>}
             </div>
 
             {/* Network error */}
@@ -565,7 +569,7 @@ export default function PayPage() {
                         </div>
                         {methodPrice != null && (
                           <div style={{ fontSize: 11, color: sel ? "var(--green)" : "var(--text-muted)", paddingLeft: 28 }}>
-                            ${methodPrice.toFixed(showDiscount ? 4 : 2)}
+                            {method === "crypto" ? "" : fiatSymbol}{methodPrice.toFixed(showDiscount ? 4 : 2)}
                             {showDiscount && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>(-{cryptoDiscountPct}%)</span>}
                           </div>
                         )}
@@ -600,7 +604,7 @@ export default function PayPage() {
                 disabled={stripeLoading}
                 style={ctaBtn(stripeLoading)}
               >
-                {stripeLoading ? "Redirecting..." : `Pay ${isYearly ? `$${product?.yearly_amount?.toFixed(2)}/year` : `$${product?.amount?.toFixed(2)}/${intervalLabel}`} →`}
+                {stripeLoading ? "Redirecting..." : `Pay ${isYearly ? `${fiatSymbol}${product?.yearly_amount?.toFixed(2)}/year` : `${fiatSymbol}${product?.amount?.toFixed(2)}/${intervalLabel}`} →`}
               </button>
             )}
 

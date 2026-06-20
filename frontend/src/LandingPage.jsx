@@ -452,7 +452,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             "🔵 Base Network",
             "💵 USDC · USDT · DAI · EURC",
             "🔐 " + (lang === "en" ? "Non-custodial" : "Não custodial"),
-            "✓ " + (lang === "en" ? "Audited contracts" : "Contratos auditados"),
+            "⏳ " + (lang === "en" ? "Audit Q3 2026" : "Auditoria Q3 2026"),
             "🤖 ERC-1271 · EIP-712",
             "📄 BUSL-1.1",
           ].map((item, i, arr) => (
@@ -505,7 +505,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
                 desc: lang === "en"
                   ? "Every subscription lives on Base. Auditable, unstoppable, transparent. No database or central server controls your recurring revenue."
                   : "Cada subscrição existe na Base. Auditável, imparável, transparente. Nenhum servidor central controla a sua receita recorrente.",
-                detail: "SubscriptionVault · MerchantRegistry · Audited",
+                detail: "SubscriptionVault · MerchantRegistry · Audit Q3 2026",
               },
               {
                 icon: "🤖", color: purple, tag: lang === "en" ? "AI Agent Ready" : "Pronto para IA",
@@ -689,8 +689,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
         <p style={{ textAlign: "center", color: muted, fontSize: 13, marginTop: 20, fontStyle: "italic", fontWeight: 300 }}>
           {lang === "en"
-            ? "Founding merchants are approved personally by the AuthOnce team within 48 hours."
-            : "Os parceiros fundadores são aprovados pessoalmente pela equipa AuthOnce em 48 horas."}
+            ? "Founding merchants are approved personally by the AuthOnce team within 48 hours. Subscribers can pay with crypto wallet or credit card — no wallet required for card payments."
+            : "Os parceiros fundadores são aprovados pessoalmente pela equipa AuthOnce em 48 horas. Os subscritores podem pagar com carteira cripto ou cartão de crédito."}
         </p>
       </section>
 
@@ -708,8 +708,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
               {lang === "en"
-                ? "First 5 merchants pay zero fees for 3 months."
-                : "Os primeiros 5 comerciantes pagam zero taxas durante 3 meses."}
+                ? "First 10 merchants pay zero fees for 3 months. First 5 get lifetime Growth tier free."
+                : "Os primeiros 10 comerciantes pagam zero taxas durante 3 meses. Os primeiros 5 recebem o plano Growth gratuito para sempre."}
             </h2>
             <p style={{ color: muted, fontSize: 15, lineHeight: 1.7, margin: "0 0 28px", fontWeight: 300 }}>
               {lang === "en"
@@ -719,7 +719,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <div style={{ display: "flex", gap: 32 }}>
               {[
                 { v: "0%",  l: lang === "en" ? "Fees · 3 months" : "Taxas · 3 meses" },
-                { v: "5",   l: lang === "en" ? "Spots total"     : "Vagas totais" },
+                { v: "10",  l: lang === "en" ? "Spots total"     : "Vagas totais" },
                 { v: "48h", l: lang === "en" ? "Review time"     : "Tempo de resposta" },
               ].map((s, i) => (
                 <div key={i}>
@@ -773,7 +773,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
                 example: "authonce.io/pay/yourname",
               },
               {
-                tag: lang === "en" ? "Copy-paste" : "Copiar e colar", tagColor: blue,
+                tag: lang === "en" ? "Coming Soon" : "Em Breve", tagColor: blue,
                 title: lang === "en" ? "Embeddable Widget" : "Widget Incorporável",
                 desc: lang === "en"
                   ? "One line of code adds a Subscribe button to your existing site. Works on any platform."
@@ -785,8 +785,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
                 tag: "API", tagColor: purple,
                 title: lang === "en" ? "Developer API" : "API para Programadores",
                 desc: lang === "en"
-                  ? "Full REST API, webhooks, and SDK. Built for developers and AI agent integrations. Complete server-side control."
-                  : "API REST completa, webhooks e SDK. Para programadores e integrações com agentes IA. Controlo total do lado do servidor.",
+                  ? "Full REST API and webhooks. Built for developers and AI agent integrations. Complete server-side control."
+                  : "API REST completa e webhooks. Para programadores e integrações com agentes IA. Controlo total do lado do servidor.",
                 time: lang === "en" ? "Ready in 1–2 days" : "Pronto em 1–2 dias",
                 example: "POST /api/subscriptions",
               },
@@ -878,7 +878,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </div>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a
-              href={`mailto:vasco@authonce.io?subject=Founding Merchant Application&body=Hi Vasco, I'm interested in becoming a founding merchant on AuthOnce. Here's a bit about my business:`}
+              href="#apply"
               style={{
                 background: "linear-gradient(135deg, #34d399, #3b82f6)",
                 border: "none", borderRadius: 12, color: "#080c14",
@@ -889,7 +889,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               {lang === "en" ? "Apply as founding merchant →" : "Candidatar-se como fundador →"}
             </a>
             <a
-              href="mailto:vasco@authonce.io"
+              href="#apply"
               style={{
                 background: "none", border: `0.5px solid ${border}`,
                 borderRadius: 12, color: muted, fontWeight: 600, fontSize: 15,
@@ -923,7 +923,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             {[
-              { label: "support@authonce.io",                              href: "mailto:support@authonce.io" },
+              { label: "support[at]authonce.io", href: "/contact" },
               { label: lang === "en" ? "Pricing"  : "Preços",             href: "/pricing" },
               { label: lang === "en" ? "Terms"    : "Termos",             href: "/terms" },
               { label: lang === "en" ? "Privacy"  : "Privacidade",        href: "/privacy" },
