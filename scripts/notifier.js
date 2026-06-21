@@ -503,7 +503,7 @@ async function onInsufficientFunds(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
       text: `Payment of $${requiredUsdc} USDC to ${merchantName} failed. Top up before ${graceDate} to keep your subscription.`,
-    });
+    }); }
   }
 
   // Email merchant
@@ -521,7 +521,7 @@ async function onInsufficientFunds(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
       `,
       text: `A subscriber payment of $${requiredUsdc} USDC failed. Grace period ends ${graceDate}. Subscriber has been notified.`,
-    });
+    }); }
   }
 
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
@@ -563,7 +563,7 @@ async function onInsufficientAllowance(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
       text: `Your USDC approval for ${merchantName} has expired. Re-approve at authonce.io/my-subscriptions.`,
-    });
+    }); }
   }
 
   // Email merchant
@@ -578,7 +578,7 @@ async function onInsufficientAllowance(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
       `,
       text: `A subscriber's USDC approval expired. Subscription paused. Subscriber has been notified.`,
-    });
+    }); }
   }
 
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
@@ -630,7 +630,7 @@ async function onSubscriptionCancelled(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
       text: `Your ${merchantName} subscription has been cancelled. No further payments will be collected.`,
-    });
+    }); }
   }
 
   await dispatchWebhook(sub.merchant_address, "subscription.cancelled", {
@@ -668,7 +668,7 @@ async function onSubscriptionExpired(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
       `,
       text: `Your ${merchantName} subscription expired on ${expiredDate}. Resubscribe at authonce.io/my-subscriptions.`,
-    });
+    }); }
   }
 
   // Email merchant
@@ -684,7 +684,7 @@ async function onSubscriptionExpired(log, iface) {
         <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
       `,
       text: `A subscription expired on ${expiredDate} after the grace period ended. No further payments will be collected.`,
-    });
+    }); }
   }
 
   await dispatchWebhook(sub.merchant_address, "subscription.expired", {
