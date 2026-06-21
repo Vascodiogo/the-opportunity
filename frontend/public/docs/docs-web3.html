@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="https://authonce.io/favicon.svg" />
+
+  <title>AuthOnce Docs — Web3 & DAO Merchant Guide</title>
+  <meta name="description" content="AuthOnce for Web3 teams and DAOs. Accept non-custodial USDC subscriptions directly into your treasury wallet on Base Network. No chargebacks, no intermediaries, every payment verifiable on-chain." />
+  <meta name="keywords" content="DAO subscription billing, Web3 treasury payments, USDC DAO membership, on-chain recurring payments, Base Network DAO billing, stablecoin subscriptions Web3" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://authonce.io/docs/web3" />
+
+  <meta property="og:title" content="AuthOnce for Web3 & DAOs — On-Chain Subscription Billing" />
+  <meta property="og:description" content="Accept recurring USDC payments directly into your DAO treasury. Non-custodial, on-chain, verifiable. 0.5% flat fee." />
+  <meta property="og:image" content="https://authonce.io/og-image.png" />
+  <meta property="og:url" content="https://authonce.io/docs/web3" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AuthOnce" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@AuthOnce" />
+  <meta name="twitter:image" content="https://authonce.io/og-image.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5NE0QK40WZ');
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "AuthOnce Web3 & DAO Merchant Guide",
+    "description": "Integration guide for Web3 teams and DAOs using AuthOnce for on-chain recurring USDC subscription billing on Base Network.",
+    "url": "https://authonce.io/docs/web3",
+    "author": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io" },
+    "publisher": { "@type": "Organization", "name": "AuthOnce", "logo": "https://authonce.io/logo.svg" },
+    "dateModified": "2026-06-21"
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c14; --surface: #0f1623; --border: #1e2a3a;
+      --blue: #0052FF; --blue-dim: rgba(0,82,255,0.12);
+      --green: #34d399; --green-dim: rgba(52,211,153,0.10);
+      --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.10);
+      --text: #e2e8f0; --muted: #64748b;
+      --mono: 'DM Mono', monospace; --sans: 'DM Sans', system-ui, sans-serif;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.7; font-size: 15px; }
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(8,12,20,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .nav-logo { font-size: 18px; font-weight: 700; color: #fff; text-decoration: none; }
+    .nav-logo span { color: var(--green); }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; transition: color .15s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--text); }
+    .nav-badge { background: var(--blue); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+    .wrapper { display: grid; grid-template-columns: 240px 1fr; max-width: 1100px; margin: 0 auto; min-height: calc(100vh - 56px); }
+    aside { border-right: 1px solid var(--border); padding: 32px 0; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; }
+    .sidebar-section { margin-bottom: 28px; padding: 0 20px; }
+    .sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .sidebar-link { display: block; padding: 5px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 13px; transition: all .15s; }
+    .sidebar-link:hover { color: var(--text); background: var(--surface); }
+    .sidebar-link.active { color: var(--purple); background: var(--purple-dim); }
+    main { padding: 48px 56px 96px; max-width: 780px; }
+    h1 { font-size: 32px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 12px; }
+    h2 { font-size: 22px; font-weight: 700; color: #fff; margin: 48px 0 16px; padding-top: 48px; border-top: 1px solid var(--border); }
+    h2:first-of-type { border-top: none; padding-top: 0; margin-top: 32px; }
+    h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 28px 0 10px; }
+    p { color: #94a3b8; margin-bottom: 16px; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul, ol { color: #94a3b8; padding-left: 20px; margin-bottom: 16px; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); font-weight: 600; }
+    .doc-hero { background: linear-gradient(135deg, var(--purple-dim) 0%, var(--blue-dim) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; margin-bottom: 40px; }
+    .doc-hero .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--purple); margin-bottom: 8px; }
+    .doc-hero p { margin: 0; color: var(--muted); }
+    .steps { display: flex; flex-direction: column; gap: 0; margin: 20px 0 28px; }
+    .step { display: flex; gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+    .step:last-child { border-bottom: none; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--purple); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .step-body h3 { margin: 0 0 6px; font-size: 15px; }
+    .step-body p { margin: 0; font-size: 14px; }
+    pre { background: #0a0f1a; border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; margin: 16px 0 24px; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+    code { font-family: var(--mono); font-size: 13px; }
+    :not(pre) > code { background: var(--surface); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; color: var(--green); }
+    .token-key { color: #7dd3fc; } .token-str { color: #86efac; } .token-num { color: #fbbf24; }
+    .token-comment { color: #475569; font-style: italic; } .token-kw { color: #c084fc; } .token-fn { color: #60a5fa; }
+    .callout { border-radius: 8px; padding: 16px 20px; margin: 20px 0; border-left: 3px solid; }
+    .callout.info { background: var(--blue-dim); border-color: var(--blue); }
+    .callout.success { background: var(--green-dim); border-color: var(--green); }
+    .callout.warning { background: rgba(251,191,36,.08); border-color: #fbbf24; }
+    .callout.purple { background: var(--purple-dim); border-color: var(--purple); }
+    .callout p { margin: 0; font-size: 14px; }
+    .callout strong { display: block; margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; font-size: 14px; }
+    th { text-align: left; padding: 10px 16px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: #94a3b8; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    td strong { color: var(--text); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.green { background: var(--green-dim); color: var(--green); }
+    .badge.purple { background: var(--purple-dim); color: var(--purple); }
+    .arch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0 28px; }
+    .arch-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+    .arch-card .label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .arch-card h4 { font-size: 15px; color: #fff; margin-bottom: 6px; }
+    .arch-card p { font-size: 13px; color: var(--muted); margin: 0; }
+    .doc-footer { margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .doc-footer p { margin: 0; font-size: 13px; color: var(--muted); }
+    .cta-block { background: linear-gradient(135deg, var(--purple-dim), var(--blue-dim)); border: 1px solid var(--border); border-radius: 12px; padding: 32px; text-align: center; margin: 48px 0; }
+    .cta-block h3 { color: #fff; font-size: 20px; margin-bottom: 8px; }
+    .cta-block p { color: var(--muted); margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; transition: opacity .15s; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { opacity: .85; text-decoration: none; }
+    .btn-outline { border: 1px solid var(--border); color: var(--text); margin-left: 12px; }
+    .btn-outline:hover { border-color: var(--muted); text-decoration: none; }
+    @media (max-width: 768px) { .wrapper { grid-template-columns: 1fr; } aside { display: none; } main { padding: 32px 20px 64px; } .arch-grid { grid-template-columns: 1fr; } .nav-links .hide-mobile { display: none; } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="https://authonce.io" class="nav-logo">Auth<span>Once</span></a>
+  <div class="nav-links">
+    <a href="/docs">SaaS</a>
+    <a href="/docs/web3" class="active">Web3 / DAO</a>
+    <a href="/docs/ai-agents">AI Agents</a>
+    <a href="https://authonce.io" class="hide-mobile">← Back to site</a>
+    <a href="https://authonce.io/#contact" class="nav-badge">Apply →</a>
+  </div>
+</nav>
+
+<div class="wrapper">
+  <aside>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a href="#why-web3" class="sidebar-link">Why Web3 teams use AuthOnce</a>
+      <a href="#architecture" class="sidebar-link">How it works on-chain</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">DAO Setup</div>
+      <a href="#treasury" class="sidebar-link">Treasury wallet setup</a>
+      <a href="#safe-multisig" class="sidebar-link">Safe multisig</a>
+      <a href="#tokens" class="sidebar-link">Supported tokens</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Use Cases</div>
+      <a href="#memberships" class="sidebar-link">DAO memberships</a>
+      <a href="#tooling" class="sidebar-link">Tool & API subscriptions</a>
+      <a href="#contributor" class="sidebar-link">Contributor retainers</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Verification</div>
+      <a href="#basescan" class="sidebar-link">Verifying payments on-chain</a>
+      <a href="#no-chargebacks" class="sidebar-link">No chargebacks by design</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Legal & Compliance</div>
+      <a href="#non-custodial" class="sidebar-link">Non-custodial architecture</a>
+      <a href="#mica" class="sidebar-link">MiCA positioning</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Other guides</div>
+      <a href="/docs" class="sidebar-link">SaaS →</a>
+      <a href="/docs/ai-agents" class="sidebar-link">AI Agents →</a>
+    </div>
+  </aside>
+
+  <main>
+    <div class="doc-hero">
+      <div class="eyebrow">Web3 & DAO Guide</div>
+      <h1>Recurring revenue, fully on-chain</h1>
+      <p>AuthOnce is built for teams that live on Base Network. Every payment is a verifiable on-chain transaction. No intermediary. No settlement delay. USDC lands directly in your treasury wallet the moment the keeper executes.</p>
+    </div>
+
+    <div class="callout purple">
+      <p><strong>Prerequisite.</strong> You need a registered merchant address on AuthOnce — any EVM wallet or Safe multisig. If you haven't applied yet, <a href="https://authonce.io/#contact">apply here</a>.</p>
+    </div>
+
+    <!-- WHY -->
+    <h2 id="why-web3">Why Web3 teams use AuthOnce</h2>
+
+    <div class="arch-grid">
+      <div class="arch-card">
+        <div class="label">vs. Custodial billing</div>
+        <h4>Funds go direct</h4>
+        <p>No intermediary holds your revenue. USDC moves from subscriber wallet to your treasury in one atomic transaction.</p>
+      </div>
+      <div class="arch-card">
+        <div class="label">vs. Token streaming</div>
+        <h4>Subscription semantics</h4>
+        <p>Pull-based billing with configurable intervals. Subscriber authorises once — payments execute automatically on schedule.</p>
+      </div>
+      <div class="arch-card">
+        <div class="label">On-chain</div>
+        <h4>Fully verifiable</h4>
+        <p>Every payment has a transaction hash. Auditors, token holders, and governance participants can verify treasury inflows on Basescan.</p>
+      </div>
+      <div class="arch-card">
+        <div class="label">Protocol</div>
+        <h4>0.5% flat fee</h4>
+        <p>Hardcoded in the smart contract. No surprise increases. No monthly fee on the Starter tier. The fee ceiling is 2% and can only be lowered.</p>
+      </div>
+    </div>
+
+    <!-- ARCHITECTURE -->
+    <h2 id="architecture">How it works on-chain</h2>
+    <p>AuthOnce has two smart contracts on Base Network:</p>
+
+    <table>
+      <thead><tr><th>Contract</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MerchantRegistry</strong></td><td>Stores approved merchants and their treasury wallet addresses.</td></tr>
+        <tr><td><strong>SubscriptionVault</strong></td><td>Holds subscriber authorisations (EIP-2612 permits) and executes payment pulls on each billing date.</td></tr>
+      </tbody>
+    </table>
+
+    <p>When a subscriber authorises a subscription:</p>
+    <ol>
+      <li>They sign an EIP-2612 permit off-chain — a cryptographic signature that authorises the vault to pull a specific amount of USDC on a recurring schedule.</li>
+      <li>The subscriber's vault is funded with exactly one billing cycle's worth of USDC. No more.</li>
+      <li>On each billing date, the keeper bot calls <code>executePull()</code> on the SubscriptionVault, which atomically transfers USDC from the subscriber vault to the merchant treasury (99.5%) and the AuthOnce protocol treasury (0.5%).</li>
+    </ol>
+
+    <div class="callout success">
+      <p><strong>Atomic and non-custodial.</strong> The keeper never holds funds. AuthOnce never holds funds. The subscriber's USDC goes directly to your treasury in a single transaction that either fully succeeds or fully reverts.</p>
+    </div>
+
+    <!-- TREASURY -->
+    <h2 id="treasury">Treasury wallet setup</h2>
+    <p>Your merchant address is where USDC lands on every successful payment. You can use:</p>
+    <ul>
+      <li>An EOA (regular wallet) — MetaMask, Coinbase Wallet, etc.</li>
+      <li>A Safe multisig — recommended for DAOs (see below)</li>
+      <li>Any EVM-compatible smart contract wallet that can receive ERC-20 tokens</li>
+    </ul>
+
+    <div class="callout warning">
+      <p><strong>Set it once.</strong> Your treasury wallet is your registered merchant address on AuthOnce. All USDC from all subscriptions goes here. You can update it later via a two-step admin transfer, but it requires a proposal and acceptance from the new address — plan accordingly.</p>
+    </div>
+
+    <!-- SAFE MULTISIG -->
+    <h2 id="safe-multisig">Safe multisig (recommended for DAOs)</h2>
+    <p>For DAOs and multi-stakeholder teams, we strongly recommend registering a <a href="https://safe.global" target="_blank">Safe multisig</a> as your merchant address. This means:</p>
+    <ul>
+      <li>No single key controls your subscription revenue</li>
+      <li>Treasury transfers require M-of-N signatures from your team</li>
+      <li>Compatible with existing DAO tooling (Snapshot, Tally, Aragon)</li>
+      <li>AuthOnce's own protocol treasury uses a 2/2 Safe on Base Mainnet</li>
+    </ul>
+
+    <h3>Setup steps</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Create a Safe on Base Network</h3>
+          <p>Go to <a href="https://app.safe.global" target="_blank">app.safe.global</a>, select Base Network, add signers, set threshold. Fund with a small amount of ETH for gas.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Register the Safe address as your merchant</h3>
+          <p>Apply to AuthOnce with your Safe address as the merchant wallet. This is the address that will receive USDC on every payment.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Keep a small ETH balance in the Safe</h3>
+          <p>USDC arrives directly via the keeper — no gas required on your side. But if you want to move funds out of the Safe, signers will need ETH for gas.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOKENS -->
+    <h2 id="tokens">Supported tokens</h2>
+    <table>
+      <thead><tr><th>Token</th><th>Issuer</th><th>Network</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><strong>USDC</strong></td><td>Circle</td><td>Base Network</td><td><span class="badge green">Live</span></td></tr>
+        <tr><td><strong>EURC</strong></td><td>Circle</td><td>Base Network</td><td><span class="badge green">Live</span></td></tr>
+        <tr><td><strong>USDT</strong></td><td>Tether</td><td>Base Network</td><td><span class="badge green">Live</span></td></tr>
+        <tr><td><strong>DAI</strong></td><td>Sky (MakerDAO)</td><td>Base Network</td><td><span class="badge green">Live</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <p><strong>Stablecoins only.</strong> WETH, cbBTC, and other volatile tokens are not supported as subscription payment tokens. Stablecoins eliminate price risk for both merchants and subscribers.</p>
+    </div>
+
+    <!-- MEMBERSHIPS -->
+    <h2 id="memberships">DAO memberships</h2>
+    <p>DAOs collecting recurring membership fees from contributors or community members are an ideal AuthOnce use case. A typical setup:</p>
+    <ul>
+      <li>Create a "Member" product at your monthly or annual membership rate</li>
+      <li>Share the pay link in your Discord, Notion, or governance forum</li>
+      <li>Members connect their wallet and sign once — no further action needed</li>
+      <li>USDC arrives in the DAO treasury wallet on each billing date</li>
+      <li>Failed payments enter a grace period and retry automatically — no manual intervention</li>
+    </ul>
+
+    <p>You receive a webhook event on every payment, cancellation, and expiry — wire these to your member management system to automatically grant or revoke access.</p>
+
+    <!-- TOOLING -->
+    <h2 id="tooling">Tool & API subscriptions</h2>
+    <p>If you sell tooling, data access, or API access to other Web3 teams or DAOs, AuthOnce is a natural fit. Your customers are already on-chain — they have wallets, they hold USDC. There is no fiat onramp friction.</p>
+
+    <p>Compared to collecting payment through invoice or token transfer:</p>
+    <ul>
+      <li>Automatic — no manual renewals, no "please top up your subscription" messages</li>
+      <li>Verifiable — you can prove payment on Basescan without sharing internal data</li>
+      <li>Predictable — grace period dunning recovers failed payments before cancellation</li>
+    </ul>
+
+    <!-- CONTRIBUTOR -->
+    <h2 id="contributor">Contributor retainers</h2>
+    <p>AuthOnce can also be used in reverse — a DAO paying contributors a recurring amount is a standard outgoing payment pattern, not an incoming subscription. For contributor payments going <em>out</em> of your treasury, you should use a tool like Superfluid, Sablier, or Parcel.</p>
+
+    <p>AuthOnce handles incoming recurring revenue — subscribers (or contributing DAOs) paying your DAO. If a contributor wants to pay for access to your DAO's resources or data, AuthOnce is the right tool.</p>
+
+    <!-- BASESCAN -->
+    <h2 id="basescan">Verifying payments on-chain</h2>
+    <p>Every payment executed by AuthOnce has a transaction hash. You can verify any payment on <a href="https://basescan.org" target="_blank">Basescan</a>:</p>
+
+    <ol>
+      <li>Go to <code>basescan.org</code></li>
+      <li>Search for your treasury wallet address</li>
+      <li>Under <strong>ERC-20 Token Txns</strong>, filter by USDC — every AuthOnce payment appears here</li>
+      <li>Each transaction shows: from (subscriber vault), to (your treasury), amount, timestamp, block number</li>
+    </ol>
+
+    <p>This means your DAO's revenue is independently auditable by any token holder or governance participant without needing access to your internal dashboard.</p>
+
+    <!-- NO CHARGEBACKS -->
+    <h2 id="no-chargebacks">No chargebacks by design</h2>
+    <p>On-chain USDC transfers are cryptographically final. Once <code>executePull()</code> succeeds on-chain, the payment cannot be reversed, disputed, or charged back. There is no payment processor standing between the subscriber and your treasury that could freeze, reverse, or confiscate funds.</p>
+
+    <p>This is structurally different from custodial billing processors where chargebacks, disputes, and account freezes are a constant operational risk — especially for Web3 businesses which some processors consider high-risk.</p>
+
+    <!-- NON-CUSTODIAL -->
+    <h2 id="non-custodial">Non-custodial architecture</h2>
+    <p>AuthOnce never holds merchant or subscriber funds. The protocol operates as follows:</p>
+    <ul>
+      <li>Subscriber USDC stays in the subscriber's own vault address at all times until a payment executes</li>
+      <li>On execution, USDC moves directly to the merchant treasury — AuthOnce is never an intermediary holder</li>
+      <li>The AuthOnce keeper bot is a transaction executor only — it cannot spend subscriber funds on anything other than the agreed subscription amount</li>
+    </ul>
+
+    <!-- MICA -->
+    <h2 id="mica">MiCA positioning</h2>
+    <p>AuthOnce is designed as a software protocol, not a payment service provider. Because the protocol never holds funds and operates entirely through on-chain smart contract execution, AuthOnce does not classify as a Crypto-Asset Service Provider (CASP) under MiCA. This is a deliberate architectural choice.</p>
+
+    <p>The protocol contracts are licensed under BUSL-1.1 and publicly auditable. For merchants operating in the EU, AuthOnce's non-custodial design means you are interacting directly with the Base Network blockchain — not with a regulated intermediary holding your assets.</p>
+
+    <div class="callout warning">
+      <p><strong>This is not legal advice.</strong> Consult your own legal counsel for compliance requirements applicable to your jurisdiction and use case.</p>
+    </div>
+
+    <div class="cta-block">
+      <h3>Ready to bring your DAO on-chain billing?</h3>
+      <p>Apply as a founding merchant. First 10 approved pay zero fees for 3 months.</p>
+      <a href="https://authonce.io/#contact" class="btn btn-primary">Apply now →</a>
+      <a href="/docs" class="btn btn-outline">SaaS guide</a>
+    </div>
+
+    <div class="doc-footer">
+      <p>AuthOnce · <a href="https://authonce.io">authonce.io</a> · <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+      <p>© 2026 AuthOnce · BUSL-1.1 · Base Network</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  const sections = document.querySelectorAll('h2[id]');
+  const links = document.querySelectorAll('.sidebar-link');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-link[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>

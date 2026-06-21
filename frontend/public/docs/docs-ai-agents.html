@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="https://authonce.io/favicon.svg" />
+
+  <title>AuthOnce Docs — AI Agent Payments Integration</title>
+  <meta name="description" content="Enable AI agents to pay recurring USDC subscriptions autonomously on Base Network. ERC-1271 native, EIP-2612 permit-based, non-custodial. The only recurring billing protocol built for AI agent spending." />
+  <meta name="keywords" content="AI agent payments, ERC-1271 subscription, autonomous agent billing, AI agent USDC, Base Network AI payments, on-chain AI spending, stablecoin agent payments, Web3 billing AI" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://authonce.io/docs/ai-agents" />
+
+  <meta property="og:title" content="AI Agent Payments — AuthOnce Integration Guide" />
+  <meta property="og:description" content="The only recurring USDC billing protocol with native ERC-1271 support for AI agent wallets. Autonomous, non-custodial, on Base Network." />
+  <meta property="og:image" content="https://authonce.io/og-image.png" />
+  <meta property="og:url" content="https://authonce.io/docs/ai-agents" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AuthOnce" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@AuthOnce" />
+  <meta name="twitter:image" content="https://authonce.io/og-image.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5NE0QK40WZ');
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "AuthOnce AI Agent Payments Integration Guide",
+    "description": "Developer guide for integrating AuthOnce recurring USDC subscriptions with AI agent wallets using ERC-1271 and EIP-2612 on Base Network.",
+    "url": "https://authonce.io/docs/ai-agents",
+    "author": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io" },
+    "publisher": { "@type": "Organization", "name": "AuthOnce", "logo": "https://authonce.io/logo.svg" },
+    "dateModified": "2026-06-21"
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c14; --surface: #0f1623; --border: #1e2a3a;
+      --blue: #0052FF; --blue-dim: rgba(0,82,255,0.12);
+      --green: #34d399; --green-dim: rgba(52,211,153,0.10);
+      --amber: #f59e0b; --amber-dim: rgba(245,158,11,0.10);
+      --text: #e2e8f0; --muted: #64748b;
+      --mono: 'DM Mono', monospace; --sans: 'DM Sans', system-ui, sans-serif;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.7; font-size: 15px; }
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(8,12,20,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .nav-logo { font-size: 18px; font-weight: 700; color: #fff; text-decoration: none; }
+    .nav-logo span { color: var(--green); }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; transition: color .15s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--text); }
+    .nav-badge { background: var(--blue); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+    .wrapper { display: grid; grid-template-columns: 240px 1fr; max-width: 1100px; margin: 0 auto; min-height: calc(100vh - 56px); }
+    aside { border-right: 1px solid var(--border); padding: 32px 0; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; }
+    .sidebar-section { margin-bottom: 28px; padding: 0 20px; }
+    .sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .sidebar-link { display: block; padding: 5px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 13px; transition: all .15s; }
+    .sidebar-link:hover { color: var(--text); background: var(--surface); }
+    .sidebar-link.active { color: var(--amber); background: var(--amber-dim); }
+    main { padding: 48px 56px 96px; max-width: 780px; }
+    h1 { font-size: 32px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 12px; }
+    h2 { font-size: 22px; font-weight: 700; color: #fff; margin: 48px 0 16px; padding-top: 48px; border-top: 1px solid var(--border); }
+    h2:first-of-type { border-top: none; padding-top: 0; margin-top: 32px; }
+    h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 28px 0 10px; }
+    p { color: #94a3b8; margin-bottom: 16px; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul, ol { color: #94a3b8; padding-left: 20px; margin-bottom: 16px; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); font-weight: 600; }
+    .doc-hero { background: linear-gradient(135deg, var(--amber-dim) 0%, var(--blue-dim) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; margin-bottom: 40px; }
+    .doc-hero .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: 8px; }
+    .doc-hero p { margin: 0; color: var(--muted); }
+    pre { background: #0a0f1a; border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; margin: 16px 0 24px; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+    code { font-family: var(--mono); font-size: 13px; }
+    :not(pre) > code { background: var(--surface); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; color: var(--green); }
+    .token-key { color: #7dd3fc; } .token-str { color: #86efac; } .token-num { color: #fbbf24; }
+    .token-comment { color: #475569; font-style: italic; } .token-kw { color: #c084fc; } .token-fn { color: #60a5fa; }
+    .callout { border-radius: 8px; padding: 16px 20px; margin: 20px 0; border-left: 3px solid; }
+    .callout.info { background: var(--blue-dim); border-color: var(--blue); }
+    .callout.success { background: var(--green-dim); border-color: var(--green); }
+    .callout.warning { background: rgba(251,191,36,.08); border-color: #fbbf24; }
+    .callout.amber { background: var(--amber-dim); border-color: var(--amber); }
+    .callout p { margin: 0; font-size: 14px; }
+    .callout strong { display: block; margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; font-size: 14px; }
+    th { text-align: left; padding: 10px 16px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: #94a3b8; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    td strong { color: var(--text); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.green { background: var(--green-dim); color: var(--green); }
+    .badge.amber { background: var(--amber-dim); color: var(--amber); }
+    .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0 28px; }
+    .flow-step { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+    .flow-step:last-child { border-bottom: none; }
+    .flow-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--amber-dim); border: 1px solid var(--amber); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .flow-body h3 { margin: 0 0 4px; font-size: 14px; }
+    .flow-body p { margin: 0; font-size: 13px; }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0 28px; }
+    .compare-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+    .compare-card .label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .compare-card ul { margin: 0; padding-left: 16px; }
+    .compare-card li { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    .doc-footer { margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .doc-footer p { margin: 0; font-size: 13px; color: var(--muted); }
+    .cta-block { background: linear-gradient(135deg, var(--amber-dim), var(--blue-dim)); border: 1px solid var(--border); border-radius: 12px; padding: 32px; text-align: center; margin: 48px 0; }
+    .cta-block h3 { color: #fff; font-size: 20px; margin-bottom: 8px; }
+    .cta-block p { color: var(--muted); margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; transition: opacity .15s; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { opacity: .85; text-decoration: none; }
+    .btn-outline { border: 1px solid var(--border); color: var(--text); margin-left: 12px; }
+    .btn-outline:hover { border-color: var(--muted); text-decoration: none; }
+    @media (max-width: 768px) { .wrapper { grid-template-columns: 1fr; } aside { display: none; } main { padding: 32px 20px 64px; } .compare { grid-template-columns: 1fr; } .nav-links .hide-mobile { display: none; } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="https://authonce.io" class="nav-logo">Auth<span>Once</span></a>
+  <div class="nav-links">
+    <a href="/docs">SaaS</a>
+    <a href="/docs/web3">Web3 / DAO</a>
+    <a href="/docs/ai-agents" class="active">AI Agents</a>
+    <a href="https://authonce.io" class="hide-mobile">← Back to site</a>
+    <a href="https://authonce.io/#contact" class="nav-badge">Apply →</a>
+  </div>
+</nav>
+
+<div class="wrapper">
+  <aside>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a href="#why" class="sidebar-link">Why agents need AuthOnce</a>
+      <a href="#how-it-works" class="sidebar-link">How it works</a>
+      <a href="#standards" class="sidebar-link">ERC-1271 & EIP-2612</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Integration</div>
+      <a href="#agent-wallet" class="sidebar-link">Agent wallet setup</a>
+      <a href="#create-subscription" class="sidebar-link">Creating a subscription</a>
+      <a href="#spending-limits" class="sidebar-link">Spending limits</a>
+      <a href="#guardian" class="sidebar-link">Guardian control</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Code</div>
+      <a href="#ethers-example" class="sidebar-link">ethers.js example</a>
+      <a href="#viem-example" class="sidebar-link">viem example</a>
+      <a href="#verification" class="sidebar-link">ERC-1271 verification</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="#contract-addresses" class="sidebar-link">Contract addresses</a>
+      <a href="#abi" class="sidebar-link">Key ABI methods</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Other guides</div>
+      <a href="/docs" class="sidebar-link">SaaS →</a>
+      <a href="/docs/web3" class="sidebar-link">Web3 / DAO →</a>
+    </div>
+  </aside>
+
+  <main>
+    <div class="doc-hero">
+      <div class="eyebrow">AI Agent Payments Guide</div>
+      <h1>Autonomous recurring payments for AI agents</h1>
+      <p>AuthOnce is the only recurring USDC billing protocol with native ERC-1271 support. AI agents can authorise, manage, and pay subscriptions on Base Network without human intervention after the initial setup.</p>
+    </div>
+
+    <div class="callout amber">
+      <p><strong>Developer guide.</strong> This page assumes familiarity with EVM smart contracts, ethers.js or viem, and AI agent wallet architectures. For a business-level overview, read our <a href="/blog/ai-agent-payments.html">AI agent payments blog post</a> first.</p>
+    </div>
+
+    <!-- WHY -->
+    <h2 id="why">Why AI agents need AuthOnce</h2>
+    <p>AI agents increasingly need to pay for services autonomously — API access, data feeds, compute, tooling. Current payment infrastructure is not designed for autonomous actors:</p>
+
+    <div class="compare">
+      <div class="compare-card">
+        <div class="label">❌ Legacy billing</div>
+        <ul>
+          <li>Requires human to enter card details</li>
+          <li>OAuth flows need browser + human</li>
+          <li>API keys are not payment primitives</li>
+          <li>No programmable spending limits</li>
+          <li>Chargebacks and disputes possible</li>
+        </ul>
+      </div>
+      <div class="compare-card">
+        <div class="label">✅ AuthOnce</div>
+        <ul>
+          <li>Agent wallet signs a permit once</li>
+          <li>Fully autonomous after setup</li>
+          <li>Payment IS the access credential</li>
+          <li>Guardian sets hard spending limits</li>
+          <li>On-chain — cryptographically final</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <h2 id="how-it-works">How it works</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-icon">🤖</div>
+        <div class="flow-body">
+          <h3>Agent wallet signs ERC-1271 authorisation</h3>
+          <p>The AI agent's smart contract wallet signs a structured authorisation (EIP-712 typed data) that grants the AuthOnce vault permission to pull a specific amount of USDC on a recurring schedule.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon">🔒</div>
+        <div class="flow-body">
+          <h3>Vault stores the subscription on-chain</h3>
+          <p>The subscription is registered in the SubscriptionVault contract. The agent's vault address, token, amount, interval, and grace period are immutably stored.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon">⚡</div>
+        <div class="flow-body">
+          <h3>Keeper executes pulls automatically</h3>
+          <p>On each billing date, AuthOnce's keeper bot calls <code>executePull()</code>. The contract validates the ERC-1271 signature and transfers USDC from the agent's vault to the merchant — no human action required.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon">🛡️</div>
+        <div class="flow-body">
+          <h3>Guardian retains override control</h3>
+          <p>The human operator (guardian) can pause or cancel any subscription at any time. The agent cannot exceed its pre-authorised spending without guardian approval.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STANDARDS -->
+    <h2 id="standards">ERC-1271 &amp; EIP-2612</h2>
+
+    <h3>ERC-1271 — Smart contract signature validation</h3>
+    <p>ERC-1271 is the standard for smart contract wallets to validate signatures. Instead of a private key signing a message (as with EOAs), the contract exposes an <code>isValidSignature(bytes32 hash, bytes signature)</code> function. AuthOnce's vault contract calls this during <code>executePull()</code> to verify the agent authorised the subscription.</p>
+
+    <p>This means any AI agent wallet that implements ERC-1271 — including Safe multisigs, custom agent wallets, and EIP-4337 smart accounts — is natively compatible with AuthOnce.</p>
+
+    <h3>EIP-2612 — Permit-based token approval</h3>
+    <p>EIP-2612 permits allow token approvals via off-chain signatures rather than on-chain transactions. For AI agents:</p>
+    <ul>
+      <li>No gas required for the approval step</li>
+      <li>The permit is included in the <code>createSubscription()</code> call — one transaction to set up the whole subscription</li>
+      <li>USDC on Base Network natively supports EIP-2612</li>
+    </ul>
+
+    <div class="callout success">
+      <p><strong>EOA agents work too.</strong> If your agent uses a regular private key (EOA), pass <code>deadline=0</code> and <code>signature="0x"</code> to <code>executePull()</code>. The ERC-1271 check is skipped. USDC allowance is still required via a prior <code>approve()</code> call.</p>
+    </div>
+
+    <!-- AGENT WALLET -->
+    <h2 id="agent-wallet">Agent wallet setup</h2>
+    <p>Your agent needs:</p>
+    <ol>
+      <li><strong>An EVM wallet on Base Network</strong> — EOA (private key) or smart contract wallet (ERC-1271)</li>
+      <li><strong>USDC balance</strong> — at least 1× the subscription amount per billing cycle. Keep 2–3× as buffer.</li>
+      <li><strong>ETH for gas</strong> — only needed for the initial <code>createSubscription()</code> call. The keeper pays gas for all subsequent <code>executePull()</code> calls.</li>
+    </ol>
+
+    <div class="callout info">
+      <p><strong>Vault funding model.</strong> The agent's vault is funded with exactly 1× the subscription amount per billing cycle. The vault is not a pooled balance — each subscription cycle requires the agent to maintain sufficient USDC in the vault address. AuthOnce's grace period gives the agent time to top up if a payment fails.</p>
+    </div>
+
+    <!-- CREATE SUBSCRIPTION -->
+    <h2 id="create-subscription">Creating a subscription</h2>
+    <p>Call <code>createSubscription()</code> on the SubscriptionVault contract. The key parameters for agent integrations:</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>merchant</strong></td><td><code>address</code></td><td>The merchant's registered wallet address</td></tr>
+        <tr><td><strong>safeVault</strong></td><td><code>address</code></td><td>Must equal <code>msg.sender</code>. The agent's own address.</td></tr>
+        <tr><td><strong>token</strong></td><td><code>address</code></td><td>USDC on Base: <code>0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913</code></td></tr>
+        <tr><td><strong>amount</strong></td><td><code>uint256</code></td><td>Amount in token decimals (USDC has 6 decimals)</td></tr>
+        <tr><td><strong>interval</strong></td><td><code>uint8</code></td><td>0 = Weekly, 1 = Monthly, 2 = Yearly</td></tr>
+        <tr><td><strong>guardian</strong></td><td><code>address</code></td><td>Human operator address. Can pause or cancel. Set to <code>address(0)</code> for no guardian.</td></tr>
+        <tr><td><strong>gracePeriodDays_</strong></td><td><code>uint256</code></td><td>1–30. Days before expiry if payment fails.</td></tr>
+        <tr><td><strong>dataVaultId_</strong></td><td><code>bytes32</code></td><td>Set to <code>bytes32(0)</code> — reserved for DataOnce phase.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- SPENDING LIMITS -->
+    <h2 id="spending-limits">Spending limits</h2>
+    <p>AuthOnce's vault architecture enforces spending limits at the protocol level:</p>
+    <ul>
+      <li>The vault holds exactly 1× the subscription amount per cycle — no more can be pulled</li>
+      <li>The subscription amount is immutable after creation — the merchant cannot raise it unilaterally</li>
+      <li>Price changes require a 30-day on-chain notice via <code>setProductExpiry()</code> — the agent can cancel before the new price takes effect</li>
+    </ul>
+
+    <p>This means the maximum the protocol can ever charge the agent in a single cycle is the amount encoded at subscription creation. This is a hard on-chain guarantee, not a policy.</p>
+
+    <!-- GUARDIAN -->
+    <h2 id="guardian">Guardian control</h2>
+    <p>The guardian field gives a human operator override capability over the agent's subscriptions:</p>
+
+    <table>
+      <thead><tr><th>Action</th><th>Who can trigger</th></tr></thead>
+      <tbody>
+        <tr><td>Cancel subscription</td><td>Agent wallet OR guardian</td></tr>
+        <tr><td>Pause subscription</td><td>Guardian only</td></tr>
+        <tr><td>Resume subscription</td><td>Guardian only</td></tr>
+        <tr><td>Change vault address</td><td>Agent wallet only (must equal msg.sender)</td></tr>
+      </tbody>
+    </table>
+
+    <p>Set the guardian to your human operator's address when creating the subscription. This gives you a kill switch if the agent behaves unexpectedly.</p>
+
+    <!-- ETHERS EXAMPLE -->
+    <h2 id="ethers-example">ethers.js example</h2>
+    <p>Full integration for an EOA agent wallet:</p>
+
+    <pre><code><span class="token-kw">import</span> { ethers } <span class="token-kw">from</span> <span class="token-str">"ethers"</span>;
+
+<span class="token-kw">const</span> VAULT_ADDRESS  = <span class="token-str">"0x..."</span>; <span class="token-comment">// SubscriptionVault on Base Mainnet</span>
+<span class="token-kw">const</span> USDC_ADDRESS   = <span class="token-str">"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"</span>;
+<span class="token-kw">const</span> MERCHANT_ADDR  = <span class="token-str">"0x..."</span>; <span class="token-comment">// Merchant registered address</span>
+<span class="token-kw">const</span> GUARDIAN_ADDR  = <span class="token-str">"0x..."</span>; <span class="token-comment">// Your human operator wallet</span>
+
+<span class="token-kw">const</span> provider = <span class="token-kw">new</span> ethers.<span class="token-fn">JsonRpcProvider</span>(<span class="token-str">"https://mainnet.base.org"</span>);
+<span class="token-kw">const</span> agentWallet = <span class="token-kw">new</span> ethers.<span class="token-fn">Wallet</span>(process.env.AGENT_PRIVATE_KEY, provider);
+
+<span class="token-kw">const</span> VAULT_ABI = [
+  <span class="token-str">"function createSubscription(address merchant, address safeVault, address token, uint256 amount, uint256 introAmount, uint256 introPulls, uint8 interval, address guardian, uint256 trialDays, uint256 gracePeriodDays_, bytes32 dataVaultId_) returns (uint256)"</span>,
+];
+<span class="token-kw">const</span> ERC20_ABI = [<span class="token-str">"function approve(address spender, uint256 amount) returns (bool)"</span>];
+
+<span class="token-kw">const</span> vault = <span class="token-kw">new</span> ethers.<span class="token-fn">Contract</span>(VAULT_ADDRESS, VAULT_ABI, agentWallet);
+<span class="token-kw">const</span> usdc  = <span class="token-kw">new</span> ethers.<span class="token-fn">Contract</span>(USDC_ADDRESS, ERC20_ABI, agentWallet);
+
+<span class="token-comment">// 1. Approve vault to pull USDC</span>
+<span class="token-kw">const</span> MONTHLY_AMOUNT = ethers.<span class="token-fn">parseUnits</span>(<span class="token-str">"49.00"</span>, <span class="token-num">6</span>); <span class="token-comment">// $49.00 USDC</span>
+<span class="token-kw">await</span> (await usdc.<span class="token-fn">approve</span>(VAULT_ADDRESS, MONTHLY_AMOUNT)).<span class="token-fn">wait</span>();
+
+<span class="token-comment">// 2. Create subscription</span>
+<span class="token-kw">const</span> tx = <span class="token-kw">await</span> vault.<span class="token-fn">createSubscription</span>(
+  MERCHANT_ADDR,
+  agentWallet.address,   <span class="token-comment">// safeVault == msg.sender</span>
+  USDC_ADDRESS,
+  MONTHLY_AMOUNT,
+  <span class="token-num">0n</span>,                    <span class="token-comment">// introAmount</span>
+  <span class="token-num">0n</span>,                    <span class="token-comment">// introPulls</span>
+  <span class="token-num">1</span>,                     <span class="token-comment">// Monthly</span>
+  GUARDIAN_ADDR,
+  <span class="token-num">0n</span>,                    <span class="token-comment">// trialDays</span>
+  <span class="token-num">7n</span>,                    <span class="token-comment">// gracePeriodDays</span>
+  ethers.<span class="token-fn">ZeroHash</span>        <span class="token-comment">// dataVaultId</span>
+);
+<span class="token-kw">const</span> receipt = <span class="token-kw">await</span> tx.<span class="token-fn">wait</span>();
+console.<span class="token-fn">log</span>(<span class="token-str">"Subscription created. Tx:"</span>, receipt.hash);
+<span class="token-comment">// From here, the keeper handles all future pulls automatically.</span></code></pre>
+
+    <!-- VIEM EXAMPLE -->
+    <h2 id="viem-example">viem example</h2>
+
+    <pre><code><span class="token-kw">import</span> { createWalletClient, http, parseUnits, zeroHash } <span class="token-kw">from</span> <span class="token-str">"viem"</span>;
+<span class="token-kw">import</span> { base } <span class="token-kw">from</span> <span class="token-str">"viem/chains"</span>;
+<span class="token-kw">import</span> { privateKeyToAccount } <span class="token-kw">from</span> <span class="token-str">"viem/accounts"</span>;
+
+<span class="token-kw">const</span> account = <span class="token-fn">privateKeyToAccount</span>(process.env.AGENT_PRIVATE_KEY);
+<span class="token-kw">const</span> client  = <span class="token-fn">createWalletClient</span>({ account, chain: base, transport: <span class="token-fn">http</span>() });
+
+<span class="token-kw">const</span> MONTHLY_AMOUNT = <span class="token-fn">parseUnits</span>(<span class="token-str">"49.00"</span>, <span class="token-num">6</span>);
+
+<span class="token-comment">// 1. Approve</span>
+<span class="token-kw">await</span> client.<span class="token-fn">writeContract</span>({
+  address: USDC_ADDRESS,
+  abi: [{ name: <span class="token-str">"approve"</span>, type: <span class="token-str">"function"</span>, inputs: [{ name: <span class="token-str">"spender"</span>, type: <span class="token-str">"address"</span>}, { name: <span class="token-str">"amount"</span>, type: <span class="token-str">"uint256"</span>}], outputs: [{ type: <span class="token-str">"bool"</span>}] }],
+  functionName: <span class="token-str">"approve"</span>,
+  args: [VAULT_ADDRESS, MONTHLY_AMOUNT],
+});
+
+<span class="token-comment">// 2. Create subscription</span>
+<span class="token-kw">await</span> client.<span class="token-fn">writeContract</span>({
+  address: VAULT_ADDRESS,
+  abi: VAULT_ABI,
+  functionName: <span class="token-str">"createSubscription"</span>,
+  args: [MERCHANT_ADDR, account.address, USDC_ADDRESS, MONTHLY_AMOUNT, <span class="token-num">0n</span>, <span class="token-num">0n</span>, <span class="token-num">1</span>, GUARDIAN_ADDR, <span class="token-num">0n</span>, <span class="token-num">7n</span>, <span class="token-fn">zeroHash</span>()],
+});</code></pre>
+
+    <!-- ERC-1271 VERIFICATION -->
+    <h2 id="verification">ERC-1271 verification (smart contract agents)</h2>
+    <p>If your agent is a smart contract wallet (Safe, EIP-4337 account, custom), the contract must implement:</p>
+
+    <pre><code><span class="token-comment">// Solidity — implement in your agent contract</span>
+<span class="token-kw">bytes4 constant</span> MAGIC_VALUE = <span class="token-num">0x1626ba7e</span>;
+
+<span class="token-kw">function</span> <span class="token-fn">isValidSignature</span>(
+  <span class="token-kw">bytes32</span> hash,
+  <span class="token-kw">bytes memory</span> signature
+) <span class="token-kw">external view returns</span> (<span class="token-kw">bytes4</span>) {
+  <span class="token-comment">// Validate the signature against your agent's signing key</span>
+  <span class="token-comment">// Return MAGIC_VALUE if valid, 0xffffffff if not</span>
+  address signer = <span class="token-fn">recoverSigner</span>(hash, signature);
+  <span class="token-kw">if</span> (authorisedSigners[signer]) {
+    <span class="token-kw">return</span> MAGIC_VALUE;
+  }
+  <span class="token-kw">return</span> <span class="token-num">0xffffffff</span>;
+}</code></pre>
+
+    <p>AuthOnce's <code>executePull()</code> calls <code>isValidSignature()</code> on the subscriber vault if it detects a contract at that address. Return <code>0x1626ba7e</code> to approve, anything else to reject.</p>
+
+    <!-- CONTRACT ADDRESSES -->
+    <h2 id="contract-addresses">Contract addresses</h2>
+    <table>
+      <thead><tr><th>Contract</th><th>Network</th><th>Address</th></tr></thead>
+      <tbody>
+        <tr><td><strong>SubscriptionVault v7</strong></td><td>Base Sepolia (testnet)</td><td><code>0xeb068B47731261F7B4A5ae8535686D67D7f72321</code></td></tr>
+        <tr><td><strong>MerchantRegistry v4</strong></td><td>Base Sepolia (testnet)</td><td><code>0xAE681E431c353f5930dDFfBC74037d3f2afE3264</code></td></tr>
+        <tr><td><strong>SubscriptionVault</strong></td><td>Base Mainnet</td><td><span class="badge amber">Q3 2026</span></td></tr>
+        <tr><td><strong>USDC</strong></td><td>Base Mainnet</td><td><code>0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913</code></td></tr>
+        <tr><td><strong>USDC</strong></td><td>Base Sepolia</td><td><code>0x036CbD53842c5426634e7929541eC2318f3dCF7e</code></td></tr>
+      </tbody>
+    </table>
+
+    <!-- ABI -->
+    <h2 id="abi">Key ABI methods</h2>
+
+    <pre><code><span class="token-comment">// Core methods you need</span>
+[
+  <span class="token-str">"function createSubscription(address merchant, address safeVault, address token, uint256 amount, uint256 introAmount, uint256 introPulls, uint8 interval, address guardian, uint256 trialDays, uint256 gracePeriodDays_, bytes32 dataVaultId_) returns (uint256 id)"</span>,
+  <span class="token-str">"function cancelSubscription(uint256 id)"</span>,
+  <span class="token-str">"function pauseSubscription(uint256 id, string reason)"</span>,
+  <span class="token-str">"function resumeSubscription(uint256 id)"</span>,
+  <span class="token-str">"function nextPullDue(uint256 id) view returns (uint256)"</span>,
+  <span class="token-str">"function getSubscription(uint256 id) view returns (tuple(address owner, address merchant, address safeVault, address token, uint256 amount, uint8 interval, uint8 status, uint256 lastPulledAt, uint256 gracePeriodDays, address guardian))"</span>,
+
+  <span class="token-comment">// Events</span>
+  <span class="token-str">"event SubscriptionCreated(uint256 indexed id, address indexed owner, address indexed merchant, address safeVault, address token, uint256 amount, uint256 introAmount, uint256 introPulls, uint8 interval, address guardian, uint256 trialEndsAt, uint256 gracePeriodDays, bool isContractVault)"</span>,
+  <span class="token-str">"event PaymentExecuted(uint256 indexed id, address indexed merchant, address indexed token, uint256 amount, uint256 merchantReceived, uint256 protocolFee)"</span>,
+  <span class="token-str">"event SubscriptionCancelled(uint256 indexed id, address indexed cancelledBy)"</span>
+]</code></pre>
+
+    <div class="callout info">
+      <p><strong>Full ABI available on Basescan.</strong> The contracts are verified. Search for the SubscriptionVault address on <a href="https://sepolia.basescan.org" target="_blank">sepolia.basescan.org</a> to read the full ABI and source code.</p>
+    </div>
+
+    <div class="cta-block">
+      <h3>Building an AI agent on Base?</h3>
+      <p>Get in touch — we're actively supporting early AI agent integrations and can assist with custom configurations.</p>
+      <a href="mailto:support@authonce.io" class="btn btn-primary">Contact us →</a>
+      <a href="/docs/web3" class="btn btn-outline">Web3 guide</a>
+    </div>
+
+    <div class="doc-footer">
+      <p>AuthOnce · <a href="https://authonce.io">authonce.io</a> · <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+      <p>© 2026 AuthOnce · BUSL-1.1 · Base Network</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  const sections = document.querySelectorAll('h2[id]');
+  const links = document.querySelectorAll('.sidebar-link');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-link[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>

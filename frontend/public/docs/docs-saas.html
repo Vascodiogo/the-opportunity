@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="https://authonce.io/favicon.svg" />
+
+  <title>AuthOnce Docs — SaaS Merchant Integration Guide</title>
+  <meta name="description" content="Complete guide for SaaS merchants integrating AuthOnce — non-custodial USDC subscription billing on Base Network. Create products, share pay links, configure webhooks, and manage recurring revenue." />
+  <meta name="keywords" content="AuthOnce docs, SaaS subscription billing, USDC recurring payments, Web3 billing integration, Base Network subscriptions, stablecoin subscriptions, Web3 billing" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://authonce.io/docs" />
+
+  <meta property="og:title" content="AuthOnce Docs — SaaS Merchant Guide" />
+  <meta property="og:description" content="Everything you need to accept USDC recurring payments on Base Network. No code required to get started." />
+  <meta property="og:image" content="https://authonce.io/og-image.png" />
+  <meta property="og:url" content="https://authonce.io/docs" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AuthOnce" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@AuthOnce" />
+  <meta name="twitter:image" content="https://authonce.io/og-image.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5NE0QK40WZ');
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "AuthOnce SaaS Merchant Integration Guide",
+    "description": "Complete documentation for SaaS merchants integrating AuthOnce non-custodial USDC subscription billing on Base Network.",
+    "url": "https://authonce.io/docs",
+    "author": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io" },
+    "publisher": { "@type": "Organization", "name": "AuthOnce", "logo": "https://authonce.io/logo.svg" },
+    "dateModified": "2026-06-21"
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080c14;
+      --surface:   #0f1623;
+      --border:    #1e2a3a;
+      --blue:      #0052FF;
+      --blue-dim:  rgba(0,82,255,0.12);
+      --green:     #34d399;
+      --green-dim: rgba(52,211,153,0.10);
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --mono:      'DM Mono', 'Fira Code', monospace;
+      --sans:      'DM Sans', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(8,12,20,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-logo { font-size: 18px; font-weight: 700; color: #fff; text-decoration: none; }
+    .nav-logo span { color: var(--green); }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; transition: color .15s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--text); }
+    .nav-badge { background: var(--blue); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+
+    /* ── Layout ── */
+    .wrapper { display: grid; grid-template-columns: 240px 1fr; max-width: 1100px; margin: 0 auto; min-height: calc(100vh - 56px); }
+
+    /* ── Sidebar ── */
+    aside {
+      border-right: 1px solid var(--border);
+      padding: 32px 0;
+      position: sticky; top: 56px; height: calc(100vh - 56px);
+      overflow-y: auto;
+    }
+    .sidebar-section { margin-bottom: 28px; padding: 0 20px; }
+    .sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .sidebar-link { display: block; padding: 5px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 13px; transition: all .15s; }
+    .sidebar-link:hover { color: var(--text); background: var(--surface); }
+    .sidebar-link.active { color: var(--green); background: var(--green-dim); }
+
+    /* ── Content ── */
+    main { padding: 48px 56px 96px; max-width: 780px; }
+
+    h1 { font-size: 32px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 12px; }
+    h2 { font-size: 22px; font-weight: 700; color: #fff; margin: 48px 0 16px; padding-top: 48px; border-top: 1px solid var(--border); }
+    h2:first-of-type { border-top: none; padding-top: 0; margin-top: 32px; }
+    h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 28px 0 10px; }
+    p { color: #94a3b8; margin-bottom: 16px; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul, ol { color: #94a3b8; padding-left: 20px; margin-bottom: 16px; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); font-weight: 600; }
+
+    /* ── Hero band ── */
+    .doc-hero {
+      background: linear-gradient(135deg, var(--blue-dim) 0%, var(--green-dim) 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 40px;
+    }
+    .doc-hero .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+    .doc-hero h1 { margin-bottom: 8px; }
+    .doc-hero p { margin: 0; color: var(--muted); }
+
+    /* ── Steps ── */
+    .steps { display: flex; flex-direction: column; gap: 0; margin: 20px 0 28px; }
+    .step { display: flex; gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+    .step:last-child { border-bottom: none; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .step-body h3 { margin: 0 0 6px; font-size: 15px; }
+    .step-body p { margin: 0; font-size: 14px; }
+
+    /* ── Code block ── */
+    pre {
+      background: #0a0f1a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+      margin: 16px 0 24px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    code { font-family: var(--mono); font-size: 13px; }
+    :not(pre) > code { background: var(--surface); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; color: var(--green); }
+    .token-key { color: #7dd3fc; }
+    .token-str { color: #86efac; }
+    .token-num { color: #fbbf24; }
+    .token-comment { color: #475569; font-style: italic; }
+    .token-kw { color: #c084fc; }
+    .token-fn { color: #60a5fa; }
+
+    /* ── Info boxes ── */
+    .callout { border-radius: 8px; padding: 16px 20px; margin: 20px 0; border-left: 3px solid; }
+    .callout.info { background: var(--blue-dim); border-color: var(--blue); }
+    .callout.success { background: var(--green-dim); border-color: var(--green); }
+    .callout.warning { background: rgba(251,191,36,.08); border-color: #fbbf24; }
+    .callout p { margin: 0; font-size: 14px; }
+    .callout strong { display: block; margin-bottom: 4px; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; font-size: 14px; }
+    th { text-align: left; padding: 10px 16px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: #94a3b8; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    td strong { color: var(--text); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.green { background: var(--green-dim); color: var(--green); }
+    .badge.blue { background: var(--blue-dim); color: #60a5fa; }
+    .badge.yellow { background: rgba(251,191,36,.1); color: #fbbf24; }
+
+    /* ── Event cards ── */
+    .event-list { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 28px; }
+    .event-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+    .event-name { font-family: var(--mono); font-size: 13px; color: var(--green); font-weight: 500; margin-bottom: 4px; }
+    .event-desc { font-size: 13px; color: var(--muted); margin: 0; }
+
+    /* ── Footer ── */
+    .doc-footer { margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .doc-footer p { margin: 0; font-size: 13px; color: var(--muted); }
+    .doc-footer a { color: var(--muted); }
+
+    /* ── CTA ── */
+    .cta-block { background: linear-gradient(135deg, var(--blue-dim), var(--green-dim)); border: 1px solid var(--border); border-radius: 12px; padding: 32px; text-align: center; margin: 48px 0; }
+    .cta-block h3 { color: #fff; font-size: 20px; margin-bottom: 8px; }
+    .cta-block p { color: var(--muted); margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; transition: opacity .15s; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { opacity: .85; text-decoration: none; }
+    .btn-outline { border: 1px solid var(--border); color: var(--text); margin-left: 12px; }
+    .btn-outline:hover { border-color: var(--muted); text-decoration: none; }
+
+    @media (max-width: 768px) {
+      .wrapper { grid-template-columns: 1fr; }
+      aside { display: none; }
+      main { padding: 32px 20px 64px; }
+      .nav-links .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="https://authonce.io" class="nav-logo">Auth<span>Once</span></a>
+  <div class="nav-links">
+    <a href="/docs" class="active">SaaS</a>
+    <a href="/docs/web3">Web3 / DAO</a>
+    <a href="/docs/ai-agents">AI Agents</a>
+    <a href="https://authonce.io" class="hide-mobile">← Back to site</a>
+    <a href="https://authonce.io/#contact" class="nav-badge">Apply →</a>
+  </div>
+</nav>
+
+<div class="wrapper">
+  <aside>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Getting Started</div>
+      <a href="#quickstart" class="sidebar-link">Quickstart</a>
+      <a href="#create-product" class="sidebar-link">Create a product</a>
+      <a href="#pay-link" class="sidebar-link">Share your pay link</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Payments</div>
+      <a href="#payment-methods" class="sidebar-link">Payment methods</a>
+      <a href="#grace-period" class="sidebar-link">Grace period & dunning</a>
+      <a href="#fees" class="sidebar-link">Fees</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Integration</div>
+      <a href="#webhooks" class="sidebar-link">Webhooks</a>
+      <a href="#webhook-events" class="sidebar-link">Webhook events</a>
+      <a href="#webhook-verification" class="sidebar-link">Signature verification</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Management</div>
+      <a href="#dashboard" class="sidebar-link">Dashboard</a>
+      <a href="#cancellations" class="sidebar-link">Cancellations</a>
+      <a href="#exports" class="sidebar-link">Tax exports</a>
+      <a href="#tiers" class="sidebar-link">Pricing tiers</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Other guides</div>
+      <a href="/docs/web3" class="sidebar-link">Web3 / DAO →</a>
+      <a href="/docs/ai-agents" class="sidebar-link">AI Agents →</a>
+    </div>
+  </aside>
+
+  <main>
+    <div class="doc-hero">
+      <div class="eyebrow">SaaS Merchant Guide</div>
+      <h1>Accept USDC subscriptions in minutes</h1>
+      <p>AuthOnce gives your SaaS product a recurring billing layer that requires no smart contract knowledge. Share a pay link, receive USDC. Everything else is automatic.</p>
+    </div>
+
+    <div class="callout success">
+      <p><strong>No code required to get started.</strong> Create a product, share your pay link, and receive your first payment — all from the dashboard. Webhooks and the REST API are available when you're ready to go deeper.</p>
+    </div>
+
+    <!-- QUICKSTART -->
+    <h2 id="quickstart">Quickstart</h2>
+    <p>From zero to first payment in four steps:</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Apply as a founding merchant</h3>
+          <p>Go to <a href="https://authonce.io/#contact">authonce.io</a> and submit your application. The first 10 approved merchants pay zero protocol fees for 3 months.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Connect your wallet</h3>
+          <p>Your merchant wallet is where USDC lands when a payment executes. Connect MetaMask, Coinbase Wallet, or any EVM-compatible wallet. This address is public — it's your on-chain identity as a merchant.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Create a subscription product</h3>
+          <p>Set a name, price, billing interval (weekly / monthly / yearly), and which payment methods you accept. Takes under 2 minutes.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Share your pay link</h3>
+          <p>Every product gets a unique URL: <code>authonce.io/pay/your-name/your-product</code>. Send it by email, embed it in your app, or put it in a button. Subscribers click, connect a wallet or enter a card, and they're subscribed.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE PRODUCT -->
+    <h2 id="create-product">Create a product</h2>
+    <p>From your merchant dashboard, click <strong>Add product</strong>. You'll configure:</p>
+
+    <table>
+      <thead><tr><th>Field</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Product name</strong></td><td>Shown to subscribers on the pay page. E.g. "Pro Plan".</td></tr>
+        <tr><td><strong>Slug</strong></td><td>URL-friendly identifier. Auto-generated from the name. E.g. <code>pro-plan</code>.</td></tr>
+        <tr><td><strong>Price</strong></td><td>Set in USDC or your preferred fiat currency. All tokens are priced 1:1 with USD.</td></tr>
+        <tr><td><strong>Interval</strong></td><td>Weekly, Monthly, or Yearly. Immutable after the first subscriber.</td></tr>
+        <tr><td><strong>Payment methods</strong></td><td>Choose any combination: USDC, EURC, USDT, DAI, or card (requires connected payment processor account).</td></tr>
+        <tr><td><strong>Grace period</strong></td><td>1–30 days. How long a failed payment retries before the subscription expires. Default: 7 days.</td></tr>
+        <tr><td><strong>Introductory pricing</strong></td><td>Optional. First N payments at a lower price. Useful for free trials and launch discounts.</td></tr>
+        <tr><td><strong>Crypto discount</strong></td><td>Optional. 0–50% discount when subscribers pay with a crypto wallet instead of card.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <p><strong>Interval is immutable.</strong> Once a subscriber is on a product, the billing interval cannot change. If you need a different interval, create a new product and migrate subscribers.</p>
+    </div>
+
+    <!-- PAY LINK -->
+    <h2 id="pay-link">Share your pay link</h2>
+    <p>Every product generates a unique pay link:</p>
+
+    <pre><code>https://authonce.io/pay/<span class="token-str">{merchant-slug}</span>/<span class="token-str">{product-slug}</span></code></pre>
+
+    <p>From your dashboard you can:</p>
+    <ul>
+      <li>Copy the URL directly</li>
+      <li>Download a QR code to use in print, email, or presentation slides</li>
+      <li>Share via WhatsApp, email, or any messaging app</li>
+    </ul>
+
+    <p>The pay page is fully responsive and works on any device. Subscribers choose their payment method on arrival — no friction, no account required.</p>
+
+    <!-- PAYMENT METHODS -->
+    <h2 id="payment-methods">Payment methods</h2>
+    <p>AuthOnce supports two flows that you control at the product level:</p>
+
+    <h3>Crypto wallet (USDC, EURC, USDT, DAI)</h3>
+    <p>The subscriber connects a wallet and signs a single EIP-2612 permit. No gas required. From that point, AuthOnce's keeper bot pulls the subscription amount on each billing date directly to your wallet. The subscriber never needs to approve again.</p>
+
+    <div class="callout success">
+      <p><strong>Zero chargebacks.</strong> On-chain payments are cryptographically final. There is no chargeback mechanism — once the payment executes, it's settled.</p>
+    </div>
+
+    <h3>Card (fiat)</h3>
+    <p>The subscriber pays with a credit or debit card through your connected payment processor account. You receive the payment in your bank account in the currency you configured. AuthOnce charges its 0.5% fee as an application fee on top of the processor's standard fee.</p>
+
+    <div class="callout warning">
+      <p><strong>Card payments require setup.</strong> Connect your payment processor account from <strong>Dashboard → Settings → Payments</strong> before enabling card as a payment method.</p>
+    </div>
+
+    <!-- GRACE PERIOD -->
+    <h2 id="grace-period">Grace period &amp; dunning</h2>
+    <p>When a payment fails — either because the subscriber's wallet has insufficient balance or their approval expired — AuthOnce does not immediately cancel the subscription. Instead, it enters a <strong>grace period</strong>.</p>
+
+    <p>During the grace period:</p>
+    <ul>
+      <li>The keeper retries the payment once every 24 hours</li>
+      <li>The subscriber receives an email notification immediately, and a reminder every 48 hours</li>
+      <li>You receive a notification that the payment failed and the grace period end date</li>
+      <li>The subscription status shows as <strong>Grace</strong> in your dashboard</li>
+    </ul>
+
+    <p>If the subscriber tops up their wallet (or re-approves), the next daily retry will succeed and billing continues normally. If the grace period ends with no successful payment, the subscription expires.</p>
+
+    <table>
+      <thead><tr><th>Setting</th><th>Range</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Grace period</strong></td><td>1 – 30 days</td><td>7 days</td></tr>
+        <tr><td><strong>Retry frequency</strong></td><td>Every 24 hours</td><td>Fixed</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <p><strong>Set grace period per product, not per subscriber.</strong> Configure it when creating or editing the product. All subscribers on that product share the same grace period setting.</p>
+    </div>
+
+    <!-- FEES -->
+    <h2 id="fees">Fees</h2>
+    <p>AuthOnce charges a single flat fee, hardcoded in the smart contract:</p>
+
+    <table>
+      <thead><tr><th>Fee type</th><th>Amount</th><th>Who pays</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Protocol fee</strong></td><td>0.5% per successful payment</td><td>Deducted from each pull — merchant receives 99.5%</td></tr>
+        <tr><td><strong>Monthly fee</strong></td><td>€0 on Starter tier</td><td>Optional tiers unlock additional features</td></tr>
+        <tr><td><strong>Card processing fee</strong></td><td>Standard processor rate</td><td>Deducted by your payment processor before settlement</td></tr>
+        <tr><td><strong>Setup / withdrawal fee</strong></td><td>None</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout success">
+      <p><strong>The 0.5% fee is a hard ceiling.</strong> It is encoded in the smart contract and can only be lowered, never raised. No surprise increases.</p>
+    </div>
+
+    <!-- WEBHOOKS -->
+    <h2 id="webhooks">Webhooks</h2>
+    <p>Webhooks let your backend react in real time to subscription events. AuthOnce sends a signed HTTPS POST to your endpoint within seconds of each event.</p>
+
+    <h3>Configure your webhook endpoint</h3>
+    <p>From <strong>Dashboard → Settings → Webhooks</strong>, enter your endpoint URL. AuthOnce will sign every request with HMAC-SHA256 using your webhook secret.</p>
+
+    <p>Every webhook payload follows the same structure:</p>
+
+    <pre><code>{
+  <span class="token-key">"event"</span>:     <span class="token-str">"payment.success"</span>,
+  <span class="token-key">"timestamp"</span>: <span class="token-num">1750000000</span>,
+  <span class="token-key">"data"</span>: {
+    <span class="token-key">"subscription_id"</span>: <span class="token-str">"42"</span>,
+    <span class="token-key">"merchant_address"</span>: <span class="token-str">"0xbb6d..."</span>,
+    <span class="token-key">"vault_address"</span>:    <span class="token-str">"0xd889..."</span>,
+    <span class="token-key">"amount_usdc"</span>:      <span class="token-str">"10.00"</span>,
+    <span class="token-key">"merchant_received_usdc"</span>: <span class="token-str">"9.95"</span>,
+    <span class="token-key">"tx_hash"</span>:        <span class="token-str">"0xecb0..."</span>,
+    <span class="token-key">"status"</span>:         <span class="token-str">"active"</span>
+  }
+}</code></pre>
+
+    <!-- WEBHOOK EVENTS -->
+    <h2 id="webhook-events">Webhook events</h2>
+
+    <div class="event-list">
+      <div class="event-card">
+        <div class="event-name">subscription.created</div>
+        <p class="event-desc">A new subscriber authorised a recurring payment. Billing will begin on the next billing date.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">payment.success</div>
+        <p class="event-desc">A payment was pulled successfully. USDC is now in your wallet. Includes transaction hash.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">payment.failed</div>
+        <p class="event-desc">Payment failed — insufficient balance or expired approval. Grace period has started. Includes grace period end date.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">payment.upcoming</div>
+        <p class="event-desc">A subscriber has a payment due in 3 days. Fired once per billing cycle as an advance notice.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">subscription.cancelled</div>
+        <p class="event-desc">A subscriber cancelled. No further payments will be collected. Merchants cannot trigger this event.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">subscription.expired</div>
+        <p class="event-desc">Grace period ended without a successful payment. Subscription is permanently closed.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">subscription.resumed</div>
+        <p class="event-desc">A subscription that was in grace period recovered — subscriber topped up and the retry succeeded.</p>
+      </div>
+      <div class="event-card">
+        <div class="event-name">subscription.expiring</div>
+        <p class="event-desc">You set a product expiry date. This fires when the 30-day notice was sent to the subscriber.</p>
+      </div>
+    </div>
+
+    <!-- WEBHOOK VERIFICATION -->
+    <h2 id="webhook-verification">Signature verification</h2>
+    <p>Every webhook includes an <code>X-AuthOnce-Signature</code> header. Always verify it before processing the event — it protects you from spoofed requests.</p>
+
+    <pre><code><span class="token-comment">// Node.js example</span>
+<span class="token-kw">const</span> crypto = <span class="token-fn">require</span>(<span class="token-str">"crypto"</span>);
+
+<span class="token-kw">function</span> <span class="token-fn">verifyWebhook</span>(rawBody, signature, secret) {
+  <span class="token-kw">const</span> expected = <span class="token-str">"sha256="</span> + crypto
+    .<span class="token-fn">createHmac</span>(<span class="token-str">"sha256"</span>, secret)
+    .<span class="token-fn">update</span>(rawBody)
+    .<span class="token-fn">digest</span>(<span class="token-str">"hex"</span>);
+  <span class="token-kw">return</span> crypto.<span class="token-fn">timingSafeEqual</span>(
+    Buffer.<span class="token-fn">from</span>(expected),
+    Buffer.<span class="token-fn">from</span>(signature)
+  );
+}
+
+<span class="token-comment">// In your Express route:</span>
+app.<span class="token-fn">post</span>(<span class="token-str">"/webhook/authonce"</span>, (req, res) => {
+  <span class="token-kw">const</span> sig = req.headers[<span class="token-str">"x-authonce-signature"</span>];
+  <span class="token-kw">if</span> (!<span class="token-fn">verifyWebhook</span>(req.rawBody, sig, process.env.AUTHONCE_WEBHOOK_SECRET)) {
+    <span class="token-kw">return</span> res.<span class="token-fn">status</span>(<span class="token-num">401</span>).<span class="token-fn">send</span>(<span class="token-str">"Unauthorized"</span>);
+  }
+  <span class="token-comment">// Safe to process</span>
+  <span class="token-kw">const</span> { event, data } = req.body;
+  <span class="token-comment">// ...</span>
+  res.<span class="token-fn">status</span>(<span class="token-num">200</span>).<span class="token-fn">send</span>(<span class="token-str">"OK"</span>);
+});</code></pre>
+
+    <!-- DASHBOARD -->
+    <h2 id="dashboard">Dashboard</h2>
+    <p>Your merchant dashboard at <a href="https://authonce.io">authonce.io</a> gives you:</p>
+    <ul>
+      <li><strong>Subscribers</strong> — list of all active, grace, cancelled, and expired subscribers with wallet addresses and payment history</li>
+      <li><strong>Payments</strong> — full payment history with transaction hashes, amounts, and Basescan links</li>
+      <li><strong>Analytics</strong> — MRR, GTV, ARPU, churn rate, new vs churned subscribers over time</li>
+      <li><strong>Webhooks</strong> — delivery log, retry status, response codes</li>
+      <li><strong>Products</strong> — manage all your subscription products</li>
+    </ul>
+
+    <!-- CANCELLATIONS -->
+    <h2 id="cancellations">Cancellations</h2>
+    <div class="callout warning">
+      <p><strong>Merchants cannot cancel subscriptions.</strong> Only the subscriber or their designated guardian can cancel. This is a deliberate protocol design — it guarantees subscribers that merchants cannot cut off their access or manipulate billing.</p>
+    </div>
+    <p>If you need to stop billing a subscriber, contact them directly and ask them to cancel from their subscriber portal at <code>authonce.io/my-subscriptions</code>. Alternatively, you can pause your product from the dashboard — no new payments will be attempted while paused.</p>
+
+    <!-- EXPORTS -->
+    <h2 id="exports">Tax exports</h2>
+    <p>From <strong>Dashboard → Payments → Export</strong>, you can download:</p>
+    <ul>
+      <li><strong>CSV</strong> — all payments with date, subscriber, amount in USDC and EUR equivalent, transaction hash</li>
+      <li><strong>XLSX</strong> — same data as a spreadsheet, with a separate guide tab explaining the columns for your accountant</li>
+    </ul>
+
+    <!-- TIERS -->
+    <h2 id="tiers">Pricing tiers</h2>
+    <table>
+      <thead><tr><th>Tier</th><th>Monthly fee</th><th>Protocol fee</th><th>Key features</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Starter</strong> <span class="badge green">Free</span></td>
+          <td>€0</td>
+          <td>0.5%</td>
+          <td>Full protocol, up to 3 products, all tokens, webhooks, basic email notifications</td>
+        </tr>
+        <tr>
+          <td><strong>Growth</strong></td>
+          <td>€49</td>
+          <td>0.5%</td>
+          <td>+ Branded emails (your name and colour), unlimited products, advanced analytics</td>
+        </tr>
+        <tr>
+          <td><strong>Business</strong></td>
+          <td>€199</td>
+          <td>0.5%</td>
+          <td>+ Custom sender domain (noreply@yourdomain.com), priority support</td>
+        </tr>
+        <tr>
+          <td><strong>Enterprise</strong></td>
+          <td>Custom</td>
+          <td>0.5%</td>
+          <td>+ Custom integrations, SLA, white-label</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <p><strong>Founding merchant offer.</strong> The first 10 approved merchants pay zero fees for 3 months. The first 5 receive lifetime Growth tier free. <a href="https://authonce.io/#contact">Apply now →</a></p>
+    </div>
+
+    <div class="cta-block">
+      <h3>Ready to get started?</h3>
+      <p>Apply as a founding merchant and receive zero fees for your first 3 months.</p>
+      <a href="https://authonce.io/#contact" class="btn btn-primary">Apply now →</a>
+      <a href="https://authonce.io" class="btn btn-outline">Back to site</a>
+    </div>
+
+    <div class="doc-footer">
+      <p>AuthOnce · <a href="https://authonce.io">authonce.io</a> · <a href="mailto:support@authonce.io">support@authonce.io</a></p>
+      <p>© 2026 AuthOnce · BUSL-1.1 · Base Network</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Sidebar active link on scroll
+  const sections = document.querySelectorAll('h2[id]');
+  const links = document.querySelectorAll('.sidebar-link');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-link[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>
