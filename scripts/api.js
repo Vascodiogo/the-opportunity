@@ -2241,6 +2241,44 @@ app.get("/auth/google/callback",
   }
 );
 
+// POST /api/subscriptions/link — store product_slug for a subscription by tx_hash
+// Called by PayPage after on-chain subscription creation confirmed
+app.post("/api/subscriptions/link", geofenceMiddleware, async (req, res) => {
+  try {
+    const { tx_hash, product_slug, merchant_address } = req.body;
+    if (!tx_hash || !product_slug || !merchant_address) {
+      return res.status(400).json({ error: "tx_hash, product_slug, and merchant_address required" });
+    }
+
+    // Verify product exists for this merchant
+    const product = await db.getProduct(merchant_address.toLowerCase(), product_slug);
+    if (!product) return res.status(404).json({ error: "product_not_found" });
+
+    // Update subscription row — may not exist yet if notifier hasn't indexed it
+    // Retry up to 5 times with 1s delay to handle timing
+    let updated = false;
+    for (let i = 0; i < 5; i++) {
+      const result = await db.query(
+        `UPDATE subscriptions SET product_slug = $1, updated_at = NOW()
+         WHERE tx_hash = $2 AND merchant_address = $3`,
+        [product_slug, tx_hash, merchant_address.toLowerCase()]
+      );
+      if (result.rowCount > 0) { updated = true; break; }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (!updated) {
+      // Store for later — notifier will pick it up on next upsert
+      console.log(`[SUBSCRIPTIONS] Link pending: ${tx_hash} → ${product_slug}`);
+    }
+
+    return res.json({ ok: true, linked: updated });
+  } catch (err) {
+    console.error("[SUBSCRIPTIONS] Link error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
 // POST /api/subscriber/cancel/:subscriptionId
 // Type B (custodied wallet) cancel — backend signs the transaction
 app.post("/api/subscriber/cancel/:subscriptionId", geofenceMiddleware, async (req, res) => {

@@ -129,12 +129,14 @@ async function initSchema() {
       last_pulled_at      TIMESTAMPTZ,
       paused_at           TIMESTAMPTZ,
       guardian_address    TEXT,
+      product_slug        TEXT,
       tx_hash             TEXT,
       block_number        BIGINT,
       created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS product_slug TEXT`);
 
   // Payments — indexed from PaymentExecuted events
   await query(`
@@ -473,19 +475,20 @@ async function getSystemHealth() {
 async function upsertSubscription(data) {
   const {
     id, ownerAddress, merchantAddress, safeVault, amount,
-    interval, status, txHash, blockNumber, guardianAddress
+    interval, status, txHash, blockNumber, guardianAddress, productSlug
   } = data;
 
   await query(`
     INSERT INTO subscriptions
       (id, owner_address, merchant_address, safe_vault, amount, interval,
-       status, tx_hash, block_number, guardian_address, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+       status, tx_hash, block_number, guardian_address, product_slug, created_at, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
     ON CONFLICT (id) DO UPDATE SET
-      status     = EXCLUDED.status,
-      updated_at = NOW()
+      status       = EXCLUDED.status,
+      product_slug = COALESCE(EXCLUDED.product_slug, subscriptions.product_slug),
+      updated_at   = NOW()
   `, [id, ownerAddress, merchantAddress, safeVault, amount, interval,
-      status, txHash, blockNumber, guardianAddress || null]);
+      status, txHash, blockNumber, guardianAddress || null, productSlug || null]);
 }
 
 async function updateSubscriptionStatus(id, status, extra = {}) {

@@ -280,7 +280,21 @@ export default function PayPage() {
   }, [approveConfirmed]);
 
   useEffect(() => {
-    if (subscribeConfirmed && flowStatus === "subscribing") setFlowStatus("success");
+    if (subscribeConfirmed && flowStatus === "subscribing") {
+      // Link product_slug to subscription by tx_hash
+      if (subscribeTxHash && productSlug && resolvedAddress) {
+        fetch(`${API_BASE}/api/subscriptions/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tx_hash: subscribeTxHash,
+            product_slug: productSlug,
+            merchant_address: resolvedAddress,
+          }),
+        }).catch(err => console.warn("[PayPage] Could not link product_slug:", err));
+      }
+      setFlowStatus("success");
+    }
   }, [subscribeConfirmed]);
 
   const isWrongNetwork = isConnected && chainId !== baseSepolia.id;

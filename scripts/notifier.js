@@ -164,7 +164,10 @@ async function checkUpcomingPayments(vault) {
 
   // Get all active subscriptions from DB
   const result = await db.query(
-    "SELECT * FROM subscriptions WHERE status = 'active'",
+    `SELECT s.*, p.name AS product_name
+     FROM subscriptions s
+     LEFT JOIN products p ON p.merchant_address = s.merchant_address AND p.slug = s.product_slug
+     WHERE s.status = 'active'`,
     []
   );
 
@@ -172,7 +175,6 @@ async function checkUpcomingPayments(vault) {
     try {
       // Read on-chain subscription to get latest state
       const onchain = await vault.subscriptions(BigInt(sub.id));
-      const lastPulledAt    = Number(onchain.lastPulledAt);
       const interval        = Number(onchain.interval);
       const status          = Number(onchain.status);
       const trialEndsAt     = Number(onchain.trialEndsAt);
@@ -246,7 +248,10 @@ async function checkPriceChangeNotices(vault) {
   const thirtyDays = 30 * 86400;
 
   const result = await db.query(
-    "SELECT * FROM subscriptions WHERE status = 'active'",
+    `SELECT s.*, p.name AS product_name
+     FROM subscriptions s
+     LEFT JOIN products p ON p.merchant_address = s.merchant_address AND p.slug = s.product_slug
+     WHERE s.status = 'active'`,
     []
   );
 
@@ -317,6 +322,8 @@ async function onSubscriptionCreated(log, iface) {
   console.log(`  Amount:   ${formatUsdc(amount)} USDC / ${INTERVAL_NAME[interval]}`);
   if (introAmount > 0n) console.log(`  Intro:    ${formatUsdc(introAmount)} USDC × ${introPulls}`);
 
+  // product_slug is linked via POST /api/subscriptions/link from PayPage after confirmation
+  // notifier preserves existing product_slug if already set (COALESCE in upsertSubscription)
   await db.upsertSubscription({
     id: id.toString(),
     ownerAddress: owner,
