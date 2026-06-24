@@ -1440,9 +1440,26 @@ function CsvImport({ address }) {
 
   if (!open) return (
     <div style={{ marginBottom: 20 }}>
-      <button onClick={() => setOpen(true)} style={ghostBtn}>
-        ⬆ Import subscribers from CSV
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <button onClick={() => setOpen(true)} style={ghostBtn}>
+          ⬆ Import subscribers from CSV
+        </button>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          email, wallet, amount, interval · max 500 rows ·{" "}
+          <button
+            onClick={() => {
+              const sample = "email,name,wallet_address,amount_usdc,interval\nalice@example.com,Alice Smith,0xAbCd1234567890AbCd1234567890AbCd12345678,9.99,monthly\nbob@example.com,Bob Jones,0x1234567890AbCd1234567890AbCd1234567890Ab,49.99,yearly";
+              const blob = new Blob([sample], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = "authonce-import-template.csv"; a.click();
+            }}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--green)", fontSize: 12, textDecoration: "underline" }}
+          >
+            download template
+          </button>
+        </span>
+      </div>
     </div>
   );
 
