@@ -915,3 +915,72 @@ MerchantRegistry v4 fixes:
 - blog + index.html SEO commit
 
 *Last updated: 2026-06-20*
+
+## 23. Session Summary — June 24 2026
+
+**Co-founder search — CoFoundersLab:**
+- Profile created: CoFoundersLab free trial (30 days, $29/month after)
+- 8 outreach messages sent: Carlota Costa (Porto), Riccardo Ferighi (Milan), Sarah Guadagnino (NYC), Maeve Buatsi (London, verified), Tanya Mohan (Dubai), Andrea Geltrude (London), Michaela Girvan (Glasgow, legal LL.M), Lauritz Elmshaeuser (Berlin)
+- Riccardo Ferighi replied — conversation active, asked about location and incorporation
+- Top leads ranked: Lauritz (Berlin, proven operator) > Michaela (Glasgow, legal + BD) > Maeve (London, verified commercial) > Andrea (London, sales + BD) > Riccardo (Milan, broadest skills)
+- Scam pattern identified: Gosuke + David Gomez (Worklo) — both ignored
+
+**Pitch deck v3:**
+- 7 fixes applied → AuthOnce-PitchDeck-v3-2026.pptx
+- Slide 2: dunning/failed payments added as 4th problem bullet
+- Slide 3: restructured — Recurring by design / Non-custodial + dunning / AI Agent Native + multi-token
+- Slide 4: fiat accuracy fix — "Payment lands directly in merchant wallet or Stripe account"
+- Slide 7: Phase 2 fiat error fixed
+- Slide 9: contract versions v5/v2 → v7/v4
+- Slide 10: "hired" → "in place"; equity removed → "Terms on request"
+- Slide 11: "evenings and weekends" removed
+
+**3 Comma Capital:**
+- Dealflow form submitted: hello@3commafunds.com
+- Lisbon VC, CMVM-regulated, €100K–€1.5M pre-seed, Web3 infrastructure focus
+- Found via Circle Alliance Partner Directory
+
+**Ordana (joinordana.com):**
+- Profile created, Stripe connected
+- MPI (Ordana team) sent inbound: "we use Stripe and they're expensive"
+- Top collaboration targets: Spotlaiz, Guideless, VantalabsAI
+
+**Base App Dashboard:**
+- Description filled (157 chars)
+
+**Leadverse.ai Reddit lead finder:**
+- Best leads: r/ethtrader (USDC self-custody), r/srilanka (Stripe alternatives), r/fintech (crypto payments)
+- Reddit karma = 5 — too low for r/fintech; r/srilanka and r/ethtrader replies drafted
+
+**Code fixes shipped:**
+
+db.js:
+- product_slug column added to subscriptions table + ALTER TABLE migration
+- upsertSubscription accepts productSlug
+
+notifier.js:
+- Both subscription queries JOIN products table → product_name in all emails
+- Stale v6 sub IDs (0,1,2,3,4,7,8,12,13,14,15) deleted from DB — were causing CALL_EXCEPTION spam in logs
+
+api.js:
+- POST /api/subscriptions/link — stores product_slug by tx_hash, retries 5×
+
+PayPage.jsx:
+- Calls /api/subscriptions/link after subscribeConfirmed
+
+MerchantDashboard.jsx:
+- CSV import hint text + inline download template link
+- Product dropdown in import panel
+- Pay link displayed after successful import with Copy button
+
+**Tier billing system — planned, not built:**
+- Path A: fiat via Stripe; Path B: crypto via AuthOnce (AuthOnce bills own merchants using AuthOnce)
+- 6 items: tier products on AuthOnce, Stripe subscription products, upgrade UI, webhook handlers, downgrade logic, payment method switch (fiat↔crypto)
+- Flagged for next sprint
+
+**Commits:**
+- fix: product name in emails via tx_hash link
+- feat: CSV import hint text and download template link
+- feat: product selector and pay link display after CSV import
+
+*Last updated: 2026-06-24*
