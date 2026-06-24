@@ -1363,13 +1363,15 @@ function WebhookModal({ merchantAddress, onClose, onSaved }) {
 }
 
 // ─── CSV Import ───────────────────────────────────────────────────────────────
-function CsvImport({ address }) {
-  const [open, setOpen]         = useState(false);
-  const [file, setFile]         = useState(null);
-  const [preview, setPreview]   = useState([]);
-  const [result, setResult]     = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState(null);
+function CsvImport({ address, products = [] }) {
+  const [open, setOpen]               = useState(false);
+  const [file, setFile]               = useState(null);
+  const [preview, setPreview]         = useState([]);
+  const [result, setResult]           = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [copied, setCopied]           = useState(false);
 
   const API = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
 
@@ -1475,6 +1477,23 @@ function CsvImport({ address }) {
         <button onClick={() => { setOpen(false); setFile(null); setPreview([]); setResult(null); setError(null); }} style={ghostBtn}>✕</button>
       </div>
 
+      {/* Product selector */}
+      {products.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>Which product are these subscribers for?</label>
+          <select
+            value={selectedProduct}
+            onChange={e => setSelectedProduct(e.target.value)}
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--border)", background: "var(--bg-tag)", color: "var(--text-primary)", fontSize: 13 }}
+          >
+            <option value="">Select a product...</option>
+            {products.map(p => (
+              <option key={p.slug} value={p.slug}>{p.name} — ${p.amount}/{p.interval}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* CSV format guide */}
       <div style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.7 }}>
         <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>Required CSV format:</div>
@@ -1542,15 +1561,40 @@ function CsvImport({ address }) {
             ✓ {result.imported} subscriber{result.imported !== 1 ? "s" : ""} imported successfully.
             {result.skipped > 0 && ` ${result.skipped} row${result.skipped !== 1 ? "s" : ""} skipped.`}
           </div>
+
+          {/* Pay link to share */}
+          {selectedProduct && (
+            <div style={{ marginTop: 10, padding: "12px 14px", background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                Share this pay link with your imported subscribers so they can complete their subscription:
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <code style={{ fontSize: 12, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {`${window.location.origin}/pay/${address}/${selectedProduct}`}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/pay/${address}/${selectedProduct}`);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  style={{ ...ghostBtn, fontSize: 12, whiteSpace: "nowrap" }}
+                >
+                  {copied ? "✓ Copied" : "Copy link"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {result.errors?.length > 0 && (
-            <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.06)", border: "0.5px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: 12, color: "var(--red)" }}>
+            <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.06)", border: "0.5px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: 12, color: "var(--red)", marginTop: 8 }}>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>Row errors:</div>
               {result.errors.map((e, i) => (
                 <div key={i}>Row {e.row}{e.email ? ` (${e.email})` : ""}: {e.reason}</div>
               ))}
             </div>
           )}
-          <button onClick={() => { setResult(null); setOpen(false); }} style={{ ...ghostBtn, marginTop: 10 }}>Done</button>
+          <button onClick={() => { setResult(null); setOpen(false); setCopied(false); }} style={{ ...ghostBtn, marginTop: 10 }}>Done</button>
         </div>
       )}
 
@@ -1984,7 +2028,7 @@ export default function MerchantDashboard({ address }) {
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{subscribers.length} total</div>
 
             {/* ── CSV Import ── */}
-            <CsvImport address={address} />
+            <CsvImport address={address} products={products} />
 
             {loading ? (
               <EmptyState message="Loading subscribers..." />
