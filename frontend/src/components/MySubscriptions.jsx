@@ -251,10 +251,10 @@ function SubscriptionCard({ sub, token, onCancelled }) {
             {sub.is_fiat_subscriber && (
               <>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
-                  Your card payment could not be collected. Please ensure your card has sufficient funds — the payment will be retried automatically.
+                  Your card payment could not be collected. Please ensure your card has sufficient funds — the payment will be retried automatically. If it continues to fail, your subscription will expire.
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
-                  🔄 Retries every 24h · Contact <a href="mailto:support@authonce.io" style={{ color: "var(--amber)" }}>support@authonce.io</a> if you need help
+                  🔄 Retries automatically every 24h
                 </div>
               </>
             )}
@@ -263,10 +263,10 @@ function SubscriptionCard({ sub, token, onCancelled }) {
             {!sub.is_fiat_subscriber && !sub.is_contract_vault && (
               <>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
-                  Your wallet needs <strong style={{ color: "var(--text-primary)" }}>${sub.amount_usdc} {tokenSymbol(sub.token)}</strong> to cover the next payment. Top up your wallet and the keeper will retry automatically.
+                  Your wallet needs <strong style={{ color: "var(--text-primary)" }}>${sub.amount_usdc} {tokenSymbol(sub.token)}</strong> to cover the next payment. Top up your wallet and the payment will be retried automatically.
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
-                  🔄 Keeper retries every 24h · Subscription expires if wallet stays empty
+                  🔄 Retries automatically every 24h · Subscription expires if wallet stays empty
                 </div>
               </>
             )}
