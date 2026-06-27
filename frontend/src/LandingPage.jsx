@@ -244,12 +244,20 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
   const [cardNum, setCardNum] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
+  const [introPrice, setIntroPrice] = useState(false);
+  const [introCycles, setIntroCycles] = useState(3);
+  const [introAmt, setIntroAmt] = useState(9);
+  const [yearlyOption, setYearlyOption] = useState(false);
+  const [cryptoDiscount, setCryptoDiscount] = useState(false);
+  const [discountPct, setDiscountPct] = useState(10);
 
   const slug = name.toLowerCase().replace(/\s+/g, "-");
   const intervalWord = interval === "Monthly" ? "month" : interval === "Weekly" ? "week" : "year";
   const fiatLabels = { card: "Card", mbway: "MB Way", mb: "Multibanco", ideal: "iDEAL", bancontact: "Bancontact", klarna: "Klarna" };
   const activeTokens = Object.entries(tokens).filter(([, v]) => v).map(([k]) => k.toUpperCase());
   const activeFiats = Object.entries(fiats).filter(([, v]) => v).map(([k]) => fiatLabels[k]);
+  const displayPrice = introPrice ? introAmt : price;
+  const cryptoPrice = cryptoDiscount ? Math.round(price * (1 - discountPct / 100) * 100) / 100 : price;
 
   const toggleStyle = (active, type = "crypto") => ({
     display: "flex", alignItems: "center", gap: 8,
@@ -257,6 +265,17 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
     border: active ? `0.5px solid ${type === "crypto" ? "rgba(52,211,153,0.5)" : "rgba(59,130,246,0.5)"}` : `0.5px solid ${border}`,
     background: active ? (type === "crypto" ? "rgba(52,211,153,0.08)" : "rgba(59,130,246,0.08)") : "transparent",
     color: active ? (type === "crypto" ? "#34d399" : "#3b82f6") : muted,
+  });
+
+  const toggleRowStyle = (active) => ({
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "12px 0", borderBottom: `0.5px solid ${border}`,
+  });
+
+  const switchStyle = (active) => ({
+    width: 36, height: 20, borderRadius: 99, border: "none", cursor: "pointer",
+    background: active ? "#34d399" : isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)",
+    position: "relative", transition: "background 0.2s", flexShrink: 0,
   });
 
   const fmtCard = (v) => v.replace(/\D/g, "").substring(0, 16).replace(/(.{4})/g, "$1 ").trim();
@@ -304,7 +323,7 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 
         <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>{lang === "en" ? "Fiat payments" : "Pagamentos fiat"}</label>
         <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "Requires Stripe connected" : "Requer Stripe conectado"}</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           {Object.keys(fiats).map(k => (
             <label key={k} style={toggleStyle(fiats[k], "fiat")}>
               <input type="checkbox" checked={fiats[k]} onChange={e => setFiats(f => ({ ...f, [k]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#3b82f6" }} />
@@ -313,11 +332,65 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
           ))}
         </div>
 
+        {/* Toggle rows */}
+        <div style={{ borderTop: `0.5px solid ${border}`, paddingTop: 4 }}>
+          <div style={toggleRowStyle(introPrice)}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{lang === "en" ? "Introductory pricing" : "Preço introdutório"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{lang === "en" ? "Lower price for first N cycles" : "Preço reduzido para os primeiros N ciclos"}</p>
+            </div>
+            <button onClick={() => setIntroPrice(v => !v)} style={switchStyle(introPrice)} aria-label="Toggle introductory pricing">
+              <span style={{ position: "absolute", top: 2, left: introPrice ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+            </button>
+          </div>
+          {introPrice && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: "10px 0" }}>
+              <div>
+                <label style={{ fontSize: 11, color: muted, display: "block", marginBottom: 4 }}>{lang === "en" ? "Intro price ($)" : "Preço intro ($)"}</label>
+                <input type="number" value={introAmt} min={1} onChange={e => setIntroAmt(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: muted, display: "block", marginBottom: 4 }}>{lang === "en" ? "For N cycles" : "Para N ciclos"}</label>
+                <input type="number" value={introCycles} min={1} max={12} onChange={e => setIntroCycles(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
+              </div>
+            </div>
+          )}
+
+          <div style={toggleRowStyle(yearlyOption)}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{lang === "en" ? "Yearly billing option" : "Opção anual"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{lang === "en" ? "Annual plan alongside monthly" : "Plano anual ao lado do mensal"}</p>
+            </div>
+            <button onClick={() => setYearlyOption(v => !v)} style={switchStyle(yearlyOption)} aria-label="Toggle yearly billing">
+              <span style={{ position: "absolute", top: 2, left: yearlyOption ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+            </button>
+          </div>
+
+          <div style={{ ...toggleRowStyle(cryptoDiscount), borderBottom: "none" }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{lang === "en" ? "Crypto discount" : "Desconto cripto"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{lang === "en" ? "Incentivise on-chain payment (0–50%)" : "Incentivar pagamento on-chain (0–50%)"}</p>
+            </div>
+            <button onClick={() => setCryptoDiscount(v => !v)} style={switchStyle(cryptoDiscount)} aria-label="Toggle crypto discount">
+              <span style={{ position: "absolute", top: 2, left: cryptoDiscount ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+            </button>
+          </div>
+          {cryptoDiscount && (
+            <div style={{ padding: "10px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <label style={{ fontSize: 11, color: muted }}>{lang === "en" ? "Discount" : "Desconto"}</label>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "#34d399" }}>{discountPct}%</span>
+              </div>
+              <input type="range" min={0} max={50} step={5} value={discountPct} onChange={e => setDiscountPct(Number(e.target.value))} style={{ width: "100%" }} />
+            </div>
+          )}
+        </div>
+
         <a href="#apply" style={{
-          display: "block", width: "100%", boxSizing: "border-box", padding: "12px",
+          display: "block", width: "100%", boxSizing: "border-box", padding: "12px", marginTop: 16,
           background: "linear-gradient(135deg, #34d399, #3b82f6)", color: "#080c14",
           border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700,
-          textAlign: "center", textDecoration: "none", cursor: "pointer",
+          textAlign: "center", textDecoration: "none",
         }}>
           {lang === "en" ? "Apply to create this product →" : "Candidatar-me para criar este produto →"}
         </a>
@@ -337,10 +410,20 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
           </div>
 
           <p style={{ fontSize: 20, fontWeight: 700, color: text, margin: "0 0 2px" }}>{name || "My Plan"}</p>
-          <p style={{ fontSize: 26, fontWeight: 700, color: "#34d399", margin: "0 0 2px", fontFamily: "'DM Mono', monospace" }}>${price}</p>
-          <p style={{ fontSize: 12, color: muted, margin: "0 0 14px" }}>{lang === "en" ? "per" : "por"} {intervalWord}</p>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+            {introPrice && <span style={{ fontSize: 26, fontWeight: 700, color: "#34d399", fontFamily: "'DM Mono', monospace" }}>${introAmt}</span>}
+            <span style={{ fontSize: introPrice ? 16 : 26, fontWeight: 700, color: introPrice ? muted : "#34d399", fontFamily: "'DM Mono', monospace", textDecoration: introPrice ? "line-through" : "none" }}>${price}</span>
+          </div>
+          {introPrice && <p style={{ fontSize: 11, color: "#34d399", margin: "0 0 2px", fontWeight: 600 }}>{lang === "en" ? `Intro price for ${introCycles} cycles` : `Preço intro por ${introCycles} ciclos`}</p>}
+          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per" : "por"} {intervalWord}</p>
 
-          {/* Tabs */}
+          {yearlyOption && (
+            <div style={{ background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
+              <span style={{ color: "#34d399", fontWeight: 600 }}>{lang === "en" ? "Save ~17% with annual" : "Poupe ~17% com anual"}</span>
+              <span style={{ color: muted, marginLeft: 8 }}>${Math.round(price * 10)} / {lang === "en" ? "year" : "ano"}</span>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 0, marginBottom: 14, border: `0.5px solid ${border}`, borderRadius: 8, overflow: "hidden" }}>
             <button onClick={() => setActiveTab("crypto")} style={{ flex: 1, padding: "8px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: activeTab === "crypto" ? "#34d399" : "transparent", color: activeTab === "crypto" ? "#080c14" : muted }}>
               {lang === "en" ? "Crypto wallet" : "Carteira cripto"}
@@ -352,6 +435,13 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 
           {activeTab === "crypto" && (
             <div>
+              {cryptoDiscount && (
+                <div style={{ background: "rgba(52,211,153,0.08)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
+                  <span style={{ color: "#34d399", fontWeight: 600 }}>{discountPct}% {lang === "en" ? "crypto discount applied" : "desconto cripto aplicado"}</span>
+                  <span style={{ color: muted, marginLeft: 8, textDecoration: "line-through" }}>${price}</span>
+                  <span style={{ color: text, fontWeight: 700, marginLeft: 6 }}>${cryptoPrice.toFixed(2)}</span>
+                </div>
+              )}
               <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
                 <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{lang === "en" ? "Select token" : "Selecionar token"}</p>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
