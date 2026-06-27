@@ -1061,8 +1061,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               phase: lang === "en" ? "Q3 2026 — in progress" : "Q3 2026 — em curso",
               color: "#3b82f6",
               items: [
-                { done: false, active: true,  label: lang === "en" ? "Security audit" : "Auditoria de segurança", detail: lang === "en" ? "5 proposals received · Nethermind recommended · July 3 completion" : "5 propostas recebidas · Nethermind recomendado · Conclusão a 3 julho" },
-                { done: false, active: true,  label: lang === "en" ? "Partnership outreach" : "Parcerias", detail: "CharmVerse · Snapshot · Tally · DeepDAO · Boardroom · Dune · Messari" },
+                { done: false, active: true,  label: lang === "en" ? "Security audit" : "Auditoria de segurança", detail: lang === "en" ? "5 proposals received · Seeking audit grant funding" : "5 propostas recebidas · A candidatar a financiamento de auditoria" },
+                { done: false, active: true,  label: lang === "en" ? "Partnership outreach" : "Parcerias", detail: lang === "en" ? "Web3 SaaS platforms · DAO tooling · Analytics providers" : "Plataformas Web3 SaaS · Ferramentas DAO · Fornecedores de análise" },
                 { done: false, active: false, label: lang === "en" ? "WooCommerce + PrestaShop plugins" : "Plugins WooCommerce + PrestaShop", detail: lang === "en" ? "$200 pre-audit safety cap" : "Limite de segurança de $200 pré-auditoria" },
                 { done: false, active: false, label: lang === "en" ? "Keeper bot v2 — parallel scaling" : "Keeper bot v2 — escalonamento paralelo", detail: lang === "en" ? "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" : "25 EOAs paralelos · Gelato/Chainlink acima de 50 comerciantes" },
                 { done: false, active: false, label: lang === "en" ? "Base Mainnet launch — September 2026" : "Lançamento Base Mainnet — setembro 2026", detail: lang === "en" ? "Audit-gated · $200 cap lifted · 10 founding spots" : "Condicionado à auditoria · Limite $200 removido · 10 vagas fundadoras" },
@@ -1074,7 +1074,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               items: [
                 { done: false, active: false, label: lang === "en" ? "Embeddable widget + full API" : "Widget incorporável + API completa", detail: lang === "en" ? "Self-serve · No-code checkout · Webhooks" : "Self-serve · Checkout sem código · Webhooks" },
                 { done: false, active: false, label: lang === "en" ? "DAO treasury integrations" : "Integrações com tesouraria DAO", detail: "Snapshot · Tally · Boardroom · Recurring contributor payments" },
-                { done: false, active: false, label: lang === "en" ? "RevOnce — revenue-based financing" : "RevOnce — financiamento baseado em receita", detail: lang === "en" ? "On-chain MRR unlocks DeFi lending" : "MRR on-chain desbloqueia empréstimos DeFi" },
+
               ],
             },
           ].map((phase, pi) => (
