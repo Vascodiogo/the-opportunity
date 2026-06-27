@@ -27,6 +27,21 @@ function intervalLabel(interval) {
   return map[interval] || interval;
 }
 
+// Token address → symbol resolver (Base Sepolia + Mainnet)
+const TOKEN_SYMBOLS = {
+  "0x036cbd53842c5426634e7929541ec2318f3dcf7e": "USDC",
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
+  "0xdbde852fd6d600bf2c3301f6b2e8e9e38afafde9": "USDT",
+  "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
+  "0x808456652fdb597867f38412077a9182bf77359":  "EURC",
+  "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42": "EURC",
+};
+
+function tokenSymbol(address) {
+  if (!address) return "stablecoin";
+  return TOKEN_SYMBOLS[address.toLowerCase()] || "stablecoin";
+}
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const S = {
   btn: {
@@ -226,8 +241,73 @@ function SubscriptionCard({ sub, token, onCancelled }) {
 
         {/* Grace period warning */}
         {sub.status === "paused" && (
-          <div style={{ background: "rgba(251,191,36,0.08)", border: "0.5px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--amber)", marginBottom: 14 }}>
-            Payment failed — your subscription is in a grace period. The keeper will retry daily. Top up your vault to restore it.
+          <div style={{ background: "rgba(217,119,6,0.05)", border: "1px solid rgba(217,119,6,0.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--amber)" }}>Payment failed — grace period active</span>
+            </div>
+
+            {/* Fiat subscriber */}
+            {sub.is_fiat_subscriber && (
+              <>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
+                  Your card payment could not be collected. Please ensure your card has sufficient funds — the payment will be retried automatically.
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
+                  🔄 Retries every 24h · Contact <a href="mailto:support@authonce.io" style={{ color: "var(--amber)" }}>support@authonce.io</a> if you need help
+                </div>
+              </>
+            )}
+
+            {/* Crypto human subscriber */}
+            {!sub.is_fiat_subscriber && !sub.is_contract_vault && (
+              <>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
+                  Your wallet needs <strong style={{ color: "var(--text-primary)" }}>${sub.amount_usdc} {tokenSymbol(sub.token)}</strong> to cover the next payment. Top up your wallet and the keeper will retry automatically.
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
+                  🔄 Keeper retries every 24h · Subscription expires if wallet stays empty
+                </div>
+              </>
+            )}
+
+            {/* AI agent / contract wallet */}
+            {sub.is_contract_vault && (
+              <>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
+                  The contract vault has insufficient <strong style={{ color: "var(--text-primary)" }}>{tokenSymbol(sub.token)}</strong>. Fund the vault with <strong style={{ color: "var(--text-primary)" }}>${sub.amount_usdc} {tokenSymbol(sub.token)}</strong> to resume.
+                </div>
+                {sub.safe_vault && (
+                  <div style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault address</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <code style={{ fontSize: 11, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {sub.safe_vault}
+                      </code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(sub.safe_vault)}
+                        style={{ background: "none", border: "0.5px solid var(--border)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--text-muted)", fontSize: 11 }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {sub.safe_vault && (
+                  <a
+                    href={`https://sepolia.basescan.org/address/${sub.safe_vault}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "block", background: "var(--amber)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "none", textAlign: "center" }}
+                  >
+                    Fund vault on Basescan →
+                  </a>
+                )}
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, textAlign: "center" }}>
+                  🔄 Keeper retries every 24h · Subscription expires if vault stays empty
+                </div>
+              </>
+            )}
           </div>
         )}
 

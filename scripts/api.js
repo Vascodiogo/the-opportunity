@@ -2241,44 +2241,6 @@ app.get("/auth/google/callback",
   }
 );
 
-// POST /api/subscriptions/link — store product_slug for a subscription by tx_hash
-// Called by PayPage after on-chain subscription creation confirmed
-app.post("/api/subscriptions/link", geofenceMiddleware, async (req, res) => {
-  try {
-    const { tx_hash, product_slug, merchant_address } = req.body;
-    if (!tx_hash || !product_slug || !merchant_address) {
-      return res.status(400).json({ error: "tx_hash, product_slug, and merchant_address required" });
-    }
-
-    // Verify product exists for this merchant
-    const product = await db.getProduct(merchant_address.toLowerCase(), product_slug);
-    if (!product) return res.status(404).json({ error: "product_not_found" });
-
-    // Update subscription row — may not exist yet if notifier hasn't indexed it
-    // Retry up to 5 times with 1s delay to handle timing
-    let updated = false;
-    for (let i = 0; i < 5; i++) {
-      const result = await db.query(
-        `UPDATE subscriptions SET product_slug = $1, updated_at = NOW()
-         WHERE tx_hash = $2 AND merchant_address = $3`,
-        [product_slug, tx_hash, merchant_address.toLowerCase()]
-      );
-      if (result.rowCount > 0) { updated = true; break; }
-      await new Promise(r => setTimeout(r, 1000));
-    }
-
-    if (!updated) {
-      // Store for later — notifier will pick it up on next upsert
-      console.log(`[SUBSCRIPTIONS] Link pending: ${tx_hash} → ${product_slug}`);
-    }
-
-    return res.json({ ok: true, linked: updated });
-  } catch (err) {
-    console.error("[SUBSCRIPTIONS] Link error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
-
 // POST /api/subscriber/cancel/:subscriptionId
 // Type B (custodied wallet) cancel — backend signs the transaction
 app.post("/api/subscriber/cancel/:subscriptionId", geofenceMiddleware, async (req, res) => {
@@ -2425,6 +2387,9 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
       SELECT
         s.id             AS subscription_id,
         s.merchant_address,
+        s.safe_vault,
+        s.token,
+        s.is_contract_vault,
         s.amount,
         s.interval,
         s.status,
@@ -2443,19 +2408,32 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
       ORDER BY s.created_at DESC
     `, [wallet]);
 
+    // Check which subscriptions came from Stripe (fiat)
+    const fiatWallets = new Set();
+    try {
+      const fiatResult = await db.query(
+        `SELECT LOWER(subscriber_wallet) AS w FROM stripe_checkout_sessions WHERE status = 'completed'`
+      );
+      fiatResult.rows.forEach(r => fiatWallets.add(r.w));
+    } catch (e) { /* ignore */ }
+
     res.json({
       wallet_address: wallet,
       subscriptions: result.rows.map(s => ({
-        subscription_id: s.subscription_id,
-        merchant_address: s.merchant_address,
-        merchant_name:   s.merchant_name,
-        product_name:    s.product_name,
-        product_slug:    s.product_slug,
-        amount_usdc:     (parseFloat(s.amount) / 1e6).toFixed(2),
-        interval:        s.interval,
-        status:          s.status,
-        last_pulled_at:  s.last_pulled_at,
-        created_at:      s.created_at,
+        subscription_id:   s.subscription_id,
+        merchant_address:  s.merchant_address,
+        safe_vault:        s.safe_vault,
+        token:             s.token,
+        is_contract_vault: s.is_contract_vault || false,
+        is_fiat_subscriber: fiatWallets.has(s.owner_address?.toLowerCase()),
+        merchant_name:     s.merchant_name,
+        product_name:      s.product_name,
+        product_slug:      s.product_slug,
+        amount_usdc:       (parseFloat(s.amount) / 1e6).toFixed(2),
+        interval:          s.interval,
+        status:            s.status,
+        last_pulled_at:    s.last_pulled_at,
+        created_at:        s.created_at,
       })),
     });
   } catch (err) {
