@@ -318,7 +318,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
   const cardBg  = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
   const border  = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
   const text    = isDark ? "#f1f5f9"                : "#0f172a";
-  const muted   = isDark ? "#94a3b8"                : "#64748b";
+  const muted   = isDark ? "#94a3b8"                : "#374151";
   const accent  = "#34d399";
   const blue    = "#3b82f6";
   const purple  = "#a78bfa";
@@ -493,20 +493,20 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </h1>
 
           {/* Pain point cards */}
-          <div className="ao-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28, textAlign: "left" }}>
+          <div className="ao-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28, textAlign: "center" }}>
             {[
               { icon: "ti-building-store", title: lang === "en" ? "No intermediary" : "Sem intermediário", sub: lang === "en" ? "Funds move wallet to wallet. No platform holds your money." : "Fundos movem-se de carteira para carteira. Sem plataforma a segurar o seu dinheiro." },
               { icon: "ti-lock", title: lang === "en" ? "No custody risk" : "Sem risco de custódia", sub: lang === "en" ? "Subscribers keep control of their wallet at all times." : "Os subscritores mantêm o controlo da carteira em todo o momento." },
               { icon: "ti-trending-down", title: lang === "en" ? "No churn from failed payments" : "Sem churn por falha de pagamento", sub: lang === "en" ? "Grace periods and auto-retry recover payments automatically." : "Períodos de graça e reenvio automático recuperam pagamentos." },
             ].map(({ icon, title, sub }) => (
               <div key={title} style={{
-                padding: 20, borderRadius: 14,
+                padding: 24, borderRadius: 14,
                 background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.07)",
                 border: `0.5px solid rgba(52,211,153,0.3)`,
               }}>
-                <i className={`ti ${icon}`} style={{ fontSize: 28, color: accent, display: "block", marginBottom: 12 }} aria-hidden="true" />
-                <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 6px", lineHeight: 1.2 }}>{title}</p>
-                <p style={{ fontSize: 12, color: muted, margin: 0, lineHeight: 1.6 }}>{sub}</p>
+                <i className={`ti ${icon}`} style={{ fontSize: 32, color: accent, display: "block", marginBottom: 14 }} aria-hidden="true" />
+                <p style={{ fontSize: 19, fontWeight: 800, color: text, margin: "0 0 10px", lineHeight: 1.2 }}>{title}</p>
+                <p style={{ fontSize: 14, color: muted, margin: 0, lineHeight: 1.6 }}>{sub}</p>
               </div>
             ))}
           </div>
