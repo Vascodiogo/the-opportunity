@@ -232,6 +232,175 @@ function ApplyForm({ lang, isDark }) {
   );
 }
 
+// ─── Product Creator ─────────────────────────────────────────────────────────
+function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
+  const [name, setName] = useState("Pro Plan");
+  const [price, setPrice] = useState(29);
+  const [interval, setInterval] = useState("Monthly");
+  const [grace, setGrace] = useState(7);
+  const [tokens, setTokens] = useState({ usdc: true, usdt: false, dai: false, eurc: false });
+  const [fiats, setFiats] = useState({ card: false, mbway: false, mb: false, ideal: false, bancontact: false, klarna: false });
+  const [activeTab, setActiveTab] = useState("crypto");
+  const [cardNum, setCardNum] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [cvv, setCvv] = useState("");
+
+  const slug = name.toLowerCase().replace(/\s+/g, "-");
+  const intervalWord = interval === "Monthly" ? "month" : interval === "Weekly" ? "week" : "year";
+  const fiatLabels = { card: "Card", mbway: "MB Way", mb: "Multibanco", ideal: "iDEAL", bancontact: "Bancontact", klarna: "Klarna" };
+  const activeTokens = Object.entries(tokens).filter(([, v]) => v).map(([k]) => k.toUpperCase());
+  const activeFiats = Object.entries(fiats).filter(([, v]) => v).map(([k]) => fiatLabels[k]);
+
+  const toggleStyle = (active, type = "crypto") => ({
+    display: "flex", alignItems: "center", gap: 8,
+    padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13,
+    border: active ? `0.5px solid ${type === "crypto" ? "rgba(52,211,153,0.5)" : "rgba(59,130,246,0.5)"}` : `0.5px solid ${border}`,
+    background: active ? (type === "crypto" ? "rgba(52,211,153,0.08)" : "rgba(59,130,246,0.08)") : "transparent",
+    color: active ? (type === "crypto" ? "#34d399" : "#3b82f6") : muted,
+  });
+
+  const fmtCard = (v) => v.replace(/\D/g, "").substring(0, 16).replace(/(.{4})/g, "$1 ").trim();
+  const fmtExp = (v) => { const d = v.replace(/\D/g, "").substring(0, 4); return d.length >= 2 ? d.substring(0, 2) + " / " + d.substring(2) : d; };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }} className="ao-form-row">
+
+      {/* Form */}
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 16, padding: 24 }}>
+        <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 16px" }}>{lang === "en" ? "New product" : "Novo produto"}</p>
+
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Product name" : "Nome do produto"}</label>
+        <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", marginBottom: 14 }} />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 4 }} className="ao-form-row">
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Price ($)" : "Preço ($)"}</label>
+            <input type="number" value={price} min={1} onChange={e => setPrice(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Interval" : "Intervalo"}</label>
+            <select value={interval} onChange={e => setInterval(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }}>
+              <option>{lang === "en" ? "Monthly" : "Mensal"}</option>
+              <option>{lang === "en" ? "Weekly" : "Semanal"}</option>
+              <option>{lang === "en" ? "Yearly" : "Anual"}</option>
+            </select>
+          </div>
+        </div>
+        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 USDT = 1 DAI = 1 EURC</p>
+
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Grace period (days, 1–30)" : "Período de graça (dias, 1–30)"}</label>
+        <input type="number" value={grace} min={1} max={30} onChange={e => setGrace(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
+        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>{lang === "en" ? "Keeper retries daily. Expires if unpaid after this window." : "Keeper reenvio diário. Expira se não pago dentro do prazo."}</p>
+
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>{lang === "en" ? "Crypto tokens" : "Tokens cripto"}</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {Object.keys(tokens).map(k => (
+            <label key={k} style={toggleStyle(tokens[k], "crypto")}>
+              <input type="checkbox" checked={tokens[k]} onChange={e => setTokens(t => ({ ...t, [k]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#34d399" }} />
+              {k.toUpperCase()}
+            </label>
+          ))}
+        </div>
+
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>{lang === "en" ? "Fiat payments" : "Pagamentos fiat"}</label>
+        <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "Requires Stripe connected" : "Requer Stripe conectado"}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+          {Object.keys(fiats).map(k => (
+            <label key={k} style={toggleStyle(fiats[k], "fiat")}>
+              <input type="checkbox" checked={fiats[k]} onChange={e => setFiats(f => ({ ...f, [k]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#3b82f6" }} />
+              {fiatLabels[k]}
+            </label>
+          ))}
+        </div>
+
+        <a href="#apply" style={{
+          display: "block", width: "100%", boxSizing: "border-box", padding: "12px",
+          background: "linear-gradient(135deg, #34d399, #3b82f6)", color: "#080c14",
+          border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700,
+          textAlign: "center", textDecoration: "none", cursor: "pointer",
+        }}>
+          {lang === "en" ? "Apply to create this product →" : "Candidatar-me para criar este produto →"}
+        </a>
+      </div>
+
+      {/* Preview */}
+      <div>
+        <p style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 10px" }}>{lang === "en" ? "Live pay page preview" : "Pré-visualização ao vivo"}</p>
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 16, padding: 20 }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, paddingBottom: 12, borderBottom: `0.5px solid ${border}` }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: "#34d399", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#080c14" }}>A</div>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: 0 }}>AuthOnce</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>authonce.io/pay/yourname/{slug}</p>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 20, fontWeight: 700, color: text, margin: "0 0 2px" }}>{name || "My Plan"}</p>
+          <p style={{ fontSize: 26, fontWeight: 700, color: "#34d399", margin: "0 0 2px", fontFamily: "'DM Mono', monospace" }}>${price}</p>
+          <p style={{ fontSize: 12, color: muted, margin: "0 0 14px" }}>{lang === "en" ? "per" : "por"} {intervalWord}</p>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 0, marginBottom: 14, border: `0.5px solid ${border}`, borderRadius: 8, overflow: "hidden" }}>
+            <button onClick={() => setActiveTab("crypto")} style={{ flex: 1, padding: "8px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: activeTab === "crypto" ? "#34d399" : "transparent", color: activeTab === "crypto" ? "#080c14" : muted }}>
+              {lang === "en" ? "Crypto wallet" : "Carteira cripto"}
+            </button>
+            <button onClick={() => setActiveTab("fiat")} style={{ flex: 1, padding: "8px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", borderLeft: `0.5px solid ${border}`, background: activeTab === "fiat" ? "#3b82f6" : "transparent", color: activeTab === "fiat" ? "#fff" : muted }}>
+              {lang === "en" ? "Card / Fiat" : "Cartão / Fiat"}
+            </button>
+          </div>
+
+          {activeTab === "crypto" && (
+            <div>
+              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+                <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{lang === "en" ? "Select token" : "Selecionar token"}</p>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {activeTokens.length === 0 && <span style={{ fontSize: 12, color: muted }}>—</span>}
+                  {activeTokens.map((t, i) => (
+                    <span key={t} style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, background: i === 0 ? "#34d399" : "transparent", color: i === 0 ? "#080c14" : muted, border: i === 0 ? "none" : `0.5px solid ${border}`, fontWeight: i === 0 ? 600 : 400, cursor: "pointer" }}>{t}</span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: muted }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span>{lang === "en" ? "Grace period" : "Período de graça"}</span><span style={{ color: text, fontWeight: 600 }}>{grace} {lang === "en" ? "days" : "dias"}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>{lang === "en" ? "Protocol fee" : "Taxa protocolo"}</span><span style={{ color: text, fontWeight: 600 }}>0.5%</span></div>
+              </div>
+              <button style={{ width: "100%", padding: 11, background: "#34d399", color: "#080c14", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
+                {lang === "en" ? "Connect wallet to subscribe →" : "Ligar carteira para subscrever →"}
+              </button>
+              <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{lang === "en" ? "Non-custodial · Base Network · Authorise once" : "Não custodial · Base Network · Autorizar uma vez"}</p>
+            </div>
+          )}
+
+          {activeTab === "fiat" && (
+            <div>
+              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "Card details" : "Dados do cartão"}</p>
+                <input type="text" placeholder="1234 5678 9012 3456" value={cardNum} onChange={e => setCardNum(fmtCard(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 8, fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <input type="text" placeholder="MM / YY" value={expiry} onChange={e => setExpiry(fmtExp(e.target.value))} style={{ width: "100%", boxSizing: "border-box", fontFamily: "'DM Mono', monospace" }} />
+                  <input type="text" placeholder="CVV" value={cvv} maxLength={4} onChange={e => setCvv(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", boxSizing: "border-box", fontFamily: "'DM Mono', monospace" }} />
+                </div>
+              </div>
+              {activeFiats.length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                  {activeFiats.map(f => <span key={f} style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, background: "rgba(59,130,246,0.1)", color: "#3b82f6", border: "0.5px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>{f}</span>)}
+                </div>
+              )}
+              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: muted }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>{lang === "en" ? "Processing fee" : "Taxa processamento"}</span><span style={{ color: text, fontWeight: 600 }}>{lang === "en" ? "Standard card rate" : "Taxa padrão cartão"}</span></div>
+              </div>
+              <button style={{ width: "100%", padding: 11, background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
+                {lang === "en" ? `Subscribe $${price}/${intervalWord} →` : `Subscrever $${price}/${intervalWord} →`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ROI Calculator ───────────────────────────────────────────────────────────
 function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
   const [mrr, setMrr] = useState(5000);
@@ -465,7 +634,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               : "Primeiros 10: 0% taxas 3 meses · Primeiros 5: Growth vitalício grátis"}
           </div>
 
-          <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 16px" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 16px" }}>
             {lang === "en" ? "Non-custodial subscription protocol · Base Network" : "Protocolo de subscrição não custodial · Base Network"}
           </p>
 
@@ -493,11 +662,12 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </h1>
 
           {/* Pain point cards */}
-          <div className="ao-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28, textAlign: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28, textAlign: "center" }} className="ao-grid-3">
             {[
               { icon: "ti-building-store", title: lang === "en" ? "No intermediary" : "Sem intermediário", sub: lang === "en" ? "Funds move wallet to wallet. No platform holds your money." : "Fundos movem-se de carteira para carteira. Sem plataforma a segurar o seu dinheiro." },
               { icon: "ti-lock", title: lang === "en" ? "No custody risk" : "Sem risco de custódia", sub: lang === "en" ? "Subscribers keep control of their wallet at all times." : "Os subscritores mantêm o controlo da carteira em todo o momento." },
               { icon: "ti-trending-down", title: lang === "en" ? "No churn from failed payments" : "Sem churn por falha de pagamento", sub: lang === "en" ? "Grace periods and auto-retry recover payments automatically." : "Períodos de graça e reenvio automático recuperam pagamentos." },
+              { icon: "ti-credit-card", title: lang === "en" ? "Fiat subscriptions too" : "Subscrições em fiat também", sub: lang === "en" ? "Accept card payments alongside crypto. One dashboard, both worlds." : "Aceite pagamentos por cartão ao lado de crypto. Um painel, dois mundos." },
             ].map(({ icon, title, sub }) => (
               <div key={title} style={{
                 padding: 24, borderRadius: 14,
@@ -625,7 +795,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.025)",
       }}>
         <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 16, textTransform: "uppercase" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 16, textTransform: "uppercase" }}>
             {lang === "en" ? "What is AuthOnce" : "O que é o AuthOnce"}
           </p>
           <p style={{ fontSize: 18, color: text, lineHeight: 1.8, margin: 0, fontWeight: 300 }}>
@@ -640,7 +810,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       <section className="ao-section" style={{ borderBottom: `0.5px solid ${border}`, padding: "80px 40px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {lang === "en" ? "Built for Web3" : "Construído para Web3"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
@@ -716,7 +886,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div className="ao-founding-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
                 {lang === "en" ? "Subscription Management" : "Gestão de Subscrições"}
               </p>
               <h2 style={{ fontSize: 32, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
@@ -783,7 +953,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
       }}>
         <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 40, flexWrap: "wrap", justifyContent: "center" }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", margin: 0, whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0, whiteSpace: "nowrap" }}>
             {lang === "en" ? "Accepted tokens" : "Tokens aceites"}
           </p>
           {[
@@ -815,7 +985,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       {/* ── How It Works ── */}
       <section id="how-it-works" className="ao-section" style={{ maxWidth: 960, margin: "0 auto", padding: "80px 40px" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
             {lang === "en" ? "How it works" : "Como funciona"}
           </p>
           <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
@@ -858,7 +1028,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "center",
         }}>
           <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: amber, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: amber, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {lang === "en" ? "Founding merchant offer" : "Oferta fundadora"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
@@ -905,11 +1075,29 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
+      {/* ── Product Creator ── */}
+      <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+              {lang === "en" ? "Try it now" : "Experimente agora"}
+            </p>
+            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
+              {lang === "en" ? "Build your first product in 30 seconds." : "Crie o seu primeiro produto em 30 segundos."}
+            </h2>
+            <p style={{ fontSize: 15, color: muted, margin: 0, fontWeight: 300 }}>
+              {lang === "en" ? "See exactly what your subscribers will see before you apply." : "Veja exatamente o que os seus subscritores verão antes de se candidatar."}
+            </p>
+          </div>
+          <ProductCreator lang={lang} isDark={isDark} border={border} cardBg={cardBg} text={text} muted={muted} accent={accent} />
+        </div>
+      </section>
+
       {/* ── Integration Paths ── */}
       <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {lang === "en" ? "Integration" : "Integração"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
@@ -974,7 +1162,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)" }}>
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {lang === "en" ? "Fee calculator" : "Calculadora de taxas"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
@@ -1001,7 +1189,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
 
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {lang === "en" ? "Founding Merchants" : "Comerciantes Fundadores"}
             </p>
             <h2 style={{ fontSize: 36, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 14, lineHeight: 1.2 }}>
@@ -1094,7 +1282,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {lang === "en" ? "Roadmap" : "Roteiro"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
@@ -1136,7 +1324,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             },
           ].map((phase, pi) => (
             <div key={pi} style={{ marginBottom: 40 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: phase.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: phase.color, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 16 }}>
                 {phase.phase}
               </p>
               {phase.items.map((item, ii) => (
