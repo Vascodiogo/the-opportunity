@@ -232,85 +232,6 @@ function ApplyForm({ lang, isDark }) {
   );
 }
 
-// ─── ROI Calculator ───────────────────────────────────────────────────────────
-function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
-  const [mrr, setMrr] = useState(5000);
-  const [subs, setSubs] = useState(50);
-
-  const traditional = mrr * 0.029 + subs * 0.30;
-  const authonce = mrr * 0.005;
-  const saving = traditional - authonce;
-  const pct = Math.round((saving / traditional) * 100);
-  const fmt = (n) => "$" + Math.round(n).toLocaleString();
-
-  const sliderStyle = { width: "100%", marginBottom: 4 };
-  const cardStyle = {
-    background: cardBg, border: `0.5px solid ${border}`,
-    borderRadius: 14, padding: "24px 20px", textAlign: "center",
-  };
-
-  return (
-    <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 32 }} className="ao-form-row">
-        <div>
-          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>
-            {lang === "en" ? "Monthly recurring revenue" : "Receita mensal recorrente"}
-          </p>
-          <input type="range" min={500} max={50000} step={500} value={mrr}
-            onChange={e => setMrr(Number(e.target.value))} style={sliderStyle} />
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 11, color: muted }}>$500</span>
-            <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{fmt(mrr)}</span>
-            <span style={{ fontSize: 11, color: muted }}>$50k</span>
-          </div>
-        </div>
-        <div>
-          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>
-            {lang === "en" ? "Number of subscribers" : "Número de subscritores"}
-          </p>
-          <input type="range" min={5} max={500} step={5} value={subs}
-            onChange={e => setSubs(Number(e.target.value))} style={sliderStyle} />
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 11, color: muted }}>5</span>
-            <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{subs}</span>
-            <span style={{ fontSize: 11, color: muted }}>500</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }} className="ao-grid-3">
-        <div style={cardStyle}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
-            {lang === "en" ? "Traditional processors" : "Processadores tradicionais"}
-          </p>
-          <p style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(traditional)}</p>
-          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per month" : "por mês"}</p>
-          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(traditional * 12)}/{lang === "en" ? "yr" : "ano"}</p>
-        </div>
-        <div style={{ ...cardStyle, border: `0.5px solid rgba(52,211,153,0.4)` }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: accent, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>AuthOnce</p>
-          <p style={{ fontSize: 28, fontWeight: 700, color: accent, margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(authonce)}</p>
-          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per month" : "por mês"}</p>
-          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(authonce * 12)}/{lang === "en" ? "yr" : "ano"}</p>
-        </div>
-        <div style={{ ...cardStyle, background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.06)", border: `0.5px solid rgba(52,211,153,0.3)` }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
-            {lang === "en" ? "You save" : "Poupa"}
-          </p>
-          <p style={{ fontSize: 28, fontWeight: 700, color: "#34d399", margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(saving)}</p>
-          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{pct}% {lang === "en" ? "less in fees" : "menos em taxas"}</p>
-          <p style={{ fontSize: 11, color: "#34d399", fontWeight: 600, margin: 0 }}>{fmt(saving * 12)}/{lang === "en" ? "yr saved" : "ano poupado"}</p>
-        </div>
-      </div>
-      <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 16 }}>
-        {lang === "en"
-          ? "Traditional processors: 2.9% + $0.30/txn industry standard. AuthOnce: 0.5% flat. Testnet only — not financial advice."
-          : "Processadores tradicionais: padrão do setor 2,9% + $0,30/txn. AuthOnce: 0,5% fixo. Apenas testnet — não é aconselhamento financeiro."}
-      </p>
-    </div>
-  );
-}
-
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }) {
   const bg      = isDark ? "#0a0f1a"                : "#ffffff";
@@ -417,34 +338,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </button>
         </div>
       </nav>
-
-      {/* ── Testnet Banner ── */}
-      <div style={{
-        background: isDark ? "rgba(234,179,8,0.08)" : "rgba(234,179,8,0.10)",
-        borderBottom: `0.5px solid rgba(234,179,8,0.3)`,
-        padding: "10px 40px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        flexWrap: "wrap", gap: 8,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: "50%", background: "#eab308",
-            display: "inline-block", flexShrink: 0,
-          }}/>
-          <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#fde68a" : "#92400e" }}>
-            {lang === "en"
-              ? "Live on Base Sepolia testnet — no real funds at risk. Mainnet targeted September 2026 following security audit."
-              : "Ativo na testnet Base Sepolia — sem fundos reais em risco. Mainnet prevista para setembro 2026 após auditoria de segurança."}
-          </span>
-        </div>
-        <a
-          href="https://sepolia.basescan.org/address/0x2ED847da7f88231Ac6907196868adF4840A97f49"
-          target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 11, color: isDark ? "#93c5fd" : "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap", fontWeight: 500 }}
-        >
-          {lang === "en" ? "View contracts on Basescan →" : "Ver contratos no Basescan →"}
-        </a>
-      </div>
 
       {/* ── HERO — Full screen with gradient ── */}
       <section style={{
@@ -922,27 +815,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
-      {/* ── ROI Calculator ── */}
-      <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Fee calculator" : "Calculadora de taxas"}
-            </p>
-            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "How much are you leaving on the table?" : "Quanto está a perder em taxas?"}
-            </h2>
-            <p style={{ fontSize: 15, color: muted, margin: 0, fontWeight: 300 }}>
-              {lang === "en"
-                ? "Traditional payment processors charge 2.9% + $0.30 per transaction. AuthOnce charges 0.5% flat."
-                : "Os processadores tradicionais cobram 2,9% + $0,30 por transação. O AuthOnce cobra apenas 0,5% fixo."}
-            </p>
-          </div>
-
-          <ROICalculator lang={lang} isDark={isDark} accent={accent} border={border} cardBg={cardBg} text={text} muted={muted} />
-        </div>
-      </section>
-
       {/* ── Apply Form ── */}
       <section id="apply" style={{
         borderTop: `0.5px solid ${border}`, padding: "80px 40px",
@@ -1033,77 +905,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
-      {/* ── Roadmap ── */}
-      <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Roadmap" : "Roteiro"}
-            </p>
-            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Built in the open. Launching Q3 2026." : "Construído de forma transparente. Lançamento Q3 2026."}
-            </h2>
-          </div>
-
-          {[
-            {
-              phase: lang === "en" ? "Foundation — completed" : "Fundação — concluído",
-              color: "#34d399",
-              items: [
-                { done: true,  label: lang === "en" ? "Smart contracts on Base Sepolia" : "Smart contracts na Base Sepolia", detail: "SubscriptionVault · MerchantRegistry · EIP-2612 · ERC-1271" },
-                { done: true,  label: lang === "en" ? "Keeper bot — automated pulls" : "Keeper bot — cobranças automáticas", detail: lang === "en" ? "47 successful pulls · 100% success rate" : "47 cobranças · 100% de sucesso" },
-                { done: true,  label: lang === "en" ? "Merchant dashboard" : "Painel do comerciante", detail: lang === "en" ? "Vanity slugs · CSV import · Grace period controls" : "Slugs personalizados · Importação CSV · Controlo do período de graça" },
-                { done: true,  label: lang === "en" ? "Stripe Connect dual-engine" : "Motor duplo Stripe Connect", detail: lang === "en" ? "0.5% on-chain + 0.5% off-chain via Stripe" : "0,5% on-chain + 0,5% off-chain via Stripe" },
-                { done: true,  label: lang === "en" ? "Marketing site + SEO blog" : "Site + blog SEO", detail: "authonce.io · blog.authonce.io · 11 articles" },
-              ],
-            },
-            {
-              phase: lang === "en" ? "Q3 2026 — in progress" : "Q3 2026 — em curso",
-              color: "#3b82f6",
-              items: [
-                { done: false, active: true,  label: lang === "en" ? "Security audit" : "Auditoria de segurança", detail: lang === "en" ? "5 proposals received · Seeking audit grant funding" : "5 propostas recebidas · A candidatar a financiamento de auditoria" },
-                { done: false, active: true,  label: lang === "en" ? "Partnership outreach" : "Parcerias", detail: lang === "en" ? "Web3 SaaS platforms · DAO tooling · Analytics providers" : "Plataformas Web3 SaaS · Ferramentas DAO · Fornecedores de análise" },
-                { done: false, active: false, label: lang === "en" ? "WooCommerce + PrestaShop plugins" : "Plugins WooCommerce + PrestaShop", detail: lang === "en" ? "$200 pre-audit safety cap" : "Limite de segurança de $200 pré-auditoria" },
-                { done: false, active: false, label: lang === "en" ? "Keeper bot v2 — parallel scaling" : "Keeper bot v2 — escalonamento paralelo", detail: lang === "en" ? "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" : "25 EOAs paralelos · Gelato/Chainlink acima de 50 comerciantes" },
-                { done: false, active: false, label: lang === "en" ? "Base Mainnet launch — September 2026" : "Lançamento Base Mainnet — setembro 2026", detail: lang === "en" ? "Audit-gated · $200 cap lifted · 10 founding spots" : "Condicionado à auditoria · Limite $200 removido · 10 vagas fundadoras" },
-              ],
-            },
-            {
-              phase: lang === "en" ? "Phase 2 — post-mainnet" : "Fase 2 — pós-mainnet",
-              color: "#a78bfa",
-              items: [
-                { done: false, active: false, label: lang === "en" ? "Embeddable widget + full API" : "Widget incorporável + API completa", detail: lang === "en" ? "Self-serve · No-code checkout · Webhooks" : "Self-serve · Checkout sem código · Webhooks" },
-                { done: false, active: false, label: lang === "en" ? "DAO treasury integrations" : "Integrações com tesouraria DAO", detail: "Snapshot · Tally · Boardroom · Recurring contributor payments" },
-
-              ],
-            },
-          ].map((phase, pi) => (
-            <div key={pi} style={{ marginBottom: 40 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: phase.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
-                {phase.phase}
-              </p>
-              {phase.items.map((item, ii) => (
-                <div key={ii} style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: item.done ? "rgba(52,211,153,0.15)" : item.active ? "rgba(59,130,246,0.15)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
-                    border: `0.5px solid ${item.done ? "rgba(52,211,153,0.4)" : item.active ? "rgba(59,130,246,0.4)" : border}`,
-                  }}>
-                    <span style={{ fontSize: 11 }}>{item.done ? "✓" : item.active ? "●" : "○"}</span>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: item.done ? text : item.active ? text : muted, margin: "0 0 2px" }}>{item.label}</p>
-                    <p style={{ fontSize: 11, color: muted, margin: 0, fontFamily: "'DM Mono', monospace" }}>{item.detail}</p>
-                  </div>
-                </div>
-              ))}
-              {pi < 2 && <div style={{ height: "0.5px", background: border, marginTop: 24 }} />}
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ── Footer ── */}
       <footer style={{ borderTop: `0.5px solid ${border}`, padding: "32px 40px" }}>
         <div className="ao-footer-inner" style={{
@@ -1138,13 +939,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>Base Network</span>
           </div>
-        </div>
-        <div style={{ maxWidth: 960, margin: "12px auto 0", borderTop: `0.5px solid ${border}`, paddingTop: 12 }}>
-          <p style={{ fontSize: 11, color: muted, margin: 0, textAlign: "center" }}>
-            {lang === "en"
-              ? "Testnet only. Smart contracts unaudited. Not financial advice. No uptime guarantees pre-mainnet."
-              : "Apenas testnet. Smart contracts não auditados. Não é aconselhamento financeiro. Sem garantias de disponibilidade pré-mainnet."}
-          </p>
         </div>
       </footer>
     </div>
