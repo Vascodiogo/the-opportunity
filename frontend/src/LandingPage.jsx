@@ -232,6 +232,85 @@ function ApplyForm({ lang, isDark }) {
   );
 }
 
+// ─── ROI Calculator ───────────────────────────────────────────────────────────
+function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
+  const [mrr, setMrr] = useState(5000);
+  const [subs, setSubs] = useState(50);
+
+  const traditional = mrr * 0.029 + subs * 0.30;
+  const authonce = mrr * 0.005;
+  const saving = traditional - authonce;
+  const pct = Math.round((saving / traditional) * 100);
+  const fmt = (n) => "$" + Math.round(n).toLocaleString();
+
+  const sliderStyle = { width: "100%", marginBottom: 4 };
+  const cardStyle = {
+    background: cardBg, border: `0.5px solid ${border}`,
+    borderRadius: 14, padding: "24px 20px", textAlign: "center",
+  };
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 32 }} className="ao-form-row">
+        <div>
+          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>
+            {lang === "en" ? "Monthly recurring revenue" : "Receita mensal recorrente"}
+          </p>
+          <input type="range" min={500} max={50000} step={500} value={mrr}
+            onChange={e => setMrr(Number(e.target.value))} style={sliderStyle} />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 11, color: muted }}>$500</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{fmt(mrr)}</span>
+            <span style={{ fontSize: 11, color: muted }}>$50k</span>
+          </div>
+        </div>
+        <div>
+          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>
+            {lang === "en" ? "Number of subscribers" : "Número de subscritores"}
+          </p>
+          <input type="range" min={5} max={500} step={5} value={subs}
+            onChange={e => setSubs(Number(e.target.value))} style={sliderStyle} />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 11, color: muted }}>5</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{subs}</span>
+            <span style={{ fontSize: 11, color: muted }}>500</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }} className="ao-grid-3">
+        <div style={cardStyle}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
+            {lang === "en" ? "Traditional processors" : "Processadores tradicionais"}
+          </p>
+          <p style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(traditional)}</p>
+          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per month" : "por mês"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(traditional * 12)}/{lang === "en" ? "yr" : "ano"}</p>
+        </div>
+        <div style={{ ...cardStyle, border: `0.5px solid rgba(52,211,153,0.4)` }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: accent, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>AuthOnce</p>
+          <p style={{ fontSize: 28, fontWeight: 700, color: accent, margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(authonce)}</p>
+          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per month" : "por mês"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(authonce * 12)}/{lang === "en" ? "yr" : "ano"}</p>
+        </div>
+        <div style={{ ...cardStyle, background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.06)", border: `0.5px solid rgba(52,211,153,0.3)` }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
+            {lang === "en" ? "You save" : "Poupa"}
+          </p>
+          <p style={{ fontSize: 28, fontWeight: 700, color: "#34d399", margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(saving)}</p>
+          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{pct}% {lang === "en" ? "less in fees" : "menos em taxas"}</p>
+          <p style={{ fontSize: 11, color: "#34d399", fontWeight: 600, margin: 0 }}>{fmt(saving * 12)}/{lang === "en" ? "yr saved" : "ano poupado"}</p>
+        </div>
+      </div>
+      <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 16 }}>
+        {lang === "en"
+          ? "Traditional processors: 2.9% + $0.30/txn industry standard. AuthOnce: 0.5% flat. Testnet only — not financial advice."
+          : "Processadores tradicionais: padrão do setor 2,9% + $0,30/txn. AuthOnce: 0,5% fixo. Apenas testnet — não é aconselhamento financeiro."}
+      </p>
+    </div>
+  );
+}
+
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }) {
   const bg      = isDark ? "#0a0f1a"                : "#ffffff";
@@ -338,6 +417,34 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </button>
         </div>
       </nav>
+
+      {/* ── Testnet Banner ── */}
+      <div style={{
+        background: isDark ? "rgba(234,179,8,0.08)" : "rgba(234,179,8,0.10)",
+        borderBottom: `0.5px solid rgba(234,179,8,0.3)`,
+        padding: "10px 40px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexWrap: "wrap", gap: 8,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: "50%", background: "#eab308",
+            display: "inline-block", flexShrink: 0,
+          }}/>
+          <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#fde68a" : "#92400e" }}>
+            {lang === "en"
+              ? "Live on Base Sepolia testnet — no real funds at risk. Mainnet targeted September 2026 following security audit."
+              : "Ativo na testnet Base Sepolia — sem fundos reais em risco. Mainnet prevista para setembro 2026 após auditoria de segurança."}
+          </span>
+        </div>
+        <a
+          href="https://sepolia.basescan.org/address/0x2ED847da7f88231Ac6907196868adF4840A97f49"
+          target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 11, color: isDark ? "#93c5fd" : "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap", fontWeight: 500 }}
+        >
+          {lang === "en" ? "View contracts on Basescan →" : "Ver contratos no Basescan →"}
+        </a>
+      </div>
 
       {/* ── HERO — Full screen with gradient ── */}
       <section style={{
@@ -815,93 +922,194 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
-      {/* ── Apply Form ── */}
-      <section id="apply" style={{
-        borderTop: `0.5px solid ${border}`, padding: "80px 40px",
-        background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.025)",
-      }}>
-        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+      {/* ── ROI Calculator ── */}
+      <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Apply today" : "Registar hoje"}
+              {lang === "en" ? "Fee calculator" : "Calculadora de taxas"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Become a founding merchant" : "Torne-se um parceiro fundador"}
+              {lang === "en" ? "How much are you leaving on the table?" : "Quanto está a perder em taxas?"}
             </h2>
-            <p style={{ color: muted, fontSize: 15, margin: 0, fontWeight: 300 }}>
+            <p style={{ fontSize: 15, color: muted, margin: 0, fontWeight: 300 }}>
               {lang === "en"
-                ? "We review every application personally. First 10 approved merchants get 0% fees for 3 months."
-                : "Analisamos cada registo pessoalmente. Os primeiros 10 aprovados pagam 0% de taxas durante 3 meses."}
+                ? "Traditional payment processors charge 2.9% + $0.30 per transaction. AuthOnce charges 0.5% flat."
+                : "Os processadores tradicionais cobram 2,9% + $0,30 por transação. O AuthOnce cobra apenas 0,5% fixo."}
             </p>
           </div>
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, padding: 36 }}>
-            <ApplyForm lang={lang} isDark={isDark} />
-          </div>
+
+          <ROICalculator lang={lang} isDark={isDark} accent={accent} border={border} cardBg={cardBg} text={text} muted={muted} />
         </div>
       </section>
 
-      {/* ── Final CTA ── */}
-      <section style={{
+      {/* ── Founding Merchants + Apply Form (merged) ── */}
+      <section id="apply" style={{
+        borderTop: `0.5px solid ${isDark ? "rgba(52,211,153,0.1)" : "rgba(52,211,153,0.15)"}`,
         padding: "80px 40px",
         background: isDark ? "rgba(52,211,153,0.03)" : "rgba(52,211,153,0.04)",
-        borderTop: `0.5px solid ${isDark ? "rgba(52,211,153,0.1)" : "rgba(52,211,153,0.15)"}`,
       }}>
-        <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: accent, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 16 }}>
-            {lang === "en" ? "Founding Merchants" : "Comerciantes Fundadores"}
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+
+          {/* Header */}
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+              {lang === "en" ? "Founding Merchants" : "Comerciantes Fundadores"}
+            </p>
+            <h2 style={{ fontSize: 36, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 14, lineHeight: 1.2 }}>
+              {lang === "en" ? "Be one of the first 10 merchants on AuthOnce." : "Seja um dos primeiros 10 comerciantes no AuthOnce."}
+            </h2>
+            <p style={{ fontSize: 15, color: muted, lineHeight: 1.7, margin: 0, fontWeight: 300 }}>
+              {lang === "en"
+                ? "Founding merchants get lifetime Growth tier free (€49/month value), direct access to the founder, and input on the product roadmap."
+                : "Os comerciantes fundadores recebem o plano Growth gratuito para sempre (valor €49/mês), acesso direto ao fundador e participação no roadmap do produto."}
+            </p>
           </div>
-          <h2 style={{ fontSize: 34, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 16, lineHeight: 1.2 }}>
-            {lang === "en" ? "Be one of the first 10 merchants on AuthOnce." : "Seja um dos primeiros 10 comerciantes no AuthOnce."}
-          </h2>
-          <p style={{ fontSize: 16, color: muted, lineHeight: 1.8, marginBottom: 32, fontWeight: 300 }}>
-            {lang === "en"
-              ? "Founding merchants get lifetime Growth tier free (€49/month value), direct access to the founder, and input on the product roadmap."
-              : "Os comerciantes fundadores recebem o plano Growth gratuito para sempre (valor €49/mês), acesso direto ao fundador e participação no roadmap do produto."}
-          </p>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
-            {[
-              { icon: "🎁", text: lang === "en" ? "Lifetime Growth tier free" : "Growth gratuito para sempre" },
-              { icon: "✉️", text: lang === "en" ? "Direct founder access"    : "Acesso direto ao fundador" },
-              { icon: "🗺️", text: lang === "en" ? "Roadmap input"            : "Participação no roadmap" },
-              { icon: "🏅", text: lang === "en" ? "Founding merchant badge"  : "Distintivo de fundador" },
-            ].map(({ icon, text: t }) => (
-              <div key={t} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "8px 16px", borderRadius: 99,
-                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-                border: `0.5px solid ${border}`,
+
+          {/* First 5 spotlight */}
+          <div style={{
+            background: isDark ? "rgba(52,211,153,0.07)" : "rgba(52,211,153,0.08)",
+            border: `1.5px solid rgba(52,211,153,0.35)`,
+            borderRadius: 16, padding: "20px 24px", marginBottom: 14,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: "#34d399",
+                background: "rgba(52,211,153,0.15)", border: "0.5px solid rgba(52,211,153,0.4)",
+                borderRadius: 99, padding: "3px 10px", letterSpacing: "0.08em", textTransform: "uppercase",
               }}>
-                <span style={{ fontSize: 14 }}>{icon}</span>
-                <span style={{ fontSize: 13, color: muted, fontWeight: 500 }}>{t}</span>
-              </div>
-            ))}
+                {lang === "en" ? "First 5 merchants only" : "Apenas os primeiros 5"}
+              </span>
+              <span style={{ fontSize: 12, color: isDark ? "#34d399" : "#0f6e56", fontWeight: 600 }}>
+                {lang === "en" ? "Most exclusive tier" : "Nível mais exclusivo"}
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[
+                { icon: "🎁", title: lang === "en" ? "Lifetime Growth tier free" : "Growth vitalício grátis", sub: lang === "en" ? "€49/month value, forever" : "Valor €49/mês, para sempre" },
+                { icon: "✉️", title: lang === "en" ? "Direct founder access" : "Acesso direto ao fundador", sub: lang === "en" ? "WhatsApp / email line" : "Linha WhatsApp / email" },
+                { icon: "🗺️", title: lang === "en" ? "Roadmap input" : "Participação no roadmap", sub: lang === "en" ? "Shape the product" : "Moldar o produto" },
+                { icon: "🏅", title: lang === "en" ? "Founding merchant badge" : "Distintivo de fundador", sub: lang === "en" ? "Permanent recognition" : "Reconhecimento permanente" },
+              ].map(({ icon, title, sub }) => (
+                <div key={title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{title}</p>
+                    <p style={{ fontSize: 11, color: muted, margin: 0 }}>{sub}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a
-              href="#apply"
-              style={{
-                background: "linear-gradient(135deg, #34d399, #3b82f6)",
-                border: "none", borderRadius: 12, color: "#080c14",
-                fontWeight: 800, fontSize: 15, padding: "14px 28px",
-                textDecoration: "none", display: "inline-block", letterSpacing: "-0.01em",
-              }}
-            >
-              {lang === "en" ? "Apply as founding merchant →" : "Candidatar-se como fundador →"}
-            </a>
-            <a
-              href="#apply"
-              style={{
-                background: "none", border: `0.5px solid ${border}`,
-                borderRadius: 12, color: muted, fontWeight: 600, fontSize: 15,
-                padding: "14px 28px", textDecoration: "none", display: "inline-block",
-              }}
-            >
-              {lang === "en" ? "Ask a question" : "Fazer uma pergunta"}
-            </a>
+
+          {/* Next 5 */}
+          <div style={{
+            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
+            border: `0.5px solid ${border}`,
+            borderRadius: 16, padding: "14px 24px", marginBottom: 32,
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: muted,
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+                borderRadius: 99, padding: "3px 10px", letterSpacing: "0.08em", textTransform: "uppercase",
+              }}>
+                {lang === "en" ? "Merchants 6–10" : "Comerciantes 6–10"}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              {[
+                { icon: "💸", text: lang === "en" ? "0% fees for 3 months" : "0% taxas por 3 meses" },
+                { icon: "✉️", text: lang === "en" ? "Direct founder access" : "Acesso ao fundador" },
+                { icon: "🏅", text: lang === "en" ? "Founding badge" : "Distintivo fundador" },
+              ].map(({ icon, text: t }) => (
+                <span key={t} style={{ fontSize: 12, color: muted, display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ fontSize: 13 }}>{icon}</span> {t}
+                </span>
+              ))}
+            </div>
           </div>
-          <p style={{ fontSize: 12, color: isDark ? "#64748b" : "#6b7280", marginTop: 20 }}>
+
+          {/* Form */}
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, padding: 36 }}>
+            <ApplyForm lang={lang} isDark={isDark} />
+          </div>
+
+          <p style={{ fontSize: 12, color: isDark ? "#64748b" : "#6b7280", textAlign: "center", marginTop: 20 }}>
             {lang === "en" ? "10 spots available · Mainnet launch September 2026" : "10 vagas disponíveis · Lançamento mainnet setembro 2026"}
           </p>
+        </div>
+      </section>
+
+      {/* ── Roadmap ── */}
+      <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
+              {lang === "en" ? "Roadmap" : "Roteiro"}
+            </p>
+            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
+              {lang === "en" ? "Built in the open. Launching Q3 2026." : "Construído de forma transparente. Lançamento Q3 2026."}
+            </h2>
+          </div>
+
+          {[
+            {
+              phase: lang === "en" ? "Foundation — completed" : "Fundação — concluído",
+              color: "#34d399",
+              items: [
+                { done: true,  label: lang === "en" ? "Smart contracts on Base Sepolia" : "Smart contracts na Base Sepolia", detail: "SubscriptionVault · MerchantRegistry · EIP-2612 · ERC-1271" },
+                { done: true,  label: lang === "en" ? "Keeper bot — automated pulls" : "Keeper bot — cobranças automáticas", detail: lang === "en" ? "47 successful pulls · 100% success rate" : "47 cobranças · 100% de sucesso" },
+                { done: true,  label: lang === "en" ? "Merchant dashboard" : "Painel do comerciante", detail: lang === "en" ? "Vanity slugs · CSV import · Grace period controls" : "Slugs personalizados · Importação CSV · Controlo do período de graça" },
+                { done: true,  label: lang === "en" ? "Stripe Connect dual-engine" : "Motor duplo Stripe Connect", detail: lang === "en" ? "0.5% on-chain + 0.5% off-chain via Stripe" : "0,5% on-chain + 0,5% off-chain via Stripe" },
+                { done: true,  label: lang === "en" ? "Marketing site + SEO blog" : "Site + blog SEO", detail: "authonce.io · blog.authonce.io · 11 articles" },
+              ],
+            },
+            {
+              phase: lang === "en" ? "Q3 2026 — in progress" : "Q3 2026 — em curso",
+              color: "#3b82f6",
+              items: [
+                { done: false, active: true,  label: lang === "en" ? "Security audit" : "Auditoria de segurança", detail: lang === "en" ? "5 proposals received · Seeking audit grant funding" : "5 propostas recebidas · A candidatar a financiamento de auditoria" },
+                { done: false, active: true,  label: lang === "en" ? "Partnership outreach" : "Parcerias", detail: lang === "en" ? "Web3 SaaS platforms · DAO tooling · Analytics providers" : "Plataformas Web3 SaaS · Ferramentas DAO · Fornecedores de análise" },
+                { done: false, active: false, label: lang === "en" ? "WooCommerce + PrestaShop plugins" : "Plugins WooCommerce + PrestaShop", detail: lang === "en" ? "$200 pre-audit safety cap" : "Limite de segurança de $200 pré-auditoria" },
+                { done: false, active: false, label: lang === "en" ? "Keeper bot v2 — parallel scaling" : "Keeper bot v2 — escalonamento paralelo", detail: lang === "en" ? "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" : "25 EOAs paralelos · Gelato/Chainlink acima de 50 comerciantes" },
+                { done: false, active: false, label: lang === "en" ? "Base Mainnet launch — September 2026" : "Lançamento Base Mainnet — setembro 2026", detail: lang === "en" ? "Audit-gated · $200 cap lifted · 10 founding spots" : "Condicionado à auditoria · Limite $200 removido · 10 vagas fundadoras" },
+              ],
+            },
+            {
+              phase: lang === "en" ? "Phase 2 — post-mainnet" : "Fase 2 — pós-mainnet",
+              color: "#a78bfa",
+              items: [
+                { done: false, active: false, label: lang === "en" ? "Embeddable widget + full API" : "Widget incorporável + API completa", detail: lang === "en" ? "Self-serve · No-code checkout · Webhooks" : "Self-serve · Checkout sem código · Webhooks" },
+                { done: false, active: false, label: lang === "en" ? "DAO treasury integrations" : "Integrações com tesouraria DAO", detail: "Snapshot · Tally · Boardroom · Recurring contributor payments" },
+
+              ],
+            },
+          ].map((phase, pi) => (
+            <div key={pi} style={{ marginBottom: 40 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: phase.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
+                {phase.phase}
+              </p>
+              {phase.items.map((item, ii) => (
+                <div key={ii} style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: item.done ? "rgba(52,211,153,0.15)" : item.active ? "rgba(59,130,246,0.15)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+                    border: `0.5px solid ${item.done ? "rgba(52,211,153,0.4)" : item.active ? "rgba(59,130,246,0.4)" : border}`,
+                  }}>
+                    <span style={{ fontSize: 11 }}>{item.done ? "✓" : item.active ? "●" : "○"}</span>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: item.done ? text : item.active ? text : muted, margin: "0 0 2px" }}>{item.label}</p>
+                    <p style={{ fontSize: 11, color: muted, margin: 0, fontFamily: "'DM Mono', monospace" }}>{item.detail}</p>
+                  </div>
+                </div>
+              ))}
+              {pi < 2 && <div style={{ height: "0.5px", background: border, marginTop: 24 }} />}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -939,6 +1147,13 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             <span style={{ fontSize: 12, color: isDark ? "#64748b" : "#94a3b8" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>Base Network</span>
           </div>
+        </div>
+        <div style={{ maxWidth: 960, margin: "12px auto 0", borderTop: `0.5px solid ${border}`, paddingTop: 12 }}>
+          <p style={{ fontSize: 11, color: muted, margin: 0, textAlign: "center" }}>
+            {lang === "en"
+              ? "Testnet only. Smart contracts unaudited. Not financial advice. No uptime guarantees pre-mainnet."
+              : "Apenas testnet. Smart contracts não auditados. Não é aconselhamento financeiro. Sem garantias de disponibilidade pré-mainnet."}
+          </p>
         </div>
       </footer>
     </div>
