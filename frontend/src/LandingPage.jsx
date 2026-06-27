@@ -446,105 +446,153 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </a>
       </div>
 
-      {/* ── HERO — Full screen with gradient ── */}
+      {/* ── HERO ── */}
       <section style={{
-        position: "relative", minHeight: "calc(100vh - 64px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        overflow: "hidden", background: heroBg,
+        background: heroBg, padding: "80px 40px 60px", textAlign: "center",
       }}>
-        <GradientCanvas isDark={isDark} />
-        <div style={{
-          position: "absolute", inset: 0,
-          background: isDark
-            ? "linear-gradient(to bottom, rgba(8,12,20,0.15) 0%, rgba(8,12,20,0.55) 100%)"
-            : "linear-gradient(to bottom, rgba(248,250,252,0.1) 0%, rgba(248,250,252,0.5) 100%)",
-        }} />
+        <div style={{ maxWidth: 860, margin: "0 auto" }}>
 
-        <div className="ao-hero-content" style={{
-          position: "relative", zIndex: 2,
-          maxWidth: 780, margin: "0 auto",
-          padding: "100px 40px 80px", textAlign: "center",
-        }}>
           <div className="ao-fade-in" style={{
             display: "inline-flex", alignItems: "center", gap: 8,
-            background: isDark ? "rgba(8,12,20,0.7)" : "rgba(255,255,255,0.85)",
-            border: `0.5px solid rgba(52,211,153,0.5)`,
-            borderRadius: 99, padding: "6px 18px", marginBottom: 36,
+            background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+            border: `0.5px solid rgba(52,211,153,0.4)`,
+            borderRadius: 99, padding: "6px 18px", marginBottom: 28,
             fontSize: 12, fontWeight: 600, color: isDark ? accent : "#0d9963",
-            backdropFilter: "blur(10px)",
           }}>
-            <span style={{
-              width: 7, height: 7, borderRadius: "50%", background: accent,
-              display: "inline-block", animation: "pulse-dot 2s infinite",
-            }}/>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: accent, display: "inline-block", animation: "pulse-dot 2s infinite" }}/>
             {lang === "en"
-              ? "First 10 get 0% fees for 3 months - First 5 get lifetime Growth free"
-              : "Primeiros 10: 0% taxas 3 meses - Primeiros 5: Growth vitalicio gratis"}
+              ? "First 10 get 0% fees for 3 months · First 5 get lifetime Growth free"
+              : "Primeiros 10: 0% taxas 3 meses · Primeiros 5: Growth vitalício grátis"}
           </div>
 
+          <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 16px" }}>
+            {lang === "en" ? "Non-custodial subscription protocol · Base Network" : "Protocolo de subscrição não custodial · Base Network"}
+          </p>
+
           <h1 className="ao-hero-h1 ao-fade-in-2" style={{
-            fontSize: "clamp(44px, 6vw, 76px)", fontWeight: 800,
-            color: text, lineHeight: 1.05, letterSpacing: "-0.035em", margin: "0 0 28px",
+            fontSize: "clamp(36px, 5vw, 62px)", fontWeight: 800,
+            color: text, lineHeight: 1.1, letterSpacing: "-0.035em", margin: "0 0 32px",
           }}>
             {lang === "en" ? (
-              <>Recurring payments<br/>
+              <>{lang === "en" ? "Your subscribers pay on time." : "Os seus subscritores pagam a tempo."}<br/>
               <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                for Web3.
+                {lang === "en" ? "Every cycle. Automatically." : "Cada ciclo. Automaticamente."}
+              </span><br/>
+              <span style={{ color: muted, fontSize: "clamp(24px, 3.5vw, 40px)" }}>
+                {lang === "en" ? "Without you lifting a finger." : "Sem precisar de fazer nada."}
               </span></>
             ) : (
-              <>Pagamentos recorrentes<br/>
+              <>Os seus subscritores pagam a tempo.<br/>
               <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                para Web3.
+                Cada ciclo. Automaticamente.
+              </span><br/>
+              <span style={{ color: muted, fontSize: "clamp(24px, 3.5vw, 40px)" }}>
+                Sem precisar de fazer nada.
               </span></>
             )}
           </h1>
 
-          <p className="ao-fade-in-3" style={{
-            fontSize: 18, color: muted, maxWidth: 560,
-            margin: "0 auto 14px", lineHeight: 1.7, fontWeight: 300,
-          }}>
+          {/* Pain point cards */}
+          <div className="ao-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28, textAlign: "left" }}>
+            {[
+              { icon: "ti-building-store", title: lang === "en" ? "No intermediary" : "Sem intermediário", sub: lang === "en" ? "Funds move wallet to wallet. No platform holds your money." : "Fundos movem-se de carteira para carteira. Sem plataforma a segurar o seu dinheiro." },
+              { icon: "ti-lock", title: lang === "en" ? "No custody risk" : "Sem risco de custódia", sub: lang === "en" ? "Subscribers keep control of their wallet at all times." : "Os subscritores mantêm o controlo da carteira em todo o momento." },
+              { icon: "ti-trending-down", title: lang === "en" ? "No churn from failed payments" : "Sem churn por falha de pagamento", sub: lang === "en" ? "Grace periods and auto-retry recover payments automatically." : "Períodos de graça e reenvio automático recuperam pagamentos." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} style={{
+                padding: 20, borderRadius: 14,
+                background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.07)",
+                border: `0.5px solid rgba(52,211,153,0.3)`,
+              }}>
+                <i className={`ti ${icon}`} style={{ fontSize: 28, color: accent, display: "block", marginBottom: 12 }} aria-hidden="true" />
+                <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 6px", lineHeight: 1.2 }}>{title}</p>
+                <p style={{ fontSize: 12, color: muted, margin: 0, lineHeight: 1.6 }}>{sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Subheadline */}
+          <p className="ao-fade-in-3" style={{ fontSize: 15, color: muted, maxWidth: 520, margin: "0 auto 20px", lineHeight: 1.7, fontWeight: 300 }}>
             {lang === "en"
-              ? "A non-custodial subscription protocol on Base Network. Subscribers authorise once — USDC, USDT, DAI or EURC pulled automatically every billing cycle, straight to your wallet."
-              : "Um protocolo de subscrição não custodial na Base Network. Os subscritores autorizam uma vez — USDC, USDT, DAI ou EURC cobrado automaticamente a cada ciclo, diretamente para a sua carteira."}
+              ? "Subscribers authorise once. Our keeper bot pulls USDC directly from their wallet every billing cycle — straight to yours. Full merchant suite included."
+              : "Os subscritores autorizam uma vez. O nosso keeper bot cobra USDC diretamente da carteira deles a cada ciclo — direto para a sua. Suite completa de comerciante incluída."}
           </p>
 
-          <p className="ao-fade-in-3" style={{
-            fontSize: 13, color: muted, maxWidth: 480, margin: "0 auto 40px",
-            fontFamily: "'DM Mono', monospace", letterSpacing: "0.01em", opacity: 0.75,
-            whiteSpace: "pre-line",
-          }}>
-            {lang === "en"
-              ? "0.5% flat · No intermediary · No custody ·\nOn-chain · AI agent ready"
-              : "0,5% fixo · Sem intermediários · Sem custódia ·\nOn-chain · Pronto para IA"}
-          </p>
+          {/* Badges */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 7,
+                padding: "9px 22px", borderRadius: 99,
+                background: isDark ? "rgba(52,211,153,0.12)" : "rgba(52,211,153,0.1)",
+                border: `0.5px solid rgba(52,211,153,0.35)`,
+                fontSize: 14, fontWeight: 600, color: isDark ? accent : "#0d9963",
+              }}>
+                <i className="ti ti-layout-dashboard" style={{ fontSize: 17 }} aria-hidden="true" />
+                {lang === "en" ? "Full merchant suite" : "Suite completa de comerciante"}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              {[
+                { icon: "ti-lock", label: lang === "en" ? "Subscribers keep custody" : "Subscritores mantêm custódia" },
+                { icon: "ti-refresh", label: lang === "en" ? "Auto-retry + grace period" : "Reenvio + período de graça" },
+                { icon: "ti-coin", label: lang === "en" ? "0.5% flat, nothing else" : "0,5% fixo, mais nada" },
+                { icon: "ti-robot", label: lang === "en" ? "AI agent ready" : "Pronto para agentes IA" },
+              ].map(({ icon, label }) => (
+                <div key={label} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 99,
+                  background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
+                  border: `0.5px solid ${border}`, fontSize: 12, color: muted,
+                }}>
+                  <i className={`ti ${icon}`} style={{ fontSize: 14, color: accent }} aria-hidden="true" />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
 
-          <div className="ao-hero-btns ao-fade-in-4" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          {/* CTAs */}
+          <div className="ao-hero-btns ao-fade-in-4" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 40 }}>
             <button onClick={scrollToApply} style={{
               background: "linear-gradient(135deg, #34d399, #3b82f6)",
-              border: "none", borderRadius: 12, padding: "16px 36px",
-              color: "#080c14", fontSize: 16, fontWeight: 800, cursor: "pointer",
-              letterSpacing: "-0.01em",
+              border: "none", borderRadius: 12, padding: "15px 34px",
+              color: "#080c14", fontSize: 15, fontWeight: 800, cursor: "pointer", letterSpacing: "-0.01em",
             }}>
               {lang === "en" ? "Apply as founding merchant →" : "Registar como parceiro fundador →"}
             </button>
             <a href="#how-it-works" style={{
               background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-              border: `0.5px solid ${border}`,
-              borderRadius: 12, padding: "16px 28px",
-              color: text, fontSize: 15, fontWeight: 600, cursor: "pointer",
-              textDecoration: "none", display: "inline-flex", alignItems: "center",
+              border: `0.5px solid ${border}`, borderRadius: 12, padding: "15px 26px",
+              color: text, fontSize: 15, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center",
             }}>
               {lang === "en" ? "See how it works" : "Como funciona"}
             </a>
           </div>
 
-          <div style={{
-            position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: 0.4,
-          }}>
-            <span style={{ fontSize: 10, color: muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Scroll</span>
-            <div style={{ width: 1, height: 24, background: `linear-gradient(to bottom, ${muted}, transparent)` }} />
+          {/* Metrics */}
+          <div style={{ borderTop: `0.5px solid ${border}`, paddingTop: 24 }}>
+            <div style={{ display: "flex", gap: 32, justifyContent: "center", flexWrap: "wrap", marginBottom: 8 }}>
+              {[
+                { val: "653",    label: lang === "en" ? "active subscribers" : "subscritores ativos" },
+                { val: "$18,200", label: lang === "en" ? "MRR processed" : "MRR processado" },
+                { val: "0%",     label: lang === "en" ? "churn rate" : "taxa de churn" },
+                { val: "100%",   label: lang === "en" ? "keeper success rate" : "taxa de sucesso do keeper" },
+              ].map(({ val, label }, i, arr) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                  <div style={{ textAlign: "center" }}>
+                    <p style={{ fontSize: 26, fontWeight: 700, color: text, margin: 0, fontFamily: "'DM Mono', monospace" }}>{val}</p>
+                    <p style={{ fontSize: 11, color: muted, margin: "4px 0 0" }}>{label}</p>
+                  </div>
+                  {i < arr.length - 1 && <div style={{ width: "0.5px", height: 36, background: border }} />}
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 11, color: muted, margin: 0, fontStyle: "italic" }}>
+              {lang === "en" ? "Illustrative figures — testnet simulation only." : "Valores ilustrativos — apenas simulação testnet."}
+            </p>
           </div>
+
         </div>
       </section>
 
