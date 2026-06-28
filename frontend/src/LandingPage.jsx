@@ -971,6 +971,138 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
+      {/* ── AI Agent Payments ── */}
+      <section className="ao-section" style={{ borderBottom: `0.5px solid ${border}`, padding: "80px 40px", background: isDark ? "rgba(59,130,246,0.03)" : "rgba(59,130,246,0.03)" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#3b82f6", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 12px" }}>
+              {lang === "en" ? "AI Agent Payments" : "Pagamentos para Agentes IA"}
+            </p>
+            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
+              {lang === "en"
+                ? "The first recurring billing protocol built for autonomous AI agents."
+                : "O primeiro protocolo de cobrança recorrente construído para agentes IA autónomos."}
+            </h2>
+            <p style={{ fontSize: 16, color: muted, maxWidth: 580, margin: "0 auto", lineHeight: 1.7, fontWeight: 300 }}>
+              {lang === "en"
+                ? "AI agents need to pay for APIs, tools, and services — autonomously, without a human approving every transaction. AuthOnce is built for exactly that."
+                : "Os agentes IA precisam de pagar por APIs, ferramentas e serviços — de forma autónoma, sem um humano a aprovar cada transação. O AuthOnce foi construído precisamente para isso."}
+            </p>
+          </div>
+
+          {/* Flow diagram */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 0, marginBottom: 48, flexWrap: "wrap",
+          }}>
+            {[
+              { icon: "ti-robot", label: lang === "en" ? "AI Agent" : "Agente IA", sub: lang === "en" ? "Smart wallet" : "Smart wallet", color: "#3b82f6" },
+              { arrow: true },
+              { icon: "ti-writing-sign", label: lang === "en" ? "Authorises once" : "Autoriza uma vez", sub: "ERC-1271 · EIP-712", color: "#34d399" },
+              { arrow: true },
+              { icon: "ti-refresh", label: lang === "en" ? "Keeper pulls" : "Keeper cobra", sub: lang === "en" ? "Every billing cycle" : "Cada ciclo", color: "#34d399" },
+              { arrow: true },
+              { icon: "ti-webhook", label: lang === "en" ? "Webhook fires" : "Webhook dispara", sub: lang === "en" ? "Agent responds" : "Agente responde", color: "#3b82f6" },
+            ].map((item, i) => item.arrow ? (
+              <div key={i} style={{ padding: "0 8px", color: muted, fontSize: 18 }}>→</div>
+            ) : (
+              <div key={i} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                padding: "16px 20px", borderRadius: 12,
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
+                border: `0.5px solid ${item.color === "#3b82f6" ? "rgba(59,130,246,0.3)" : "rgba(52,211,153,0.3)"}`,
+                minWidth: 120, textAlign: "center",
+              }}>
+                <i className={`ti ${item.icon}`} style={{ fontSize: 24, color: item.color }} aria-hidden="true" />
+                <p style={{ fontSize: 13, fontWeight: 700, color: text, margin: 0 }}>{item.label}</p>
+                <p style={{ fontSize: 10, color: muted, margin: 0, fontFamily: "'DM Mono', monospace" }}>{item.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Feature grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }} className="ao-form-row">
+            {[
+              {
+                icon: "ti-writing-sign",
+                title: lang === "en" ? "ERC-1271 smart wallet support" : "Suporte ERC-1271 para smart wallets",
+                body: lang === "en"
+                  ? "Smart contract wallets sign subscription authorisations natively. The agent signs once — AuthOnce pulls automatically every cycle with no further interaction required."
+                  : "As smart wallets assinam autorizações de subscrição nativamente. O agente assina uma vez — o AuthOnce cobra automaticamente a cada ciclo sem mais interação.",
+                color: "#3b82f6",
+              },
+              {
+                icon: "ti-webhook",
+                title: lang === "en" ? "Programmatic webhook notifications" : "Notificações webhook programáticas",
+                body: lang === "en"
+                  ? "When a payment fails or grace period starts, AuthOnce POSTs to your agent's endpoint. No human required — the agent handles recovery autonomously."
+                  : "Quando um pagamento falha ou o período de graça começa, o AuthOnce faz POST para o endpoint do agente. Sem humanos — o agente gere a recuperação autonomamente.",
+                color: "#3b82f6",
+              },
+              {
+                icon: "ti-lock",
+                title: lang === "en" ? "Non-custodial treasury" : "Tesouraria não custodial",
+                body: lang === "en"
+                  ? "The agent's treasury keeps full custody. AuthOnce only pulls the exact authorised amount on the due date — nothing more, ever."
+                  : "A tesouraria do agente mantém custódia total. O AuthOnce cobra apenas o valor autorizado na data de vencimento — nunca mais.",
+                color: "#34d399",
+              },
+              {
+                icon: "ti-clock",
+                title: lang === "en" ? "Programmable grace period recovery" : "Recuperação programável no período de graça",
+                body: lang === "en"
+                  ? "Agents can be programmed to top up their wallet during the 1–30 day grace period before expiry. Fully autonomous payment recovery — zero churn."
+                  : "Os agentes podem ser programados para carregar a carteira durante o período de graça de 1–30 dias antes do vencimento. Recuperação totalmente autónoma — zero churn.",
+                color: "#34d399",
+              },
+            ].map(({ icon, title, body, color }) => (
+              <div key={title} style={{
+                padding: 24, borderRadius: 14,
+                background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+                border: `0.5px solid ${color === "#3b82f6" ? "rgba(59,130,246,0.2)" : "rgba(52,211,153,0.2)"}`,
+              }}>
+                <i className={`ti ${icon}`} style={{ fontSize: 26, color, display: "block", marginBottom: 12 }} aria-hidden="true" />
+                <p style={{ fontSize: 15, fontWeight: 700, color: text, margin: "0 0 8px", lineHeight: 1.3 }}>{title}</p>
+                <p style={{ fontSize: 13, color: muted, margin: 0, lineHeight: 1.7 }}>{body}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Use cases */}
+          <div style={{ marginTop: 32, padding: "20px 24px", borderRadius: 12, background: isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.05)", border: "0.5px solid rgba(59,130,246,0.2)" }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 12px" }}>
+              {lang === "en" ? "Built for" : "Construído para"}
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {[
+                lang === "en" ? "AI agents paying for API access" : "Agentes IA a pagar por acesso a APIs",
+                lang === "en" ? "Autonomous trading bots" : "Bots de trading autónomos",
+                lang === "en" ? "DAO-governed agent treasuries" : "Tesourarias de agentes geridas por DAOs",
+                lang === "en" ? "On-chain AI service subscriptions" : "Subscrições de serviços IA on-chain",
+                lang === "en" ? "Smart wallet billing" : "Faturação para smart wallets",
+              ].map(tag => (
+                <span key={tag} style={{
+                  fontSize: 12, padding: "5px 14px", borderRadius: 99,
+                  background: isDark ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.08)",
+                  border: "0.5px solid rgba(59,130,246,0.25)", color: "#3b82f6", fontWeight: 500,
+                }}>{tag}</span>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "center", marginTop: 32 }}>
+            <a href="#apply" style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "12px 28px", borderRadius: 10,
+              background: "rgba(59,130,246,0.1)", border: "0.5px solid rgba(59,130,246,0.3)",
+              color: "#3b82f6", fontSize: 14, fontWeight: 600, textDecoration: "none",
+            }}>
+              {lang === "en" ? "Build AI agent billing →" : "Construir faturação para agentes IA →"}
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ── Full Subscription Management ── */}
       <section className="ao-section" style={{ borderBottom: `0.5px solid ${border}`, padding: "80px 40px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
