@@ -30,6 +30,7 @@
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@openzeppelin/contracts": "^5.0.2",
+    "@pushprotocol/restapi": "^1.7.32",
     "@wagmi/connectors": "^8.0.1",
     "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
