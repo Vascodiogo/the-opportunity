@@ -30,8 +30,8 @@ export const RPC_URLS = [
 ];
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-export const VAULT_ADDRESS    = "0xeb068B47731261F7B4A5ae8535686D67D7f72321"; // v7
-export const REGISTRY_ADDRESS = "0xAE681E431c353f5930dDFfBC74037d3f2afE3264"; // v4
+export const VAULT_ADDRESS    = "0xAd7B4b66F5C0145cbC52c56918F7D6C2871d8c5d"; // v7
+export const REGISTRY_ADDRESS = "0x9183696fD048A28915eD0A6587f8FB1103b1D12E"; // v4
 export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
