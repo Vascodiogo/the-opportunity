@@ -86,6 +86,8 @@ async function main() {
   console.log(`  MerchantRegistry: ${registryAddress}`);
 
   // ── 2. Deploy SubscriptionVault v6 ────────────────────────────────────────
+  console.log("Waiting 20s before deploying SubscriptionVault...");
+  await new Promise(r => setTimeout(r, 20000));
   console.log("Deploying SubscriptionVault v6...");
   const SubscriptionVault = await hre.ethers.getContractFactory("SubscriptionVault");
   const vault = await SubscriptionVault.deploy(
@@ -100,11 +102,26 @@ async function main() {
 
   // ── 3. Approve tokens ─────────────────────────────────────────────────────
   const tokens = TOKENS[network] || {};
-  console.log("\nApproving tokens...");
+  console.log("\nWaiting 15s before token approvals to avoid rate limiting...");
+  await new Promise(r => setTimeout(r, 15000));
+  console.log("Approving tokens...");
   for (const [symbol, address] of Object.entries(tokens)) {
     const tx = await vault.approveToken(address);
     await tx.wait();
     console.log(`  Approved: ${symbol} (${address})`);
+    await new Promise(r => setTimeout(r, 5000));
+  }
+
+  // ── 4. Auto-approve deployer as first merchant (testnet convenience) ───────
+  if (!isMainnet) {
+    console.log("\nWaiting 10s before merchant approval...");
+    await new Promise(r => setTimeout(r, 10000));
+    console.log("Approving deployer as first merchant...");
+    const REGISTRY_ABI = ["function approveMerchant(address merchant) external"];
+    const registryContract = new hre.ethers.Contract(registryAddress, REGISTRY_ABI, deployer);
+    const tx = await registryContract.approveMerchant(deployer.address);
+    await tx.wait();
+    console.log(`  Approved: ${deployer.address} ✓`);
   }
 
   // ── 4. Summary ────────────────────────────────────────────────────────────
