@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How AI Trading Bots Can Pay for Subscriptions Autonomously | AuthOnce Blog</title>
+  <meta name="description" content="Autonomous trading bots need uninterrupted access to market data, signal feeds, and infrastructure APIs. AuthOnce enables fully autonomous on-chain recurring payments via ERC-1271 — no human required." />
+  <meta name="keywords" content="AI trading bot payments, autonomous agent billing, ERC-1271 smart wallet, on-chain subscriptions, Web3 recurring payments, crypto data subscription, AuthOnce" />
+  <meta name="author" content="Vasco Diogo, AuthOnce" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://blog.authonce.io/ai-agent-trading-bot-payments" />
+  <meta property="og:title" content="How AI Trading Bots Can Pay for Subscriptions Autonomously" />
+  <meta property="og:description" content="Autonomous trading bots need uninterrupted market data. AuthOnce enables ERC-1271 native recurring payments — the bot authorises once, pays forever." />
+  <meta property="og:url" content="https://blog.authonce.io/ai-agent-trading-bot-payments" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="AuthOnce Blog" />
+  <meta property="og:image" content="https://authonce.io/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@AuthOnce" />
+  <meta name="twitter:image" content="https://authonce.io/og-image.png" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "How AI Trading Bots Can Pay for Subscriptions Autonomously",
+    "description": "Autonomous trading bots need uninterrupted access to market data, signal feeds, and infrastructure APIs. AuthOnce enables fully autonomous on-chain recurring payments via ERC-1271.",
+    "author": { "@type": "Person", "name": "Vasco Diogo", "url": "https://twitter.com/VascoBuilds" },
+    "publisher": { "@type": "Organization", "name": "AuthOnce", "url": "https://authonce.io" },
+    "datePublished": "2026-06-28",
+    "url": "https://blog.authonce.io/ai-agent-trading-bot-payments",
+    "keywords": ["AI agent payments", "ERC-1271", "autonomous trading bot", "on-chain subscriptions", "Web3 billing"]
+  }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --white:     #ffffff;
+      --bg:        #f8f9fc;
+      --ink:       #0D0F14;
+      --ink-2:     #3A3D47;
+      --ink-3:     #7A7E8C;
+      --rule:      #E8EAF0;
+      --base-blue: #0052FF;
+      --base-dim:  #E8EEFF;
+      --green:     #00D4A0;
+      --radius:    12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--white);
+      color: var(--ink);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 400;
+      line-height: 1.75;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Nav */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--rule);
+      padding: 0 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .nav-logo-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--base-blue);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo-icon svg { width: 16px; height: 16px; fill: white; }
+    .nav-brand-text { font-weight: 700; font-size: 17px; letter-spacing: -0.02em; color: var(--ink); }
+    .nav-brand-text em { color: var(--base-blue); font-style: normal; }
+    .nav-links { display: flex; align-items: center; gap: 24px; }
+    .nav-links a { text-decoration: none; color: var(--ink-2); font-size: 14px; font-weight: 500; }
+    .nav-links a:hover { color: var(--base-blue); }
+    .nav-cta {
+      background: var(--base-blue); color: white !important;
+      padding: 8px 18px; border-radius: 8px; font-weight: 600 !important;
+      font-size: 13px !important;
+    }
+    .nav-cta:hover { opacity: 0.88; }
+
+    /* Layout */
+    .container { max-width: 720px; margin: 0 auto; padding: 0 24px; }
+
+    /* Tag */
+    .post-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600;
+      color: var(--base-blue);
+      background: var(--base-dim);
+      border-radius: 99px; padding: 4px 14px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    /* Hero */
+    .post-hero { padding: 60px 24px 44px; max-width: 720px; margin: 0 auto; }
+    .post-title {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+      margin-bottom: 18px;
+    }
+    .post-subtitle {
+      font-size: 18px; color: var(--ink-2);
+      line-height: 1.7; font-weight: 300; margin-bottom: 24px;
+    }
+    .post-meta {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      font-size: 13px; color: var(--ink-3);
+      padding-top: 20px; border-top: 1px solid var(--rule);
+    }
+    .post-meta strong { color: var(--ink); font-weight: 600; }
+    .post-meta a { color: var(--base-blue); text-decoration: none; }
+
+    /* Article */
+    article { padding: 44px 24px 80px; max-width: 720px; margin: 0 auto; }
+    article h2 {
+      font-size: 22px; font-weight: 700;
+      color: var(--ink); letter-spacing: -0.02em;
+      margin: 48px 0 14px; line-height: 1.3;
+    }
+    article h3 {
+      font-size: 17px; font-weight: 600;
+      color: var(--ink); margin: 32px 0 10px;
+    }
+    article p { color: var(--ink-2); margin-bottom: 18px; line-height: 1.8; }
+    article a { color: var(--base-blue); text-decoration: none; border-bottom: 1px solid rgba(0,82,255,0.2); }
+    article a:hover { border-bottom-color: var(--base-blue); }
+    article ul, article ol { margin: 0 0 18px 22px; color: var(--ink-2); }
+    article li { margin-bottom: 8px; line-height: 1.7; }
+    article strong { color: var(--ink); font-weight: 600; }
+
+    /* Code */
+    pre {
+      background: var(--ink);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin: 24px 0;
+      font-family: 'DM Mono', monospace;
+      font-size: 13px; line-height: 1.7;
+      color: #94a3b8;
+    }
+    code {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px; color: var(--base-blue);
+      background: var(--base-dim);
+      padding: 2px 6px; border-radius: 4px;
+    }
+    pre code { color: #94a3b8; background: none; padding: 0; }
+    .cc { color: #475569; }
+    .ck { color: #93c5fd; }
+    .cs { color: #86efac; }
+    .cm { color: #c084fc; }
+
+    /* Callout */
+    .callout {
+      background: var(--base-dim);
+      border-left: 3px solid var(--base-blue);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 18px 22px; margin: 28px 0;
+    }
+    .callout p { margin: 0; color: var(--ink-2); }
+    .callout-green {
+      background: rgba(0,212,160,0.08);
+      border-left-color: var(--green);
+    }
+
+    /* Flow */
+    .flow {
+      display: flex; align-items: center;
+      gap: 0; flex-wrap: wrap;
+      background: var(--bg);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 24px; margin: 28px 0;
+      justify-content: center;
+    }
+    .flow-node {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+      padding: 12px 16px; border-radius: 10px;
+      background: white; border: 1px solid var(--rule);
+      text-align: center; min-width: 110px;
+    }
+    .flow-node .icon { font-size: 22px; }
+    .flow-node .label { font-size: 12px; font-weight: 600; color: var(--ink); }
+    .flow-node .sub { font-size: 10px; color: var(--ink-3); font-family: 'DM Mono', monospace; }
+    .flow-arrow { padding: 0 8px; color: var(--ink-3); font-size: 16px; }
+
+    /* Feature grid */
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 28px 0; }
+    .feature-card {
+      background: var(--bg); border: 1px solid var(--rule);
+      border-radius: var(--radius); padding: 20px;
+    }
+    .feature-card h4 { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+    .feature-card p { font-size: 13px; color: var(--ink-2); margin: 0; line-height: 1.6; }
+
+    /* CTA */
+    .post-cta {
+      background: var(--ink); border-radius: 16px;
+      padding: 36px; text-align: center; margin: 48px 0;
+    }
+    .post-cta h3 { font-size: 22px; font-weight: 700; color: white; margin-bottom: 10px; letter-spacing: -0.02em; }
+    .post-cta p { color: rgba(255,255,255,0.6); margin-bottom: 20px; font-size: 15px; }
+    .btn-primary {
+      display: inline-block; background: var(--base-blue);
+      color: white; font-weight: 700; font-size: 14px;
+      padding: 12px 28px; border-radius: 10px; text-decoration: none; border: none;
+    }
+    .btn-primary:hover { opacity: 0.88; }
+
+    /* Related */
+    .related { background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius); padding: 24px; margin: 40px 0; }
+    .related h4 { font-size: 13px; font-weight: 700; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 14px; }
+    .related ul { margin: 0; list-style: none; }
+    .related li { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+    .related li:last-child { border-bottom: none; padding-bottom: 0; }
+    .related a { color: var(--ink); border: none; font-weight: 500; font-size: 15px; }
+    .related a:hover { color: var(--base-blue); }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--rule);
+      padding: 28px 40px;
+      display: flex; align-items: center;
+      justify-content: space-between; flex-wrap: wrap; gap: 14px;
+    }
+    .footer-brand { font-weight: 700; font-size: 15px; color: var(--ink); }
+    footer nav { position: static; background: none; border: none; padding: 0; height: auto; }
+    footer nav a { color: var(--ink-3); font-size: 13px; text-decoration: none; margin-right: 20px; }
+    footer nav a:hover { color: var(--base-blue); }
+    .footer-note { font-size: 12px; color: var(--ink-3); }
+
+    @media (max-width: 640px) {
+      nav { padding: 0 20px; }
+      .post-hero, article { padding-left: 20px; padding-right: 20px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .flow { gap: 8px; }
+      footer { padding: 24px 20px; flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="https://authonce.io" class="nav-logo">
+    <div class="nav-logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18L20 8.5v7L12 19.82 4 15.5v-7L12 4.18z"/></svg>
+    </div>
+    <span class="nav-brand-text">Auth<em>Once</em></span>
+  </a>
+  <div class="nav-links">
+    <a href="https://blog.authonce.io">Blog</a>
+    <a href="https://authonce.io/pricing">Pricing</a>
+    <a href="https://authonce.io/#apply" class="nav-cta">Apply →</a>
+  </div>
+</nav>
+
+<div class="post-hero">
+  <div class="post-tag">AI Agent Payments</div>
+  <h1 class="post-title">How AI Trading Bots Can Pay for Subscriptions Autonomously</h1>
+  <p class="post-subtitle">Autonomous trading bots need uninterrupted access to market data, signal feeds, and infrastructure APIs. One missed payment means trading blind. AuthOnce fixes this with ERC-1271 native recurring payments — the bot authorises once, pays forever.</p>
+  <div class="post-meta">
+    <strong>Vasco Diogo</strong>
+    <span>·</span>
+    <span>June 28, 2026</span>
+    <span>·</span>
+    <span>8 min read</span>
+    <span>·</span>
+    <a href="https://authonce.io">authonce.io</a>
+  </div>
+</div>
+
+<article>
+
+  <h2>The problem: autonomous bots, manual payments</h2>
+
+  <p>A production trading bot operates 24 hours a day, 7 days a week. It monitors order books, executes strategies, manages risk — all without human intervention. That is the point. Autonomy is the feature.</p>
+
+  <p>But when it comes to paying for the services it depends on, the autonomy breaks down completely. Every data provider, signal API, and infrastructure tool requires either a human credit card on file or a manual USDC transfer. Both require a human in the loop.</p>
+
+  <p>The consequences of a missed payment are severe:</p>
+
+  <ul>
+    <li><strong>Market data cuts out</strong> — the bot trades on stale prices</li>
+    <li><strong>Signal feed expires</strong> — the strategy goes blind</li>
+    <li><strong>RPC node throttles</strong> — execution slows or fails</li>
+    <li><strong>Indexer access revoked</strong> — on-chain data disappears</li>
+  </ul>
+
+  <p>In a fast-moving market, any of these means losses. The bot that was supposed to run autonomously now depends entirely on a human remembering to top up a subscription.</p>
+
+  <div class="callout">
+    <p><strong>The core problem:</strong> There is no existing Web3-native solution for autonomous recurring payments. Every current approach requires either a custodial intermediary or a human approval step. AuthOnce was built to solve this.</p>
+  </div>
+
+  <h2>The solution: ERC-1271 native recurring billing</h2>
+
+  <p>AuthOnce is a non-custodial subscription protocol on Base Network. For AI agents and smart contract wallets, it implements <strong>ERC-1271 signature verification</strong> — the standard that allows smart contracts to sign messages and authorise on-chain actions.</p>
+
+  <p>The full autonomous payment cycle looks like this:</p>
+
+  <div class="flow">
+    <div class="flow-node">
+      <div class="icon">🤖</div>
+      <div class="label">Trading bot</div>
+      <div class="sub">Smart wallet</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <div class="icon">✍️</div>
+      <div class="label">Authorises once</div>
+      <div class="sub">ERC-1271 · EIP-712</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <div class="icon">🔄</div>
+      <div class="label">Keeper pulls</div>
+      <div class="sub">Every cycle</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <div class="icon">🪝</div>
+      <div class="label">Webhook fires</div>
+      <div class="sub">Agent responds</div>
+    </div>
+  </div>
+
+  <p>The bot signs a subscription authorisation once using ERC-1271. From that point, AuthOnce's keeper bot pulls the agreed USDC amount directly from the bot's wallet on each billing cycle — weekly, monthly, or yearly. No human approval. No manual transfer. No custodian holding funds.</p>
+
+  <h2>Step-by-step: integrating a trading bot with AuthOnce</h2>
+
+  <h3>1. Deploy or use an existing smart wallet</h3>
+
+  <p>The trading bot needs a smart contract wallet — any ERC-1271 compatible implementation works. Safe (formerly Gnosis Safe) is the most widely used. The wallet holds the bot's operating treasury in USDC.</p>
+
+  <h3>2. Authorise the subscription on-chain</h3>
+
+  <p>The bot calls the AuthOnce <code>SubscriptionVault</code> contract to create a subscription. This involves a single ERC-1271 signed permit — the bot's smart wallet signs the authorisation, specifying the merchant address, amount, token, and billing interval.</p>
+
+<pre><code><span class="cc">// Create subscription via AuthOnce SubscriptionVault</span>
+<span class="cm">const</span> tx = <span class="cm">await</span> vault.createSubscription({
+  merchant: <span class="cs">"0xMerchant..."</span>,
+  token:    <span class="cs">"0xUSDC..."</span>,
+  amount:   parseUnits(<span class="cs">"49"</span>, 6),    <span class="cc">// $49 USDC</span>
+  interval: <span class="cs">"monthly"</span>,
+  gracePeriodDays: <span class="ck">7</span>,
+});
+</code></pre>
+
+  <h3>3. Register a webhook endpoint</h3>
+
+  <p>When creating the subscription via the AuthOnce API, the bot registers a webhook URL. This is the endpoint AuthOnce will POST to when payment events occur — failed payments, grace period warnings, expiry notices.</p>
+
+<pre><code><span class="cc">// Register webhook at subscription time</span>
+<span class="cm">const</span> res = <span class="cm">await</span> fetch(<span class="cs">"https://api.authonce.io/subscriptions/link"</span>, {
+  method: <span class="cs">"POST"</span>,
+  headers: { <span class="cs">"Content-Type"</span>: <span class="cs">"application/json"</span> },
+  body: JSON.stringify({
+    tx_hash:                subscribeTxHash,
+    product_slug:           <span class="cs">"market-data-pro"</span>,
+    subscriber_webhook_url: <span class="cs">"https://your-bot.com/authonce/events"</span>,
+    is_contract_vault:      <span class="cm">true</span>,
+  }),
+});
+</code></pre>
+
+  <h3>4. Handle payment events programmatically</h3>
+
+  <p>When a payment fails — say, the bot's USDC balance is temporarily low — AuthOnce fires a POST to the registered webhook. The bot receives the event and can respond autonomously: top up the wallet, trigger an alert, or pause trading until funds are restored.</p>
+
+<pre><code><span class="cc">// Bot's webhook handler</span>
+app.post(<span class="cs">"/authonce/events"</span>, (req, res) => {
+  <span class="cm">const</span> { event, subscription_id, title } = req.body;
+
+  <span class="cm">if</span> (event === <span class="cs">"payment.alert"</span>) {
+    <span class="cc">// Respond autonomously — no human needed</span>
+    bot.topUpWallet();
+    bot.pauseStrategy(<span class="cs">"insufficient_funds"</span>);
+    alerts.send(title);
+  }
+
+  res.json({ received: <span class="cm">true</span> });
+});
+</code></pre>
+
+  <h3>5. Autonomous grace period recovery</h3>
+
+  <p>AuthOnce gives subscribers a programmable 1–30 day grace period when a payment fails. During this window, the keeper retries the pull daily. The bot has time to top up its wallet programmatically — without any subscription expiring or access being cut.</p>
+
+  <div class="callout callout-green">
+    <p><strong>Zero downtime payments:</strong> With a 7-day grace period, the bot has a full week to detect the failure, top up, and resume normal billing — all without losing access to a single data feed.</p>
+  </div>
+
+  <h2>What services can a trading bot subscribe to?</h2>
+
+  <p>Any crypto data provider, API service, or infrastructure tool that integrates AuthOnce can be billed this way. The natural targets are:</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>📊 Market data providers</h4>
+      <p>Real-time price feeds, order book data, historical OHLCV, liquidity analytics. Any subscription-based data service.</p>
+    </div>
+    <div class="feature-card">
+      <h4>📡 Signal APIs</h4>
+      <p>Alpha signal providers, sentiment feeds, on-chain flow data, MEV analytics. Recurring access to alpha.</p>
+    </div>
+    <div class="feature-card">
+      <h4>⚡ RPC infrastructure</h4>
+      <p>Dedicated node access, execution relay subscriptions, private mempool access, bundle submission APIs.</p>
+    </div>
+    <div class="feature-card">
+      <h4>🔍 Indexing services</h4>
+      <p>On-chain data indexers that power real-time position tracking, event monitoring, and analytics.</p>
+    </div>
+  </div>
+
+  <h2>Why non-custodial matters for bots</h2>
+
+  <p>Existing subscription solutions for crypto bots involve one of two bad patterns:</p>
+
+  <ul>
+    <li><strong>Custodial pre-funding</strong> — lock USDC with a platform that controls disbursement. The platform holds your funds.</li>
+    <li><strong>Manual transfers</strong> — a human sends USDC each billing cycle. Not autonomous at all.</li>
+  </ul>
+
+  <p>AuthOnce is neither. The bot's wallet retains full custody. AuthOnce only pulls the exact authorised amount on the billing date — nothing more. The smart contract is open-source and operates on Base Network with no intermediary between the bot's wallet and the merchant's wallet.</p>
+
+  <h2>Technical specification</h2>
+
+  <ul>
+    <li><strong>Signature standard:</strong> ERC-1271 (smart contract signature verification) + EIP-712</li>
+    <li><strong>Tokens:</strong> USDC, USDT, DAI, EURC on Base Network</li>
+    <li><strong>Billing intervals:</strong> Weekly, monthly, yearly</li>
+    <li><strong>Grace period:</strong> 1–30 days, configurable per subscription</li>
+    <li><strong>Protocol fee:</strong> 0.5% flat — no per-transaction fee, no monthly platform fee</li>
+    <li><strong>Webhook events:</strong> <code>payment.alert</code>, <code>subscription.expired</code>, <code>subscription.resumed</code></li>
+    <li><strong>Network:</strong> Base Network (Ethereum L2, OP Stack)</li>
+  </ul>
+
+  <h2>Current status</h2>
+
+  <p>AuthOnce is live on Base Sepolia testnet. ERC-1271 smart wallet support, webhook notifications, and the keeper bot are all operational. Mainnet launch is targeted for September 2026, contingent on the completed security audit.</p>
+
+  <p>If you are building a trading bot, autonomous agent, or any smart contract wallet that needs recurring payment capability — apply as a founding merchant. The first 5 merchants get lifetime Growth tier free and direct access to the founder.</p>
+
+  <div class="post-cta">
+    <h3>Build autonomous payments for your trading bot</h3>
+    <p>ERC-1271 native. Non-custodial. Webhook-driven. Live on Base Sepolia testnet today.</p>
+    <a href="https://authonce.io/#apply" class="btn-primary">Apply as founding merchant →</a>
+  </div>
+
+  <div class="related">
+    <h4>Related reading</h4>
+    <ul>
+      <li><a href="https://blog.authonce.io/eip-2612-gasless-permits">EIP-2612 gasless permits — how AuthOnce enables zero-gas subscription authorisation</a></li>
+      <li><a href="https://blog.authonce.io/erc-1271-smart-wallets">ERC-1271 smart wallet payments — the technical deep dive</a></li>
+      <li><a href="https://blog.authonce.io/why-onchain-recurring-payments-are-broken">Why on-chain recurring payments are broken — and how to fix them</a></li>
+      <li><a href="https://blog.authonce.io/base-network-subscription-protocol">Why we built AuthOnce on Base Network</a></li>
+    </ul>
+  </div>
+
+</article>
+
+<footer>
+  <span class="footer-brand">AuthOnce</span>
+  <nav>
+    <a href="https://blog.authonce.io">Blog</a>
+    <a href="https://authonce.io/pricing">Pricing</a>
+    <a href="https://twitter.com/AuthOnce">@AuthOnce</a>
+    <a href="https://authonce.io/legal">Legal</a>
+  </nav>
+  <span class="footer-note">Testnet only · Not financial advice</span>
+</footer>
+
+</body>
+</html>
