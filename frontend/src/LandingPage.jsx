@@ -1348,12 +1348,12 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               },
               {
                 tag: "API", tagColor: purple,
-                title: lang === "en" ? "Developer API" : "API para Programadores",
+                title: lang === "en" ? "Developer API + Webhooks" : "API para Programadores + Webhooks",
                 desc: lang === "en"
-                  ? "Full REST API and webhooks. Built for developers and AI agent integrations. Complete server-side control."
-                  : "API REST completa e webhooks. Para programadores e integrações com agentes IA. Controlo total do lado do servidor.",
-                time: lang === "en" ? "Ready in 1–2 days" : "Pronto em 1–2 dias",
-                example: "POST /api/subscriptions",
+                  ? "Full REST API, webhooks, and AI agent support. ERC-1271 native — autonomous agents can subscribe and pay without human intervention."
+                  : "API REST completa, webhooks e suporte para agentes IA. ERC-1271 nativo — agentes autónomos podem subscrever e pagar sem intervenção humana.",
+                time: lang === "en" ? "Live on Base Sepolia" : "Ativo na Base Sepolia",
+                example: "POST /api/subscriptions/link",
               },
             ].map((card, i) => (
               <div key={i} style={{
@@ -1373,6 +1373,33 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
                   borderRadius: 6, padding: "8px 12px",
                   fontSize: 11, color: muted, fontFamily: "'DM Mono', monospace",
                 }}>{card.example}</div>
+                {/* Full code snippet for API card only */}
+                {i === 2 && (
+                  <div style={{
+                    background: isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.06)",
+                    borderRadius: 8, padding: "14px 16px",
+                    fontSize: 11, color: isDark ? "#94a3b8" : "#475569",
+                    fontFamily: "'DM Mono', monospace", lineHeight: 1.8,
+                    whiteSpace: "pre",
+                    overflowX: "auto",
+                  }}>{`// Subscribe an AI agent or user
+const res = await fetch(
+  "https://api.authonce.io/subscriptions/link",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Merchant-Key": "<your_api_key>"
+    },
+    body: JSON.stringify({
+      tx_hash: "0x...",
+      product_slug: "pro-plan",
+      subscriber_webhook_url:
+        "https://your-agent.com/hooks"
+    })
+  }
+);`}</div>
+                )}
                 <div style={{ fontSize: 11, color: card.tagColor, fontWeight: 600 }}>{card.time}</div>
               </div>
             ))}
