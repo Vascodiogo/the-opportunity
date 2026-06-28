@@ -235,12 +235,14 @@ export default function PayPage() {
   // Detect if connected wallet is a smart contract (AI agent) or EOA
   useEffect(() => {
     if (!address) { setIsContractAddress(false); return; }
-    const provider = new (require("ethers").ethers.JsonRpcProvider)(
-      import.meta.env.VITE_RPC_URL || "https://sepolia.base.org"
-    );
-    provider.getCode(address).then(code => {
-      setIsContractAddress(code !== "0x");
-    }).catch(() => setIsContractAddress(false));
+    fetch(`${import.meta.env.VITE_RPC_URL || "https://sepolia.base.org"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "eth_getCode", params: [address, "latest"], id: 1 }),
+    })
+      .then(r => r.json())
+      .then(data => setIsContractAddress(data?.result && data.result !== "0x"))
+      .catch(() => setIsContractAddress(false));
   }, [address]);
 
   useEffect(() => {
