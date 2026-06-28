@@ -186,6 +186,9 @@ export default function PayPage() {
   const [availableMethods, setAvailableMethods] = useState(null);
   const [stripeLoading, setStripeLoading]   = useState(false);
   const [selectedToken, setSelectedToken]   = useState("usdc"); // crypto token choice
+  const [subscriberEmail, setSubscriberEmail] = useState("");    // optional payment alert email
+  const [agentWebhookUrl, setAgentWebhookUrl] = useState("");    // AI agent webhook endpoint
+  const [isContractAddress, setIsContractAddress] = useState(false); // true if subscriber is a smart contract
 
   const { address, isConnected } = useAccount();
   const chainId                  = useChainId();
@@ -228,6 +231,17 @@ export default function PayPage() {
     address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "allowance",
     args: [address, VAULT_ADDRESS], query: { enabled: !!address && !!product },
   });
+
+  // Detect if connected wallet is a smart contract (AI agent) or EOA
+  useEffect(() => {
+    if (!address) { setIsContractAddress(false); return; }
+    const provider = new (require("ethers").ethers.JsonRpcProvider)(
+      import.meta.env.VITE_RPC_URL || "https://sepolia.base.org"
+    );
+    provider.getCode(address).then(code => {
+      setIsContractAddress(code !== "0x");
+    }).catch(() => setIsContractAddress(false));
+  }, [address]);
 
   useEffect(() => {
     if (!resolvedAddress || !productSlug) return;
@@ -290,6 +304,9 @@ export default function PayPage() {
             tx_hash: subscribeTxHash,
             product_slug: productSlug,
             merchant_address: resolvedAddress,
+            subscriber_email: subscriberEmail || null,
+            subscriber_webhook_url: agentWebhookUrl || null,
+            is_contract_vault: isContractAddress || false,
           }),
         }).catch(err => console.warn("[PayPage] Could not link product_slug:", err));
       }
@@ -725,6 +742,48 @@ export default function PayPage() {
                   <Step n={1} label={`Approve ${activeAmount?.toFixed(2)} ${selectedTokenMeta.label}`} active={stepApprove} done={approvedDone} />
                   <Step n={2} label="Create subscription on-chain" active={stepSubscribe} done={subscribedDone} />
                 </div>
+
+                {/* Notification opt-in — email for humans, webhook for AI agents */}
+                {flowStatus === "connected" && (
+                  <div style={{
+                    background: "var(--bg-tag)", border: "0.5px solid var(--border)",
+                    borderRadius: 10, padding: "12px 14px", marginBottom: 14,
+                  }}>
+                    {isContractAddress ? (
+                      <>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                          🤖 AI agent detected
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>
+                          Receive payment alerts via webhook (optional)
+                        </div>
+                        <input
+                          type="url"
+                          placeholder="https://your-agent.com/authonce-webhook"
+                          value={agentWebhookUrl}
+                          onChange={e => setAgentWebhookUrl(e.target.value)}
+                          style={{ width: "100%", boxSizing: "border-box", fontSize: 12 }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                          🔔 Payment alerts (optional)
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>
+                          Get notified if a payment fails or your grace period starts. Otherwise we'll send a wallet notification via Push Protocol.
+                        </div>
+                        <input
+                          type="email"
+                          placeholder="you@example.com"
+                          value={subscriberEmail}
+                          onChange={e => setSubscriberEmail(e.target.value)}
+                          style={{ width: "100%", boxSizing: "border-box", fontSize: 12 }}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* Trust signals */}
                 {flowStatus === "connected" && (

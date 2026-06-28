@@ -137,6 +137,10 @@ async function initSchema() {
     )
   `);
   await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS product_slug TEXT`);
+  // Subscriber notification preferences
+  await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscriber_email TEXT`);
+  await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscriber_webhook_url TEXT`);
+  await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_contract_vault BOOLEAN DEFAULT FALSE`);
 
   // Payments — indexed from PaymentExecuted events
   await query(`
@@ -475,20 +479,38 @@ async function getSystemHealth() {
 async function upsertSubscription(data) {
   const {
     id, ownerAddress, merchantAddress, safeVault, amount,
-    interval, status, txHash, blockNumber, guardianAddress, productSlug
+    interval, status, txHash, blockNumber, guardianAddress, productSlug,
+    subscriberEmail, subscriberWebhookUrl, isContractVault
   } = data;
 
   await query(`
     INSERT INTO subscriptions
       (id, owner_address, merchant_address, safe_vault, amount, interval,
-       status, tx_hash, block_number, guardian_address, product_slug, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
+       status, tx_hash, block_number, guardian_address, product_slug,
+       subscriber_email, subscriber_webhook_url, is_contract_vault,
+       created_at, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW())
     ON CONFLICT (id) DO UPDATE SET
-      status       = EXCLUDED.status,
-      product_slug = COALESCE(EXCLUDED.product_slug, subscriptions.product_slug),
-      updated_at   = NOW()
+      status                 = EXCLUDED.status,
+      product_slug           = COALESCE(EXCLUDED.product_slug, subscriptions.product_slug),
+      subscriber_email       = COALESCE(EXCLUDED.subscriber_email, subscriptions.subscriber_email),
+      subscriber_webhook_url = COALESCE(EXCLUDED.subscriber_webhook_url, subscriptions.subscriber_webhook_url),
+      is_contract_vault      = COALESCE(EXCLUDED.is_contract_vault, subscriptions.is_contract_vault),
+      updated_at             = NOW()
   `, [id, ownerAddress, merchantAddress, safeVault, amount, interval,
-      status, txHash, blockNumber, guardianAddress || null, productSlug || null]);
+      status, txHash, blockNumber, guardianAddress || null, productSlug || null,
+      subscriberEmail || null, subscriberWebhookUrl || null, isContractVault || false]);
+}
+
+// Update subscriber notification preferences post-subscription
+async function updateSubscriberNotificationPrefs(subscriptionId, { subscriberEmail, subscriberWebhookUrl } = {}) {
+  await query(`
+    UPDATE subscriptions SET
+      subscriber_email       = COALESCE($2, subscriber_email),
+      subscriber_webhook_url = COALESCE($3, subscriber_webhook_url),
+      updated_at             = NOW()
+    WHERE id = $1
+  `, [subscriptionId, subscriberEmail || null, subscriberWebhookUrl || null]);
 }
 
 async function updateSubscriptionStatus(id, status, extra = {}) {
@@ -873,6 +895,7 @@ module.exports = {
   // Subscriptions
   upsertSubscription,
   updateSubscriptionStatus,
+  updateSubscriberNotificationPrefs,
   getSubscription,
   getSubscriptionsByMerchant,
   // Payments

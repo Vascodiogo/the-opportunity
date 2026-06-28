@@ -122,9 +122,100 @@ async function sendEmail({ to, subject, html, text }) {
   }
 }
 
-// Get subscriber email for a vault address
+// ─── Push Protocol (wallet notifications) ────────────────────────────────────
+// Uses Push Protocol staging for testnet, mainnet channel for production.
+// Requires PUSH_CHANNEL_PRIVATE_KEY env var.
+
+let _pushAPI = null;
+async function getPushAPI() {
+  if (_pushAPI) return _pushAPI;
+  if (!process.env.PUSH_CHANNEL_PRIVATE_KEY) return null;
+  try {
+    const { PushAPI, CONSTANTS } = await import("@pushprotocol/restapi");
+    const { ethers: _ethers } = await import("ethers");
+    const signer = new _ethers.Wallet(process.env.PUSH_CHANNEL_PRIVATE_KEY);
+    _pushAPI = await PushAPI.initialize(signer, {
+      env: process.env.NETWORK === "mainnet" ? CONSTANTS.ENV.PROD : CONSTANTS.ENV.STAGING,
+    });
+    console.log("[PUSH] Push Protocol API initialized");
+    return _pushAPI;
+  } catch (err) {
+    console.warn("[PUSH] Push Protocol unavailable:", err.message);
+    return null;
+  }
+}
+
+async function sendPushNotification({ walletAddress, title, body, cta }) {
+  const pushAPI = await getPushAPI();
+  if (!pushAPI) { console.warn("[PUSH] No Push API — skipping wallet notification"); return; }
+  try {
+    await pushAPI.channel.send([`eip155:1:${walletAddress}`], {
+      notification: { title, body },
+      payload: { title, body, cta: cta || "https://authonce.io/my-subscriptions", img: "" },
+      channel: `eip155:1:${process.env.PUSH_CHANNEL_ADDRESS || ""}`,
+    });
+    console.log(`[PUSH] Sent notification to ${walletAddress}: ${title}`);
+  } catch (err) {
+    console.error(`[PUSH] Failed to send to ${walletAddress}:`, err.message);
+  }
+}
+
+// ─── AI Agent webhook notification ───────────────────────────────────────────
+async function sendAgentWebhook({ webhookUrl, event, payload }) {
+  if (!webhookUrl) return;
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-AuthOnce-Event": event },
+      body: JSON.stringify({ event, ...payload, timestamp: new Date().toISOString() }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    console.log(`[AGENT_WEBHOOK] ${event} → ${webhookUrl} [${res.status}]`);
+  } catch (err) {
+    console.error(`[AGENT_WEBHOOK] Failed to deliver ${event} to ${webhookUrl}:`, err.message);
+  }
+}
+
+// ─── Smart subscriber notification routing ────────────────────────────────────
+// Priority: AI agent webhook → email → Push Protocol wallet notification
+async function notifySubscriber({ sub, title, emailHtml, emailText, emailSubject, pushBody, ctaUrl }) {
+  const ownerAddress = sub.owner_address;
+
+  // 1. AI agent — webhook takes priority
+  if (sub.is_contract_vault && sub.subscriber_webhook_url) {
+    await sendAgentWebhook({
+      webhookUrl: sub.subscriber_webhook_url,
+      event: "payment.alert",
+      payload: { subscription_id: sub.id?.toString(), title, body: pushBody, vault_address: sub.safe_vault || ownerAddress },
+    });
+    return;
+  }
+
+  // 2. Email — if subscriber provided one
+  const email = sub.subscriber_email || null;
+  if (email) {
+    await sendEmail({ to: email, subject: emailSubject, html: emailHtml, text: emailText });
+    return;
+  }
+
+  // 3. Push Protocol — fallback for crypto-native subscribers without email
+  if (ownerAddress) {
+    await sendPushNotification({ walletAddress: ownerAddress, title, body: pushBody, cta: ctaUrl || "https://authonce.io/my-subscriptions" });
+  }
+}
+
+// Get subscriber email for a vault address (legacy — checks subscribers table)
 async function getSubscriberEmail(vaultAddress) {
   try {
+    // First check subscription record for directly provided email
+    const subRes = await db.query(
+      "SELECT subscriber_email, owner_address FROM subscriptions WHERE safe_vault = $1 OR owner_address = $1 LIMIT 1",
+      [vaultAddress.toLowerCase()]
+    );
+    if (subRes.rows[0]?.subscriber_email) {
+      return { email: subRes.rows[0].subscriber_email, name: null };
+    }
+    // Fallback to subscribers table (Google OAuth users)
     const res = await db.query(
       "SELECT email, name FROM subscribers WHERE wallet_address = $1",
       [vaultAddress.toLowerCase()]
@@ -492,43 +583,28 @@ async function onInsufficientFunds(log, iface) {
 
   await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
 
-  // Email subscriber
+  // Notify subscriber — smart routing (AI agent webhook → email → Push Protocol)
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
-  if (subscriber?.email) {
-    const merchantName  = await getMerchantName(sub.merchant_address);
-    const requiredUsdc  = (Number(required) / 1e6).toFixed(2);
-    const availableUsdc = (Number(available) / 1e6).toFixed(2);
-    const graceDate     = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
-    const fundsTpl2 = templates.paymentFailedFunds({ name: subscriber.name, merchantName, requiredUsdc, availableUsdc, graceDate });
-    await sendEmail({ to: subscriber.email, subject: templates.subjects.paymentFailedFunds(merchantName), ...fundsTpl2 });
-    if (false) { await sendEmail({ to: subscriber.email, subject: "", html: `
-        <p>REPLACED</p>
-        <p>REPLACED</p>
-        <p>REPLACED</p>
-        <p>Manage your subscription at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>.</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
-      `,
-      text: `Payment of $${requiredUsdc} USDC to ${merchantName} failed. Top up before ${graceDate} to keep your subscription.`,
-    }); }
-  }
+  const merchantName  = await getMerchantName(sub.merchant_address);
+  const requiredUsdc  = (Number(required) / 1e6).toFixed(2);
+  const availableUsdc = (Number(available) / 1e6).toFixed(2);
+  const graceDate     = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+  const fundsTpl2 = templates.paymentFailedFunds({ name: subscriber?.name, merchantName, requiredUsdc, availableUsdc, graceDate });
+  await notifySubscriber({
+    sub,
+    title: `Payment failed — top up by ${graceDate}`,
+    emailSubject: templates.subjects.paymentFailedFunds(merchantName),
+    emailHtml: fundsTpl2.html,
+    emailText: fundsTpl2.text || `Payment of $${requiredUsdc} USDC to ${merchantName} failed. Top up before ${graceDate} to keep your subscription.`,
+    pushBody: `Your ${merchantName} subscription payment of $${requiredUsdc} failed. Top up your wallet by ${graceDate} to stay subscribed.`,
+    ctaUrl: "https://authonce.io/my-subscriptions",
+  });
 
   // Email merchant
   const merchantEmail = await getMerchantEmail(sub.merchant_address);
   if (merchantEmail) {
-    const requiredUsdc = (Number(required) / 1e6).toFixed(2);
-    const graceDate    = new Date(Number(pausedUntil) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    const fundsMerchantTpl2 = templates.merchantPaymentFailed({ requiredUsdc, graceDate, reason: "insufficient_funds", subscriptionId: id.toString(), productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: subscriber?.email || null });
+    const fundsMerchantTpl2 = templates.merchantPaymentFailed({ requiredUsdc, graceDate, reason: "insufficient_funds", subscriptionId: id.toString(), productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: subscriber?.email || sub.subscriber_email || null });
     await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantPaymentFailed(), ...fundsMerchantTpl2 });
-    if (false) { await sendEmail({ to: merchantEmail, subject: "", html: `
-        <p>REPLACED</p>
-        <p>REPLACED</p>
-        <p>REPLACED</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
-      `,
-      text: `A subscriber payment of $${requiredUsdc} USDC failed. Grace period ends ${graceDate}. Subscriber has been notified.`,
-    }); }
   }
 
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
@@ -661,37 +737,26 @@ async function onSubscriptionExpired(log, iface) {
   if (!sub) return;
   await db.updateSubscriptionStatus(id.toString(), "expired");
 
-  // Email subscriber
+  // Notify subscriber — smart routing (AI agent webhook → email → Push Protocol)
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
-  if (subscriber?.email) {
-    const merchantName = await getMerchantName(sub.merchant_address);
-    const expiredDate  = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    const expiredSubTpl = templates.subscriptionExpired({ name: subscriber.name, merchantName, expiredDate });
-    await sendEmail({ to: subscriber.email, subject: templates.subjects.subscriptionExpired(merchantName), ...expiredSubTpl });
-    if (false) { await sendEmail({ to: subscriber.email, subject: "", html: `
-        <p>REPLACED_EXPIRED_SUB</p>
-        <p>REPLACED</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · Non-custodial subscription protocol</p>
-      `,
-      text: `Your ${merchantName} subscription expired on ${expiredDate}. Resubscribe at authonce.io/my-subscriptions.`,
-    }); }
-  }
+  const merchantName = await getMerchantName(sub.merchant_address);
+  const expiredDate  = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const expiredSubTpl = templates.subscriptionExpired({ name: subscriber?.name, merchantName, expiredDate });
+  await notifySubscriber({
+    sub,
+    title: `Your ${merchantName} subscription has expired`,
+    emailSubject: templates.subjects.subscriptionExpired(merchantName),
+    emailHtml: expiredSubTpl.html,
+    emailText: expiredSubTpl.text || `Your ${merchantName} subscription expired on ${expiredDate}. Resubscribe at authonce.io/my-subscriptions.`,
+    pushBody: `Your ${merchantName} subscription expired on ${expiredDate}. Resubscribe to restore access.`,
+    ctaUrl: "https://authonce.io/my-subscriptions",
+  });
 
   // Email merchant
   const merchantEmail = await getMerchantEmail(sub.merchant_address);
   if (merchantEmail) {
-    const expiredDate = new Date(Number(timestamp) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    const expiredMerchantTpl = templates.merchantExpired({ subscriptionId: id.toString(), expiredDate, productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: subscriber?.email || null });
+    const expiredMerchantTpl = templates.merchantExpired({ subscriptionId: id.toString(), expiredDate, productName: sub.product_name || null, subscriberWallet: sub.owner_address || null, subscriberEmail: subscriber?.email || sub.subscriber_email || null });
     await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantExpired(), ...expiredMerchantTpl });
-    if (false) { await sendEmail({ to: merchantEmail, subject: "", html: `
-        <p>REPLACED_EXPIRED_MERCHANT</p>
-        <p>REPLACED</p>
-        <hr/>
-        <p style="font-size:12px;color:#94a3b8;">AuthOnce · <a href="https://authonce.io">authonce.io</a></p>
-      `,
-      text: `A subscription expired on ${expiredDate} after the grace period ended. No further payments will be collected.`,
-    }); }
   }
 
   await dispatchWebhook(sub.merchant_address, "subscription.expired", {
@@ -792,6 +857,7 @@ async function main() {
   console.log(`  Basescan: ${BASESCAN_URL}`);
   console.log(`  Mode:     Polling every ${POLL_INTERVAL / 1000}s`);
   console.log(`  Email:    ${resend ? "Resend configured" : "NO RESEND_API_KEY"}`);
+  console.log(`  Push:     ${process.env.PUSH_CHANNEL_PRIVATE_KEY ? "Push Protocol enabled" : "No PUSH_CHANNEL_PRIVATE_KEY (email/webhook only)"}`);
   console.log(`  DB:       ${process.env.DATABASE_URL ? "PostgreSQL connected" : "NO DATABASE_URL"}`);
   console.log("=".repeat(60));
 

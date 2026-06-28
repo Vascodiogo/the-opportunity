@@ -755,6 +755,58 @@ app.put("/api/merchants/:address", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// POST /api/subscriptions/link
+// Links product_slug and subscriber notification prefs to a subscription by tx_hash
+// Called from PayPage after on-chain subscription creation
+// -----------------------------------------------------------------------------
+app.post("/api/subscriptions/link", async (req, res) => {
+  try {
+    const {
+      tx_hash, product_slug, merchant_address,
+      subscriber_email, subscriber_webhook_url, is_contract_vault,
+    } = req.body;
+
+    if (!tx_hash) return res.status(400).json({ error: "tx_hash required" });
+
+    // Find subscription by tx_hash
+    const result = await db.query(
+      "SELECT id FROM subscriptions WHERE tx_hash = $1 LIMIT 1",
+      [tx_hash.toLowerCase()]
+    );
+
+    if (!result.rows.length) {
+      // Subscription may not be indexed yet — return 202 and let notifier index it
+      return res.status(202).json({ message: "subscription not yet indexed" });
+    }
+
+    const subId = result.rows[0].id;
+
+    // Update product_slug and notification prefs
+    await db.query(`
+      UPDATE subscriptions SET
+        product_slug           = COALESCE($2, product_slug),
+        subscriber_email       = COALESCE($3, subscriber_email),
+        subscriber_webhook_url = COALESCE($4, subscriber_webhook_url),
+        is_contract_vault      = COALESCE($5, is_contract_vault),
+        updated_at             = NOW()
+      WHERE id = $1
+    `, [
+      subId,
+      product_slug || null,
+      subscriber_email || null,
+      subscriber_webhook_url || null,
+      is_contract_vault != null ? is_contract_vault : null,
+    ]);
+
+    console.log(`[API] Linked subscription ${subId}: product_slug=${product_slug}, email=${subscriber_email ? "set" : "none"}, webhook=${subscriber_webhook_url ? "set" : "none"}, contract=${is_contract_vault}`);
+    res.json({ success: true, subscription_id: subId });
+  } catch (err) {
+    console.error("[API] subscriptions/link error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // GET /api/merchants/:address/subscriptions
 // -----------------------------------------------------------------------------
 app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req, res) => {
