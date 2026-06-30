@@ -30,8 +30,8 @@ export const RPC_URLS = [
 ];
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-export const VAULT_ADDRESS    = "0xAd7B4b66F5C0145cbC52c56918F7D6C2871d8c5d"; // v7
-export const REGISTRY_ADDRESS = "0x9183696fD048A28915eD0A6587f8FB1103b1D12E"; // v4
+export const VAULT_ADDRESS    = "0x483f59367b2e5BEbbF33a6A110B1F1C42C706564"; // v7
+export const REGISTRY_ADDRESS = "0x393BA721aB45f4d4DaAC1B914e7F6377508C0299"; // v4
 export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
@@ -95,6 +95,29 @@ export const VAULT_ABI = [
       { name: "trialDays",        type: "uint256" },
       { name: "gracePeriodDays_", type: "uint256" },
       { name: "dataVaultId_",     type: "bytes32" },
+    ],
+    outputs: [{ name: "id", type: "uint256" }],
+  },
+  {
+    name: "createSubscriptionWithPermit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "merchant",         type: "address" },
+      { name: "safeVault",        type: "address" },
+      { name: "token",            type: "address" },
+      { name: "amount",           type: "uint256" },
+      { name: "introAmount",      type: "uint256" },
+      { name: "introPulls",       type: "uint256" },
+      { name: "interval",         type: "uint8"   },
+      { name: "guardian",         type: "address" },
+      { name: "trialDays",        type: "uint256" },
+      { name: "gracePeriodDays_", type: "uint256" },
+      { name: "dataVaultId_",     type: "bytes32" },
+      { name: "permitDeadline",   type: "uint256" },
+      { name: "v",                type: "uint8"   },
+      { name: "r",                type: "bytes32" },
+      { name: "s",                type: "bytes32" },
     ],
     outputs: [{ name: "id", type: "uint256" }],
   },

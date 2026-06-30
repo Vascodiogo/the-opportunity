@@ -8,6 +8,7 @@ import {
   useAccount, useDisconnect,
   useWriteContract, useWaitForTransactionReceipt,
   useReadContract, useChainId, useSwitchChain,
+  useSignTypedData,
 } from "wagmi";
 import { parseUnits } from "viem";
 import { baseSepolia } from "wagmi/chains";
@@ -24,6 +25,46 @@ const USDC_APPROVE_ABI = [
     name: "allowance", type: "function", stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "nonces", type: "function", stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+];
+
+// ─── EIP-2612 permit support ──────────────────────────────────────────────────
+// Only USDC and EURC support permit() on Base (both are Circle FiatToken
+// contracts). DAI uses a non-standard permit interface (bool allowed, not
+// value) — not wired up here, falls back to approve+subscribe. USDT has no
+// permit() at all on any chain — always falls back to approve+subscribe.
+// Tokens not listed here automatically use the two-step flow.
+const PERMIT_SUPPORTED_TOKENS = {
+  usdc: { name: "USDC", version: "2" },
+  eurc: { name: "EURC", version: "2" },
+};
+
+const VAULT_PERMIT_ABI = [
+  {
+    name: "createSubscriptionWithPermit", type: "function", stateMutability: "nonpayable",
+    inputs: [
+      { name: "merchant",         type: "address" },
+      { name: "safeVault",        type: "address" },
+      { name: "token",            type: "address" },
+      { name: "amount",           type: "uint256" },
+      { name: "introAmount",      type: "uint256" },
+      { name: "introPulls",       type: "uint256" },
+      { name: "interval",         type: "uint8"   },
+      { name: "guardian",         type: "address" },
+      { name: "trialDays",        type: "uint256" },
+      { name: "gracePeriodDays_", type: "uint256" },
+      { name: "dataVaultId_",     type: "bytes32" },
+      { name: "permitDeadline",   type: "uint256" },
+      { name: "v",                type: "uint8"   },
+      { name: "r",                type: "bytes32" },
+      { name: "s",                type: "bytes32" },
+    ],
+    outputs: [{ name: "id", type: "uint256" }],
   },
 ];
 
@@ -195,6 +236,7 @@ export default function PayPage() {
   const { disconnect }           = useDisconnect();
   const { switchChain }          = useSwitchChain();
   const { writeContractAsync }   = useWriteContract();
+  const { signTypedDataAsync }   = useSignTypedData();
 
   const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
     hash: approveTxHash, query: { enabled: !!approveTxHash },
@@ -230,6 +272,17 @@ export default function PayPage() {
   const { data: currentAllowance } = useReadContract({
     address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "allowance",
     args: [address, VAULT_ADDRESS], query: { enabled: !!address && !!product },
+  });
+
+  // Whether the selected token supports EIP-2612 permit (USDC, EURC only).
+  // Everything else (USDT, DAI) falls back to the existing two-step flow.
+  const tokenSupportsPermit = !!PERMIT_SUPPORTED_TOKENS[selectedToken];
+
+  // Subscriber's current permit nonce on the token contract — required to
+  // build a valid EIP-712 signature. Only fetched for permit-capable tokens.
+  const { data: permitNonce } = useReadContract({
+    address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "nonces",
+    args: [address], query: { enabled: !!address && !!product && tokenSupportsPermit },
   });
 
   // Detect if connected wallet is a smart contract (AI agent) or EOA
@@ -320,11 +373,97 @@ export default function PayPage() {
   const hasTrial       = trialDays > 0;
   const hasIntro       = product?.intro_amount > 0 && product?.intro_pulls > 0;
 
-  const handleApprove = async () => {
+  // ─── One-signature subscribe via EIP-2612 permit ─────────────────────────
+  // Used for USDC and EURC. Subscriber signs a single EIP-712 typed message
+  // (no gas, no separate transaction) authorising the vault to pull `amount`.
+  // That signature is submitted on-chain inside createSubscriptionWithPermit,
+  // which calls the token's permit() then creates the subscription in the
+  // same transaction. Net result: one wallet prompt, one confirmation.
+  const handleSubscribeWithPermit = async () => {
     if (!product || !address || !resolvedAddress) {
       setErrorMsg("Could not resolve merchant. Please refresh."); return;
     }
     setErrorMsg("");
+    setFlowStatus("subscribing");
+    try {
+      const tokenDomain = PERMIT_SUPPORTED_TOKENS[selectedToken];
+      const deadline     = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 min validity
+      const nonce        = permitNonce ?? 0n;
+
+      const signature = await signTypedDataAsync({
+        domain: {
+          name: tokenDomain.name,
+          version: tokenDomain.version,
+          chainId: baseSepolia.id,
+          verifyingContract: selectedTokenAddress,
+        },
+        types: {
+          Permit: [
+            { name: "owner",    type: "address" },
+            { name: "spender",  type: "address" },
+            { name: "value",    type: "uint256" },
+            { name: "nonce",    type: "uint256" },
+            { name: "deadline", type: "uint256" },
+          ],
+        },
+        primaryType: "Permit",
+        message: {
+          owner: address,
+          spender: VAULT_ADDRESS,
+          value: amountRaw,
+          nonce,
+          deadline,
+        },
+      });
+
+      // Split the 65-byte signature into v, r, s for the contract call.
+      const sig = signature.slice(2);
+      const r = `0x${sig.slice(0, 64)}`;
+      const s = `0x${sig.slice(64, 128)}`;
+      const v = parseInt(sig.slice(128, 130), 16);
+
+      const introAmountRaw = hasIntro && !isYearly ? parseUnits(product.intro_amount.toString(), selectedTokenMeta.decimals) : 0n;
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS, abi: VAULT_PERMIT_ABI, functionName: "createSubscriptionWithPermit",
+        args: [
+          resolvedAddress,
+          address,
+          selectedTokenAddress,
+          amountRaw,
+          introAmountRaw,
+          isYearly ? 0n : BigInt(product.intro_pulls || 0),
+          isYearly ? 2 : product.interval,
+          ZERO_ADDRESS,
+          BigInt(trialDays),
+          0n,
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          deadline,
+          v, r, s,
+        ],
+      });
+      setSubscribeTxHash(hash);
+    } catch (err) {
+      // Permit signature rejected, or token's permit() failed on-chain
+      // (PermitFailed revert) — fall back to the standard two-step flow
+      // rather than leaving the subscriber stuck.
+      console.warn("[PayPage] Permit flow failed, falling back to approve+subscribe:", err);
+      setFlowStatus("connected");
+      await handleApprove(true);
+    }
+  };
+
+  const handleApprove = async (skipPermitAttempt = false) => {
+    if (!product || !address || !resolvedAddress) {
+      setErrorMsg("Could not resolve merchant. Please refresh."); return;
+    }
+    setErrorMsg("");
+
+    // Prefer the one-signature permit flow for supported tokens, unless this
+    // call is itself the fallback path after a permit attempt already failed.
+    if (!skipPermitAttempt && tokenSupportsPermit && (currentAllowance === undefined || currentAllowance < amountRaw)) {
+      await handleSubscribeWithPermit(); return;
+    }
+
     if (currentAllowance !== undefined && currentAllowance >= amountRaw) {
       await handleCreateSubscription(); return;
     }
@@ -790,7 +929,10 @@ export default function PayPage() {
                 {/* Trust signals */}
                 {flowStatus === "connected" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, padding: "14px 16px", background: "var(--bg-tag)", borderRadius: 10, border: "0.5px solid var(--border)" }}>
-                    <TrustRow icon="⚡" text={`Two transactions — approve ${selectedTokenMeta.label}, then subscribe`} />
+                    {tokenSupportsPermit
+                      ? <TrustRow icon="⚡" text={`One signature — ${selectedTokenMeta.label} approval and subscription happen together`} />
+                      : <TrustRow icon="⚡" text={`Two transactions — approve ${selectedTokenMeta.label}, then subscribe`} />
+                    }
                     {isYearly && <TrustRow icon="📅" text={`Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`} />}
                     {hasTrial && <TrustRow icon="🎁" text={`${trialDays}-day free trial — first payment after trial ends`} />}
                     {hasIntro && !hasTrial && !isYearly && <TrustRow icon="🎁" text={`Intro $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalPlural}, then $${product.amount?.toFixed(2)}`} />}
@@ -809,7 +951,7 @@ export default function PayPage() {
                   }}>
                     {stepApprove && !approveConfirmed && "Waiting for approval confirmation..."}
                     {approveConfirmed && stepSubscribe && "Approved. Creating subscription..."}
-                    {stepSubscribe && !subscribeConfirmed && !approveConfirmed && "Creating subscription on-chain..."}
+                    {stepSubscribe && !subscribeConfirmed && !approveConfirmed && (tokenSupportsPermit ? "Confirm the signature in your wallet..." : "Creating subscription on-chain...")}
                   </div>
                 )}
 
@@ -820,7 +962,7 @@ export default function PayPage() {
                 {flowStatus === "connected" && (
                   <button
                     style={ctaBtn(isWrongNetwork || !resolvedAddress)}
-                    onClick={handleApprove}
+                    onClick={() => handleApprove()}
                     disabled={isWrongNetwork || !resolvedAddress}
                   >
                     {hasTrial && !isYearly

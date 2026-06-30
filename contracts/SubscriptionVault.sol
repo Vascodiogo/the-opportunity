@@ -30,6 +30,17 @@ pragma solidity 0.8.24;
 //            Eliminates stale lastPulledAt if fee transfer path fails after
 //            merchant payment succeeds.
 //
+//    [V7-P1] NEW — createSubscriptionWithPermit() added. Lets a subscriber
+//            authorise via a single EIP-2612 signed permit instead of a
+//            separate approve() transaction followed by createSubscription().
+//            One wallet signature, one on-chain transaction. Falls back to
+//            the existing two-step approve()+createSubscription() flow for
+//            tokens that do not implement EIP-2612 permit() (reverts cleanly
+//            with "PermitFailed" if the token's permit() call fails).
+//            createSubscription() validation logic extracted into
+//            _createSubscriptionInternal() — both entry points share one
+//            audited code path for subscription creation invariants.
+//
 //  EIP-712 domain:
 //    name:              "AuthOnce"
 //    version:           "7"
@@ -119,6 +130,29 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
     function decimals() external view returns (uint8);
+}
+
+// -----------------------------------------------------------------------------
+// Interface — EIP-2612 Permit
+// Allows gasless approval via off-chain signature. Subscriber signs a typed
+// message once; no separate approve() transaction is required. The token
+// contract verifies the signature and sets allowance atomically inside the
+// same transaction that calls permit(). Not all ERC-20 tokens implement this
+// (USDC, USDT on most chains do). createSubscriptionWithPermit() reverts
+// cleanly if the token does not support permit — callers must fall back to
+// the standard approve() + createSubscription() flow for non-permit tokens.
+// -----------------------------------------------------------------------------
+
+interface IERC20Permit {
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8   v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 }
 
 // -----------------------------------------------------------------------------
@@ -535,12 +569,105 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         bytes32  dataVaultId_
     ) external returns (uint256 id) {
         // [H2] safeVault must be the caller.
-        require(safeVault == msg.sender,   "VaultMustBeCaller");
+        require(safeVault == msg.sender, "VaultMustBeCaller");
 
+        id = _createSubscriptionInternal(
+            merchant, safeVault, token, amount, introAmount, introPulls,
+            interval, guardian, trialDays, gracePeriodDays_, dataVaultId_
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // [V7-P1] EIP-2612 gasless permit entry point.
+    //
+    // Lets a subscriber authorise AuthOnce in a single on-chain transaction
+    // instead of two (approve, then createSubscription). The subscriber signs
+    // an off-chain EIP-712 permit message in their wallet (no gas, no separate
+    // transaction); this function submits that signature to the token's
+    // permit() function and immediately calls createSubscription() in the
+    // same call. From the subscriber's perspective this is one wallet prompt
+    // and one on-chain confirmation.
+    //
+    // Falls back cleanly: if the token does not implement EIP-2612 (permit()
+    // reverts or the call fails), this function reverts with "PermitFailed"
+    // and the frontend should fall back to the standard approve() +
+    // createSubscription() two-step flow for that token.
+    //
+    // Security notes:
+    //   - permit() is called with owner = msg.sender, spender = address(this).
+    //     Matches the existing invariant that safeVault == msg.sender in
+    //     createSubscription — the signer must be the same address calling
+    //     this function, preventing signature replay by a third party.
+    //   - value passed to permit() is the exact subscription `amount`, not an
+    //     unlimited approval. Each subscription's first-pull allowance is
+    //     scoped to that subscription only. Future pulls rely on the vault's
+    //     existing nextPullAmount() + executePull() allowance checks exactly
+    //     as today — this does not change recurring-pull security model at
+    //     all, only how the FIRST approval is granted.
+    //   - deadline, v, r, s are passed straight through to the token's
+    //     permit(); the token contract itself enforces the standard EIP-2612
+    //     signature and deadline checks. No additional trust is placed in
+    //     this contract beyond what permit() already provides.
+    // -------------------------------------------------------------------------
+    function createSubscriptionWithPermit(
+        address  merchant,
+        address  safeVault,
+        address  token,
+        uint256  amount,
+        uint256  introAmount,
+        uint256  introPulls,
+        Interval interval,
+        address  guardian,
+        uint256  trialDays,
+        uint256  gracePeriodDays_,
+        bytes32  dataVaultId_,
+        uint256  permitDeadline,
+        uint8    v,
+        bytes32  r,
+        bytes32  s
+    ) external returns (uint256 id) {
+        // Same caller invariant as createSubscription [H2]. Checked here
+        // explicitly (not just inside _createSubscriptionInternal) so the
+        // permit() call below only ever executes for the legitimate vault
+        // owner — never on behalf of a third party relaying a signature.
+        require(safeVault == msg.sender, "VaultMustBeCaller");
+
+        // Submit the EIP-2612 permit signature to the token contract.
+        // Approves this vault to pull exactly `amount` from msg.sender.
+        try IERC20Permit(token).permit(
+            msg.sender, address(this), amount, permitDeadline, v, r, s
+        ) {
+            // permit succeeded — allowance is now set on-chain
+        } catch {
+            revert("PermitFailed");
+        }
+
+        id = _createSubscriptionInternal(
+            merchant, safeVault, token, amount, introAmount, introPulls,
+            interval, guardian, trialDays, gracePeriodDays_, dataVaultId_
+        );
+    }
+
+    /// @dev Internal subscription-creation logic shared by createSubscription()
+    ///      and createSubscriptionWithPermit(). Extracted so the permit path
+    ///      does not duplicate validation logic — single source of truth for
+    ///      subscription invariants, audited once.
+    function _createSubscriptionInternal(
+        address  merchant,
+        address  safeVault,
+        address  token,
+        uint256  amount,
+        uint256  introAmount,
+        uint256  introPulls,
+        Interval interval,
+        address  guardian,
+        uint256  trialDays,
+        uint256  gracePeriodDays_,
+        bytes32  dataVaultId_
+    ) internal returns (uint256 id) {
         require(merchant  != address(0),   "ZeroMerchant");
         require(token     != address(0),   "ZeroToken");
         require(amount    >  0,            "ZeroAmount");
-        // [SV-11] Cap subscription amount to prevent misconfigured subscriptions.
         require(amount    <= MAX_SUBSCRIPTION_AMOUNT, "AmountTooHigh");
         require(approvedTokens[token],     "TokenNotApproved");
         require(
@@ -553,7 +680,6 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             introAmount == 0 || introAmount <= amount,
             "IntroExceedsFull"
         );
-        // [SV-11] Cap introAmount as well.
         require(
             introAmount == 0 || introAmount <= MAX_SUBSCRIPTION_AMOUNT,
             "IntroAmountTooHigh"
@@ -571,16 +697,6 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 graceDays   = gracePeriodDays_ == 0 ? DEFAULT_GRACE_DAYS : gracePeriodDays_;
         uint256 trialEndsAt = trialDays > 0 ? block.timestamp + (trialDays * 1 days) : 0;
 
-        // [SV-01] Detect vault type at creation time and store immutably.
-        // extcodesize is called once here. executePull uses the stored flag.
-        // A contract subscribing from within its own constructor will have
-        // extcodesize == 0 here — isContractVault = false — making the bypass
-        // explicit, auditable, and on-chain: the subscription will be treated
-        // as an EOA subscription permanently.
-        // NOTE: This is a known trade-off. Legitimate contract wallets MUST
-        // call createSubscription after their constructor completes (i.e., from
-        // a deployed wallet, not during deployment). This is standard practice
-        // for all ERC-1271 integrations.
         bool contractVault = _isContract(safeVault);
 
         id = _nextSubscriptionId++;
