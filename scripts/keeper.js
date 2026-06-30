@@ -28,7 +28,7 @@ if (!process.env.VAULT_ADDRESS) throw new Error("VAULT_ADDRESS not set in env");
 const VAULT_ADDRESS   = ethers.getAddress(process.env.VAULT_ADDRESS.trim());
 const RPC_URL         = (process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org").trim();
 const KEEPER_PRIVKEY  = (process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || "").trim();
-const RUN_INTERVAL_MS = 60_000;
+const RUN_INTERVAL_MS = 20_000; // reduced from 60s for faster detection of due subscriptions
 
 // ─── DB pool (optional — falls back to on-chain scan if DATABASE_URL not set) ─
 const db = process.env.DATABASE_URL
@@ -213,130 +213,143 @@ async function getSubscriptionIds(vault) {
 }
 
 // ─── Process active subscriptions ────────────────────────────────────────────
+// Processes subscriptions in parallel batches (CONCURRENCY at a time) instead
+// of one-by-one. Same keeper wallet, same executePull() call, same checks —
+// just concurrent RPC calls instead of sequential waits. This is the
+// throughput fix: most time per pull is RPC round-trip latency, not CPU,
+// so batching directly multiplies effective pulls/minute.
+const CONCURRENCY = 5;
+
+async function processOneSubscription(vault, wallet, id) {
+  const sub    = await vault.subscriptions(id);
+  const status = Number(sub.status);
+
+  // ── Active: check if due and pull ──────────────────────────────────────
+  if (status === STATUS.Active) {
+    const due = await vault.isDue(id);
+
+    if (!due) {
+      const now = Math.floor(Date.now() / 1000);
+      const billingPausedUntil = Number(sub.billingPausedUntil);
+      if (billingPausedUntil > 0 && now < billingPausedUntil) {
+        const hoursLeft = Math.ceil((billingPausedUntil - now) / 3600);
+        console.log(`  Subscription #${id} billing paused by merchant for ${hoursLeft}h more.`);
+      }
+      return { pulled: 0, skipped: 1 };
+    }
+
+    const pullAmount     = await vault.nextPullAmount(id);
+    const isIntro        = await vault.inIntroPricing(id);
+    const introPullsLeft = isIntro ? await vault.introPullsRemaining(id) : 0n;
+    const vaultType = sub.isContractVault ? "contract-wallet (ERC-1271)" : "EOA";
+
+    console.log(`  -> Pulling subscription #${id}`);
+    console.log(`     Owner:      ${sub.owner}`);
+    console.log(`     Merchant:   ${sub.merchant}`);
+    console.log(`     Vault type: ${vaultType}`);
+    console.log(`     Amount:     ${ethers.formatUnits(pullAmount, 6)} USDC${isIntro ? ` (intro — ${introPullsLeft} pulls remaining at intro price)` : ""}`);
+    console.log(`     Interval:   ${INTERVAL_NAME[Number(sub.interval)]}`);
+
+    if (sub.isContractVault) {
+      console.warn(`     WARNING: Subscription #${id} is a contract vault. ERC-1271 signing not yet implemented in keeper. Skipping.`);
+      console.warn(`     ACTION:  Upgrade keeper to v6.1 before onboarding contract wallet subscribers.`);
+      await logPullAttempt({
+        subscriptionId: id,
+        wallet:   sub.owner,
+        merchant: sub.merchant,
+        amountUsdc: ethers.formatUnits(pullAmount, 6),
+        status:   "skipped",
+        error:    "contract-vault: ERC-1271 not yet implemented",
+      });
+      return { pulled: 0, skipped: 1 };
+    }
+
+    try {
+      const BUILDER_CODE = "0x62635f6361336b376235320b0080218021802180218021802180218021";
+      const encodedCall  = vault.interface.encodeFunctionData("executePull", [id, 0, "0x"]);
+      const calldataWithCode = encodedCall + BUILDER_CODE.slice(2);
+      const tx = await wallet.sendTransaction({
+        to: VAULT_ADDRESS,
+        data: calldataWithCode,
+      });
+      console.log(`     TX sent:  ${tx.hash}`);
+      const receipt = await tx.wait();
+      console.log(`     Confirmed in block ${receipt.blockNumber}`);
+      await logPullAttempt({
+        subscriptionId: id,
+        wallet:   sub.owner,
+        merchant: sub.merchant,
+        amountUsdc: ethers.formatUnits(pullAmount, 6),
+        status:   "success",
+        txHash:   tx.hash,
+        blockNumber: receipt.blockNumber,
+      });
+      console.log("");
+      return { pulled: 1, skipped: 0 };
+    } catch (err) {
+      console.error(`     executePull failed: ${err.message}`);
+      await logPullAttempt({
+        subscriptionId: id,
+        wallet:   sub.owner,
+        merchant: sub.merchant,
+        amountUsdc: ethers.formatUnits(pullAmount, 6),
+        status:   "failed",
+        error:    err.message?.slice(0, 500),
+      });
+      console.log("");
+      return { pulled: 0, skipped: 0 };
+    }
+  }
+
+  // ── Paused: retry if vault topped up within grace period ────────────────
+  if (status === STATUS.Paused) {
+    const pausedAt       = Number(sub.pausedAt);
+    const graceSecs      = Number(sub.gracePeriodDays) * 86_400;
+    const now            = Math.floor(Date.now() / 1000);
+    const gracePeriodEnd = pausedAt + graceSecs;
+
+    if (now > gracePeriodEnd) return { pulled: 0, skipped: 0 }; // will be expired by expiry loop
+
+    const balance   = await vault.vaultBalance(id);
+    const allowance = await vault.vaultAllowance(id);
+    const required  = await vault.nextPullAmount(id);
+
+    if (balance >= required && allowance >= required) {
+      console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
+      console.log(`     Balance: ${ethers.formatUnits(balance, 6)} USDC, Required: ${ethers.formatUnits(required, 6)} USDC`);
+      console.log(`     Subscriber must call resumeSubscription to reactivate.`);
+      return { pulled: 0, skipped: 1 };
+    } else {
+      const balFmt         = ethers.formatUnits(balance, 6);
+      const reqFmt         = ethers.formatUnits(required, 6);
+      const alwFmt         = ethers.formatUnits(allowance, 6);
+      const graceRemaining = Math.floor((gracePeriodEnd - now) / 3600);
+      console.log(`  Subscription #${id} in grace (${graceRemaining}h left) — balance: ${balFmt} USDC, allowance: ${alwFmt} USDC, required: ${reqFmt} USDC`);
+      return { pulled: 0, skipped: 1 };
+    }
+  }
+
+  return { pulled: 0, skipped: 0 };
+}
+
 async function processDueSubscriptions(vault, wallet, ids) {
   let pulled  = 0;
   let skipped = 0;
 
-  for (const id of ids) {
-    const sub    = await vault.subscriptions(id);
-    const status = Number(sub.status);
-
-    // ── Active: check if due and pull ──────────────────────────────────────
-    if (status === STATUS.Active) {
-      const due = await vault.isDue(id);
-
-      if (!due) {
-        // [SV-02] Log reason for skip: billing pause vs interval not elapsed.
-        const now = Math.floor(Date.now() / 1000);
-        const billingPausedUntil = Number(sub.billingPausedUntil);
-        if (billingPausedUntil > 0 && now < billingPausedUntil) {
-          const hoursLeft = Math.ceil((billingPausedUntil - now) / 3600);
-          console.log(`  Subscription #${id} billing paused by merchant for ${hoursLeft}h more.`);
-        }
-        skipped++;
-        continue;
-      }
-
-      const pullAmount     = await vault.nextPullAmount(id);
-      const isIntro        = await vault.inIntroPricing(id);
-      const introPullsLeft = isIntro ? await vault.introPullsRemaining(id) : 0n;
-
-      // [SV-01] Log vault type for observability.
-      const vaultType = sub.isContractVault ? "contract-wallet (ERC-1271)" : "EOA";
-
-      console.log(`  -> Pulling subscription #${id}`);
-      console.log(`     Owner:      ${sub.owner}`);
-      console.log(`     Merchant:   ${sub.merchant}`);
-      console.log(`     Vault type: ${vaultType}`);
-      console.log(`     Amount:     ${ethers.formatUnits(pullAmount, 6)} USDC${isIntro ? ` (intro — ${introPullsLeft} pulls remaining at intro price)` : ""}`);
-      console.log(`     Interval:   ${INTERVAL_NAME[Number(sub.interval)]}`);
-
-      // [SV-01] Contract vault path — ERC-1271 signature required.
-      // Currently all subscribers are EOA. ERC-1271 full flow planned for v6.1.
-      if (sub.isContractVault) {
-        console.warn(`     WARNING: Subscription #${id} is a contract vault. ERC-1271 signing not yet implemented in keeper. Skipping.`);
-        console.warn(`     ACTION:  Upgrade keeper to v6.1 before onboarding contract wallet subscribers.`);
-        skipped++;
-        await logPullAttempt({
-          subscriptionId: id,
-          wallet:   sub.owner,
-          merchant: sub.merchant,
-          amountUsdc: ethers.formatUnits(pullAmount, 6),
-          status:   "skipped",
-          error:    "contract-vault: ERC-1271 not yet implemented",
-        });
-        continue;
-      }
-
-      try {
-        // EOA path: deadline=0, signature="0x"
-        // Append Base Builder Code to calldata for leaderboard attribution
-        const BUILDER_CODE = "0x62635f6361336b376235320b0080218021802180218021802180218021";
-        const encodedCall  = vault.interface.encodeFunctionData("executePull", [id, 0, "0x"]);
-        const calldataWithCode = encodedCall + BUILDER_CODE.slice(2); // append without 0x prefix
-        const tx = await wallet.sendTransaction({
-          to: VAULT_ADDRESS,
-          data: calldataWithCode,
-        });
-        console.log(`     TX sent:  ${tx.hash}`);
-        const receipt = await tx.wait();
-        console.log(`     Confirmed in block ${receipt.blockNumber}`);
-        pulled++;
-        // ── Log successful pull to DB ────────────────────────────────────────
-        await logPullAttempt({
-          subscriptionId: id,
-          wallet:   sub.owner,
-          merchant: sub.merchant,
-          amountUsdc: ethers.formatUnits(pullAmount, 6),
-          status:   "success",
-          txHash:   tx.hash,
-          blockNumber: receipt.blockNumber,
-        });
-      } catch (err) {
-        console.error(`     executePull failed: ${err.message}`);
-        // ── Log failed pull to DB ────────────────────────────────────────────
-        await logPullAttempt({
-          subscriptionId: id,
-          wallet:   sub.owner,
-          merchant: sub.merchant,
-          amountUsdc: ethers.formatUnits(pullAmount, 6),
-          status:   "failed",
-          error:    err.message?.slice(0, 500),
-        });
-      }
-      console.log("");
-    }
-
-    // ── Paused: retry if vault topped up within grace period ────────────────
-    if (status === STATUS.Paused) {
-      const pausedAt       = Number(sub.pausedAt);
-      const graceSecs      = Number(sub.gracePeriodDays) * 86_400;
-      const now            = Math.floor(Date.now() / 1000);
-      const gracePeriodEnd = pausedAt + graceSecs;
-
-      if (now > gracePeriodEnd) continue; // will be expired by expiry loop
-
-      const balance   = await vault.vaultBalance(id);
-      const allowance = await vault.vaultAllowance(id);
-      const required  = await vault.nextPullAmount(id);
-
-      if (balance >= required && allowance >= required) {
-        // Vault is funded and allowance restored during grace period.
-        // Keeper does NOT call resumeSubscription — only the subscriber/guardian
-        // can resume. Keeper's role is executePull and expireSubscription only.
-        // Log the recovery state so notifier can send subscriber a reminder.
-        console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
-        console.log(`     Balance: ${ethers.formatUnits(balance, 6)} USDC, Required: ${ethers.formatUnits(required, 6)} USDC`);
-        console.log(`     Subscriber must call resumeSubscription to reactivate.`);
-        skipped++;
-      } else {
-        const balFmt         = ethers.formatUnits(balance, 6);
-        const reqFmt         = ethers.formatUnits(required, 6);
-        const alwFmt         = ethers.formatUnits(allowance, 6);
-        const graceRemaining = Math.floor((gracePeriodEnd - now) / 3600);
-        console.log(`  Subscription #${id} in grace (${graceRemaining}h left) — balance: ${balFmt} USDC, allowance: ${alwFmt} USDC, required: ${reqFmt} USDC`);
-        skipped++;
-      }
+  // Process in batches of CONCURRENCY, parallel within each batch.
+  // Sequential pulls were the bottleneck — each await blocked on RPC
+  // round-trip even when nothing depends on the previous result.
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const batch = ids.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(id => processOneSubscription(vault, wallet, id).catch(err => {
+        console.error(`  Subscription #${id} processing error: ${err.message}`);
+        return { pulled: 0, skipped: 0 };
+      }))
+    );
+    for (const r of results) {
+      pulled  += r.pulled;
+      skipped += r.skipped;
     }
   }
 
@@ -390,6 +403,7 @@ async function run() {
   console.log(`  Keeper:   ${wallet.address}`);
   console.log(`  RPC:      ${RPC_URL}`);
   console.log(`  Interval: every ${RUN_INTERVAL_MS / 1000}s`);
+  console.log(`  Concurrency: ${CONCURRENCY} parallel pulls per batch`);
   console.log("=".repeat(60));
   console.log("");
 
