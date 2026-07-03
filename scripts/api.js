@@ -2431,10 +2431,58 @@ app.get("/api/subscriber/me", async (req, res) => {
   }
 });
 
+// Verifies that whoever is asking for wallet X's subscriptions actually
+// controls wallet X — either via a Google-session JWT whose derived wallet
+// matches, or via a fresh signed message from the wallet itself.
+//
+// Message format: "AuthOnce: view my subscriptions (<unix_ms_timestamp>)"
+// The timestamp is checked against a 5-minute window so a captured signature
+// can't be replayed indefinitely — it's not a nonce-backed session, but it
+// closes the "any address in a URL returns that address's data" hole with no
+// new schema or session storage required.
+const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
+
+async function verifySubscriptionsAccess(req, wallet) {
+  const auth = req.headers.authorization;
+  if (auth?.startsWith("Bearer ")) {
+    try {
+      const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+      if (decoded.type === "subscriber" && decoded.wallet?.toLowerCase() === wallet) {
+        return true;
+      }
+    } catch { /* fall through to signature check */ }
+  }
+
+  const { signature, timestamp } = req.query;
+  if (!signature || !timestamp) return false;
+
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > SIGNATURE_WINDOW_MS) return false;
+
+  try {
+    const message = `AuthOnce: view my subscriptions (${ts})`;
+    const recovered = ethers.verifyMessage(message, signature);
+    return recovered.toLowerCase() === wallet;
+  } catch {
+    return false;
+  }
+}
+
 // GET /api/subscriber/subscriptions/:walletAddress
+// Requires either a matching Google-session JWT, or a fresh signature from
+// the wallet itself (?signature=...&timestamp=...) proving ownership.
 app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
   try {
     const wallet = req.params.walletAddress.toLowerCase();
+
+    const authorized = await verifySubscriptionsAccess(req, wallet);
+    if (!authorized) {
+      return res.status(401).json({
+        error: "unauthorized",
+        message: "Sign a message with this wallet, or log in with the Google account linked to it.",
+      });
+    }
+
     const result = await db.query(`
       SELECT
         s.id             AS subscription_id,
