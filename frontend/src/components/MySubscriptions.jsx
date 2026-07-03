@@ -1,7 +1,7 @@
 // src/components/MySubscriptions.jsx — Visual redesign May 2026
 // Logic: unchanged. Visual: CSS variables, consistent tokens, no hardcoded colors.
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSignMessage } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { VAULT_ADDRESS, VAULT_ABI } from "../config.js";
 
@@ -351,8 +351,10 @@ export default function MySubscriptions() {
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState("");
   const [filter, setFilter]             = useState("active");
+  const [walletAuthError, setWalletAuthError] = useState("");
 
-  const { address } = useAccount();
+  const { address }            = useAccount();
+  const { signMessageAsync }   = useSignMessage();
 
   useEffect(() => {
     const params   = new URLSearchParams(window.location.search);
@@ -374,6 +376,21 @@ export default function MySubscriptions() {
       .catch(() => setError("Could not load your profile."));
   }, [token]);
 
+  // Merges subscriptions from whichever source(s) are active — Google-derived
+  // wallet, connected wallet, or both — instead of one overwriting the other.
+  // A subscriber who both logged in with Google and connects their own wallet
+  // sees everything, deduped by subscription_id.
+  const mergeSubscriptions = (incoming) => {
+    setSubscriptions(prev => {
+      const byId = new Map(prev.map(s => [s.subscription_id, s]));
+      incoming.forEach(s => byId.set(s.subscription_id, s));
+      return Array.from(byId.values()).sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+    });
+  };
+
+  // Google/custodial path — unchanged except it now merges instead of overwrites.
   useEffect(() => {
     if (!subscriber?.wallet_address) return;
     setLoading(true);
@@ -381,10 +398,39 @@ export default function MySubscriptions() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => setSubscriptions(data.subscriptions || []))
+      .then(data => mergeSubscriptions(data.subscriptions || []))
       .catch(() => setError("Could not load subscriptions."))
       .finally(() => setLoading(false));
   }, [subscriber]);
+
+  // Self-custody path — no Google account needed. Subscriber signs a short,
+  // free message proving they control the connected wallet; the backend
+  // verifies that signature before returning anything (see api.js).
+  // This is a signature only — no transaction, no gas, no key ever touches
+  // AuthOnce. It runs as soon as a wallet connects, whether or not the
+  // subscriber is also logged in with Google.
+  useEffect(() => {
+    if (!address) return;
+    setLoading(true);
+    setWalletAuthError("");
+    (async () => {
+      try {
+        const timestamp = Date.now();
+        const message = `AuthOnce: view my subscriptions (${timestamp})`;
+        const signature = await signMessageAsync({ message });
+        const res = await fetch(
+          `${API_BASE}/api/subscriber/subscriptions/${address}?signature=${encodeURIComponent(signature)}&timestamp=${timestamp}`
+        );
+        if (!res.ok) throw new Error("verification_failed");
+        const data = await res.json();
+        mergeSubscriptions(data.subscriptions || []);
+      } catch (err) {
+        setWalletAuthError("Could not verify this wallet. Try reconnecting and signing again.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [address]);
 
   const handleLogout = () => {
     sessionStorage.removeItem("subscriber_token");
@@ -411,7 +457,9 @@ export default function MySubscriptions() {
     .reduce((sum, s) => sum + parseFloat(s.amount_usdc || 0), 0);
 
   // ── Not logged in ────────────────────────────────────────────────────────────
-  if (!token) {
+  // Gate is "no Google session AND no connected wallet" — either path is a
+  // valid way in. Self-custody subscribers never need Google at all.
+  if (!token && !address) {
     return (
       <div style={{
         minHeight: "100vh", display: "flex", flexDirection: "column",
@@ -433,8 +481,24 @@ export default function MySubscriptions() {
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔐</div>
             <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8 }}>Sign in to continue</div>
             <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-              Use the same Google account you used when subscribing.
+              Connect the wallet you subscribed with, or use the Google account you used at checkout.
             </div>
+          </div>
+
+          {/* Wallet path — subscribed with MetaMask, Rabby, etc. No Google needed. */}
+          <div style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>
+            <ConnectButton />
+          </div>
+          {walletAuthError && (
+            <div style={{ fontSize: 12, color: "var(--red)", textAlign: "center", marginBottom: 16 }}>
+              {walletAuthError}
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>or</span>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
           </div>
 
           <button onClick={handleGoogleLogin} style={{
@@ -453,8 +517,8 @@ export default function MySubscriptions() {
           </button>
 
           <div style={{ marginTop: 20, fontSize: 11, color: "var(--text-faint)", textAlign: "center", lineHeight: 1.6 }}>
-            No password. No wallet required.<br/>
-            Your data stays private — we only store your email and subscription status.
+            Connecting a wallet only asks for a free signature to prove it's yours — no transaction, no gas.<br/>
+            Your data stays private — we only store your email or wallet address and subscription status.
           </div>
         </div>
 

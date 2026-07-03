@@ -13,6 +13,8 @@ import {
 import { parseUnits } from "viem";
 import { baseSepolia } from "wagmi/chains";
 
+import PermissionSteps from "./PermissionSteps";
+
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
 const USDC_APPROVE_ABI = [
@@ -520,6 +522,34 @@ export default function PayPage() {
   const subscribedDone  = subscribeConfirmed;
   const currentStep     = flowStatus === "idle" ? 1 : (flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") ? (approvedDone ? 3 : 2) : 3;
 
+  // Drives PermissionSteps + the pending-status text below.
+  // Your handleApprove() actually has THREE distinct on-chain paths, not two:
+  //   1. "permit"  — fresh allowance, permit-capable token → 1 signature + 1 tx
+  //   2. "legacy"  — fresh allowance, non-permit token      → approve tx + subscribe tx
+  //   3. "direct"  — allowance ALREADY sufficient, any token → single tx, no signing, no approve step
+  // Missing case 3 is what caused the USDC test to show "sign a message" copy
+  // when nothing was actually signed — allowance was already sufficient from
+  // an earlier test, so handleApprove() skipped straight to handleCreateSubscription().
+  const hasSufficientAllowance = currentAllowance !== undefined && currentAllowance >= amountRaw;
+  // approveTxHash is only ever set inside the pure-legacy / post-permit-failure
+  // branch, so its presence reliably means "we fell back to legacy," even if
+  // tokenSupportsPermit or hasSufficientAllowance would otherwise say otherwise.
+  const usedLegacyFallback = !!approveTxHash;
+  const flowMode = usedLegacyFallback
+    ? "legacy"
+    : hasSufficientAllowance
+    ? "direct"
+    : tokenSupportsPermit
+    ? "permit"
+    : "legacy";
+
+  const permissionStep =
+    flowMode === "direct"
+      ? (subscribedDone ? 2 : (stepSubscribe ? 1 : 0))
+      : flowMode === "permit"
+      ? (subscribedDone ? 3 : subscribeTxHash ? 2 : (stepSubscribe ? 1 : 0))
+      : (subscribedDone ? 3 : stepSubscribe ? 2 : stepApprove ? 1 : 0);
+
   // CTA button style — used in multiple places
   const ctaBtn = (disabled) => ({
     width: "100%", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 15,
@@ -926,13 +956,18 @@ export default function PayPage() {
                   </div>
                 )}
 
+                {/* Permission steps — what the subscriber will be asked to approve */}
+                {(flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") && (
+                  <PermissionSteps
+                    tokenSymbol={selectedTokenMeta.label}
+                    activeStep={permissionStep}
+                    mode={flowMode}
+                  />
+                )}
+
                 {/* Trust signals */}
                 {flowStatus === "connected" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20, padding: "14px 16px", background: "var(--bg-tag)", borderRadius: 10, border: "0.5px solid var(--border)" }}>
-                    {tokenSupportsPermit
-                      ? <TrustRow icon="⚡" text={`One signature — ${selectedTokenMeta.label} approval and subscription happen together`} />
-                      : <TrustRow icon="⚡" text={`Two transactions — approve ${selectedTokenMeta.label}, then subscribe`} />
-                    }
                     {isYearly && <TrustRow icon="📅" text={`Billed annually · $${(product.yearly_amount / 12).toFixed(2)}/month equivalent`} />}
                     {hasTrial && <TrustRow icon="🎁" text={`${trialDays}-day free trial — first payment after trial ends`} />}
                     {hasIntro && !hasTrial && !isYearly && <TrustRow icon="🎁" text={`Intro $${product.intro_amount.toFixed(2)} for ${product.intro_pulls} ${intervalPlural}, then $${product.amount?.toFixed(2)}`} />}
@@ -949,9 +984,14 @@ export default function PayPage() {
                     borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--green)",
                     textAlign: "center", marginBottom: 16,
                   }}>
-                    {stepApprove && !approveConfirmed && "Waiting for approval confirmation..."}
-                    {approveConfirmed && stepSubscribe && "Approved. Creating subscription..."}
-                    {stepSubscribe && !subscribeConfirmed && !approveConfirmed && (tokenSupportsPermit ? "Confirm the signature in your wallet..." : "Creating subscription on-chain...")}
+                    {flowMode === "legacy" && stepApprove && !approveConfirmed && "Waiting for approval confirmation..."}
+                    {flowMode === "legacy" && approveConfirmed && stepSubscribe && "Approved. Creating subscription..."}
+                    {flowMode === "legacy" && stepSubscribe && !subscribeConfirmed && !approveConfirmed && "Creating subscription on-chain..."}
+
+                    {flowMode === "permit" && stepSubscribe && !subscribeTxHash && "Confirm the signature in your wallet..."}
+                    {flowMode === "permit" && stepSubscribe && subscribeTxHash && !subscribeConfirmed && "Signed. Confirming on-chain..."}
+
+                    {flowMode === "direct" && stepSubscribe && !subscribeConfirmed && "Confirming on-chain..."}
                   </div>
                 )}
 
