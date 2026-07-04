@@ -269,6 +269,7 @@ async function checkUpcomingPayments(vault) {
       const interval        = Number(onchain.interval);
       const status          = Number(onchain.status);
       const trialEndsAt     = Number(onchain.trialEndsAt);
+      const lastPulledAt    = Number(onchain.lastPulledAt);
 
       if (status !== 0) continue; // Skip non-active
 
