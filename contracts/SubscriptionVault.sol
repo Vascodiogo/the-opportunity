@@ -385,6 +385,12 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
 
     uint16  public feeBps;
 
+    /// @notice Max subscription amount for contract-wallet (ERC-1271 / AI agent)
+    ///         subscribers. Checked once at creation, not per-pull, since amount
+    ///         is immutable per subscription. One-way ratchet — can only increase.
+    ///         EOA subscribers are unaffected; MAX_SUBSCRIPTION_AMOUNT still applies to everyone.
+    uint256 public maxAgentPullAmount;
+
     uint256 private _nextSubscriptionId;
 
     mapping(address => bool) public approvedTokens;
@@ -485,6 +491,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     event RegistryUpdated(address indexed oldRegistry, address indexed newRegistry);
     event KeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event FeeUpdated(uint16 oldFeeBps, uint16 newFeeBps);
+    event AgentPullCapUpdated(uint256 oldCap, uint256 newCap);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event AdminTransferProposed(address indexed currentAdmin, address indexed proposedAdmin);
     event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
@@ -534,6 +541,12 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         protocolTreasury = _protocolTreasury;
         merchantRegistry = _merchantRegistry;
         feeBps           = PROTOCOL_FEE_BPS;
+
+        // Starting agent pull cap = Business tier price (199 USDC, 6 decimals).
+        // Applies only to contract-wallet (ERC-1271) subscribers, including
+        // AuthOnce's own merchants paying their own tier via multisig/Safe.
+        // Admin-adjustable upward only — see setAgentPullCap().
+        maxAgentPullAmount = 199_000000;
 
         emit ProtocolDeployed(PROTOCOL, VERSION, msg.sender, _admin, block.chainid, block.timestamp);
     }
@@ -698,6 +711,10 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 trialEndsAt = trialDays > 0 ? block.timestamp + (trialDays * 1 days) : 0;
 
         bool contractVault = _isContract(safeVault);
+
+        if (contractVault) {
+            require(amount <= maxAgentPullAmount, "AgentPullExceedsCap");
+        }
 
         id = _nextSubscriptionId++;
 
@@ -1080,6 +1097,16 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         require(_feeBps <= feeBps,      "CanOnlyLowerFee");
         emit FeeUpdated(feeBps, _feeBps);
         feeBps = _feeBps;
+    }
+
+    /// @notice Sets the max subscription amount for contract-wallet (AI agent)
+    ///         subscribers. One-way ratchet — can only increase, never decrease.
+    ///         Existing subscriptions are unaffected either way, since amount is
+    ///         checked once at creation and is immutable per subscription.
+    function setAgentPullCap(uint256 _newCap) external onlyAdmin {
+        require(_newCap > maxAgentPullAmount, "CapCanOnlyIncrease");
+        emit AgentPullCapUpdated(maxAgentPullAmount, _newCap);
+        maxAgentPullAmount = _newCap;
     }
 
     function setKeeper(address _keeper) external onlyAdmin {
