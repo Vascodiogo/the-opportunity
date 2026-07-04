@@ -239,11 +239,6 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
   const [interval, setInterval] = useState("Monthly");
   const [grace, setGrace] = useState(7);
   const [tokens, setTokens] = useState({ usdc: true, usdt: false, dai: false, eurc: false });
-  const [fiats, setFiats] = useState({ card: false, mbway: false, mb: false, ideal: false, bancontact: false, klarna: false });
-  const [activeTab, setActiveTab] = useState("crypto");
-  const [cardNum, setCardNum] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
   const [introPrice, setIntroPrice] = useState(false);
   const [introCycles, setIntroCycles] = useState(3);
   const [introAmt, setIntroAmt] = useState(9);
@@ -253,9 +248,7 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 
   const slug = name.toLowerCase().replace(/\s+/g, "-");
   const intervalWord = interval === "Monthly" ? "month" : interval === "Weekly" ? "week" : "year";
-  const fiatLabels = { card: "Card", mbway: "MB Way", mb: "Multibanco", ideal: "iDEAL", bancontact: "Bancontact", klarna: "Klarna" };
   const activeTokens = Object.entries(tokens).filter(([, v]) => v).map(([k]) => k.toUpperCase());
-  const activeFiats = Object.entries(fiats).filter(([, v]) => v).map(([k]) => fiatLabels[k]);
   const displayPrice = introPrice ? introAmt : price;
   const cryptoPrice = cryptoDiscount ? Math.round(price * (1 - discountPct / 100) * 100) / 100 : price;
 
@@ -277,9 +270,6 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
     background: active ? "#34d399" : isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)",
     position: "relative", transition: "background 0.2s", flexShrink: 0,
   });
-
-  const fmtCard = (v) => v.replace(/\D/g, "").substring(0, 16).replace(/(.{4})/g, "$1 ").trim();
-  const fmtExp = (v) => { const d = v.replace(/\D/g, "").substring(0, 4); return d.length >= 2 ? d.substring(0, 2) + " / " + d.substring(2) : d; };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }} className="ao-form-row">
@@ -317,17 +307,6 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
             <label key={k} style={toggleStyle(tokens[k], "crypto")}>
               <input type="checkbox" checked={tokens[k]} onChange={e => setTokens(t => ({ ...t, [k]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#34d399" }} />
               {k.toUpperCase()}
-            </label>
-          ))}
-        </div>
-
-        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>{lang === "en" ? "Fiat payments" : "Pagamentos fiat"}</label>
-        <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "Requires Stripe connected" : "Requer Stripe conectado"}</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-          {Object.keys(fiats).map(k => (
-            <label key={k} style={toggleStyle(fiats[k], "fiat")}>
-              <input type="checkbox" checked={fiats[k]} onChange={e => setFiats(f => ({ ...f, [k]: e.target.checked }))} style={{ width: 14, height: 14, accentColor: "#3b82f6" }} />
-              {fiatLabels[k]}
             </label>
           ))}
         </div>
@@ -424,67 +403,32 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 0, marginBottom: 14, border: `0.5px solid ${border}`, borderRadius: 8, overflow: "hidden" }}>
-            <button onClick={() => setActiveTab("crypto")} style={{ flex: 1, padding: "8px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: activeTab === "crypto" ? "#34d399" : "transparent", color: activeTab === "crypto" ? "#080c14" : muted }}>
-              {lang === "en" ? "Crypto wallet" : "Carteira cripto"}
+          <div>
+            {cryptoDiscount && (
+              <div style={{ background: "rgba(52,211,153,0.08)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
+                <span style={{ color: "#34d399", fontWeight: 600 }}>{discountPct}% {lang === "en" ? "crypto discount applied" : "desconto cripto aplicado"}</span>
+                <span style={{ color: muted, marginLeft: 8, textDecoration: "line-through" }}>${price}</span>
+                <span style={{ color: text, fontWeight: 700, marginLeft: 6 }}>${cryptoPrice.toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+              <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{lang === "en" ? "Select token" : "Selecionar token"}</p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {activeTokens.length === 0 && <span style={{ fontSize: 12, color: muted }}>—</span>}
+                {activeTokens.map((t, i) => (
+                  <span key={t} style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, background: i === 0 ? "#34d399" : "transparent", color: i === 0 ? "#080c14" : muted, border: i === 0 ? "none" : `0.5px solid ${border}`, fontWeight: i === 0 ? 600 : 400, cursor: "pointer" }}>{t}</span>
+                ))}
+              </div>
+            </div>
+            <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: muted }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span>{lang === "en" ? "Grace period" : "Período de graça"}</span><span style={{ color: text, fontWeight: 600 }}>{grace} {lang === "en" ? "days" : "dias"}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span>{lang === "en" ? "Protocol fee" : "Taxa protocolo"}</span><span style={{ color: text, fontWeight: 600 }}>0.5%</span></div>
+            </div>
+            <button style={{ width: "100%", padding: 11, background: "#34d399", color: "#080c14", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
+              {lang === "en" ? "Connect wallet to subscribe →" : "Ligar carteira para subscrever →"}
             </button>
-            <button onClick={() => setActiveTab("fiat")} style={{ flex: 1, padding: "8px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", borderLeft: `0.5px solid ${border}`, background: activeTab === "fiat" ? "#3b82f6" : "transparent", color: activeTab === "fiat" ? "#fff" : muted }}>
-              {lang === "en" ? "Card / Fiat" : "Cartão / Fiat"}
-            </button>
+            <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{lang === "en" ? "Non-custodial · Base Network · Authorise once" : "Não custodial · Base Network · Autorizar uma vez"}</p>
           </div>
-
-          {activeTab === "crypto" && (
-            <div>
-              {cryptoDiscount && (
-                <div style={{ background: "rgba(52,211,153,0.08)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
-                  <span style={{ color: "#34d399", fontWeight: 600 }}>{discountPct}% {lang === "en" ? "crypto discount applied" : "desconto cripto aplicado"}</span>
-                  <span style={{ color: muted, marginLeft: 8, textDecoration: "line-through" }}>${price}</span>
-                  <span style={{ color: text, fontWeight: 700, marginLeft: 6 }}>${cryptoPrice.toFixed(2)}</span>
-                </div>
-              )}
-              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
-                <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{lang === "en" ? "Select token" : "Selecionar token"}</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {activeTokens.length === 0 && <span style={{ fontSize: 12, color: muted }}>—</span>}
-                  {activeTokens.map((t, i) => (
-                    <span key={t} style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, background: i === 0 ? "#34d399" : "transparent", color: i === 0 ? "#080c14" : muted, border: i === 0 ? "none" : `0.5px solid ${border}`, fontWeight: i === 0 ? 600 : 400, cursor: "pointer" }}>{t}</span>
-                  ))}
-                </div>
-              </div>
-              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: muted }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span>{lang === "en" ? "Grace period" : "Período de graça"}</span><span style={{ color: text, fontWeight: 600 }}>{grace} {lang === "en" ? "days" : "dias"}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span>{lang === "en" ? "Protocol fee" : "Taxa protocolo"}</span><span style={{ color: text, fontWeight: 600 }}>0.5%</span></div>
-              </div>
-              <button style={{ width: "100%", padding: 11, background: "#34d399", color: "#080c14", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
-                {lang === "en" ? "Connect wallet to subscribe →" : "Ligar carteira para subscrever →"}
-              </button>
-              <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{lang === "en" ? "Non-custodial · Base Network · Authorise once" : "Não custodial · Base Network · Autorizar uma vez"}</p>
-            </div>
-          )}
-
-          {activeTab === "fiat" && (
-            <div>
-              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: 12, marginBottom: 10 }}>
-                <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "Card details" : "Dados do cartão"}</p>
-                <input type="text" placeholder="1234 5678 9012 3456" value={cardNum} onChange={e => setCardNum(fmtCard(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 8, fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <input type="text" placeholder="MM / YY" value={expiry} onChange={e => setExpiry(fmtExp(e.target.value))} style={{ width: "100%", boxSizing: "border-box", fontFamily: "'DM Mono', monospace" }} />
-                  <input type="text" placeholder="CVV" value={cvv} maxLength={4} onChange={e => setCvv(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", boxSizing: "border-box", fontFamily: "'DM Mono', monospace" }} />
-                </div>
-              </div>
-              {activeFiats.length > 0 && (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                  {activeFiats.map(f => <span key={f} style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, background: "rgba(59,130,246,0.1)", color: "#3b82f6", border: "0.5px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>{f}</span>)}
-                </div>
-              )}
-              <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: muted }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span>{lang === "en" ? "Processing fee" : "Taxa processamento"}</span><span style={{ color: text, fontWeight: 600 }}>{lang === "en" ? "Standard card rate" : "Taxa padrão cartão"}</span></div>
-              </div>
-              <button style={{ width: "100%", padding: 11, background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
-                {lang === "en" ? `Subscribe $${price}/${intervalWord} →` : `Subscrever $${price}/${intervalWord} →`}
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -697,7 +641,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </span>
         </div>
         <a
-          href="https://sepolia.basescan.org/address/0x2ED847da7f88231Ac6907196868adF4840A97f49"
+          href="https://sepolia.basescan.org/address/0x483f59367b2e5BEbbF33a6A110B1F1C42C706564"
           target="_blank" rel="noopener noreferrer"
           style={{ fontSize: 11, color: isDark ? "#93c5fd" : "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap", fontWeight: 500 }}
         >
@@ -757,7 +701,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               { icon: "ti-building-store", title: lang === "en" ? "No intermediary" : "Sem intermediário", sub: lang === "en" ? "Funds move wallet to wallet. No platform holds your money." : "Fundos movem-se de carteira para carteira. Sem plataforma a segurar o seu dinheiro." },
               { icon: "ti-lock", title: lang === "en" ? "No custody risk" : "Sem risco de custódia", sub: lang === "en" ? "Subscribers keep control of their wallet at all times." : "Os subscritores mantêm o controlo da carteira em todo o momento." },
               { icon: "ti-trending-down", title: lang === "en" ? "No churn from failed payments" : "Sem churn por falha de pagamento", sub: lang === "en" ? "Grace periods and auto-retry recover payments automatically." : "Períodos de graça e reenvio automático recuperam pagamentos." },
-              { icon: "ti-credit-card", title: lang === "en" ? "Fiat subscriptions too" : "Subscrições em fiat também", sub: lang === "en" ? "Accept card payments alongside crypto. One dashboard, both worlds." : "Aceite pagamentos por cartão ao lado de crypto. Um painel, dois mundos." },
+              { icon: "ti-robot", title: lang === "en" ? "Built for AI agents too" : "Também para agentes de IA", sub: lang === "en" ? "ERC-1271 smart wallets authorize pulls natively — no card, no human required." : "Carteiras inteligentes ERC-1271 autorizam pagamentos nativamente — sem cartão, sem humano." },
             ].map(({ icon, title, sub }) => (
               <div key={title} style={{
                 padding: 24, borderRadius: 14,
@@ -1547,7 +1491,7 @@ const res = await fetch(
                 { done: true,  label: lang === "en" ? "Smart contracts on Base Sepolia" : "Smart contracts na Base Sepolia", detail: "SubscriptionVault · MerchantRegistry · EIP-2612 · ERC-1271" },
                 { done: true,  label: lang === "en" ? "Keeper bot — automated pulls" : "Keeper bot — cobranças automáticas", detail: lang === "en" ? "47 successful pulls · 100% success rate" : "47 cobranças · 100% de sucesso" },
                 { done: true,  label: lang === "en" ? "Merchant dashboard" : "Painel do comerciante", detail: lang === "en" ? "Vanity slugs · CSV import · Grace period controls" : "Slugs personalizados · Importação CSV · Controlo do período de graça" },
-                { done: true,  label: lang === "en" ? "Stripe Connect dual-engine" : "Motor duplo Stripe Connect", detail: lang === "en" ? "0.5% on-chain + 0.5% off-chain via Stripe" : "0,5% on-chain + 0,5% off-chain via Stripe" },
+                { done: true,  label: lang === "en" ? "Single on-chain fee" : "Taxa única on-chain", detail: lang === "en" ? "0.5% protocol fee, hardcoded in executePull() — no off-chain processor" : "Taxa de protocolo de 0.5%, fixa no executePull() — sem processador off-chain" },
                 { done: true,  label: lang === "en" ? "Marketing site + SEO blog" : "Site + blog SEO", detail: "authonce.io · blog.authonce.io · 11 articles" },
               ],
             },

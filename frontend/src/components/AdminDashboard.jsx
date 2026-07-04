@@ -1110,6 +1110,19 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
               </div>
             ))}
 
+            <div style={{ ...S.card, padding: "16px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Agent Pull Cap</div>
+                <a href={`${basescanBase}/address/${VAULT_ADDRESS}#writeContract`} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: "var(--green)", textDecoration: "none" }}>
+                  Call setAgentPullCap ↗
+                </a>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
+                Max subscription amount for contract-wallet (ERC-1271 / AI agent) subscribers. One-way ratchet — can only increase. Call directly on Basescan, same pattern as setKeeper and setFeeBps. No live on-chain read here — check current value on Basescan before changing it.
+              </div>
+            </div>
+
             <div style={{ background: "rgba(29,158,117,0.05)", border: "0.5px solid rgba(29,158,117,0.15)", borderRadius: 12, padding: "16px 20px" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)", marginBottom: 12 }}>Mainnet deployment checklist</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
