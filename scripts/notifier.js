@@ -843,13 +843,56 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
   }
 }
 
+// ─── Block checkpoint persistence ───────────────────────────────────────────
+// Without this, lastBlock only ever lives in memory — every restart (deploy,
+// crash, platform maintenance) resets it to "now," silently skipping any
+// SubscriptionCreated/PaymentExecuted/etc. events that happened in the gap.
+// This is what caused subscription id 2 to succeed on-chain but never reach
+// Postgres. One row, one key ("lastBlock"), updated after every successful
+// poll cycle.
+async function ensureCheckpointTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS notifier_state (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function loadLastBlock(fallback) {
+  try {
+    const result = await db.query(`SELECT value FROM notifier_state WHERE key = 'lastBlock'`);
+    if (result.rows.length > 0) {
+      const saved = parseInt(result.rows[0].value, 10);
+      if (Number.isFinite(saved)) return saved;
+    }
+  } catch (err) {
+    console.error("[NOTIFIER] Failed to load checkpoint, using fallback:", err.message);
+  }
+  return fallback;
+}
+
+async function saveLastBlock(block) {
+  try {
+    await db.query(
+      `INSERT INTO notifier_state (key, value, updated_at) VALUES ('lastBlock', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [String(block)]
+    );
+  } catch (err) {
+    console.error("[NOTIFIER] Failed to save checkpoint:", err.message);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
   await db.initSchema();
+  await ensureCheckpointTable();
 
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Notification Backend v4.1");
+  console.log("  AuthOnce — Notification Backend v4.2");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  RPC:      ${RPC_URL}`);
@@ -871,15 +914,25 @@ async function main() {
   }
 
   let provider  = new ethers.JsonRpcProvider(RPC_URL);
-  let lastBlock = 41000000; // SubscriptionVault v4 deployment block
 
+  // Fallback only used if both the checkpoint AND the live block-number
+  // fetch fail — deliberately conservative (deployment block), not "now."
+  let currentBlockNow;
   try {
-    lastBlock = (await provider.getBlockNumber()) - BLOCK_LAG;
-    console.log(`\n  Starting from block ${lastBlock}\n`);
+    currentBlockNow = (await provider.getBlockNumber()) - BLOCK_LAG;
   } catch (err) {
     console.error("[NOTIFIER] Failed to get block number:", err.message);
     await new Promise(r => setTimeout(r, 10_000));
+    currentBlockNow = 41000000; // SubscriptionVault v4 deployment block
   }
+
+  let lastBlock = await loadLastBlock(currentBlockNow);
+  const resumedFromCheckpoint = lastBlock !== currentBlockNow;
+  console.log(
+    resumedFromCheckpoint
+      ? `\n  Resumed from saved checkpoint: block ${lastBlock}\n`
+      : `\n  No checkpoint found — starting from block ${lastBlock}\n`
+  );
 
   // Vault contract for proactive checks
   const vault = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, provider);
@@ -889,7 +942,11 @@ async function main() {
 
   const poll = async () => {
     try {
-      lastBlock = await pollEvents(provider, iface, topicMap, lastBlock);
+      const newLastBlock = await pollEvents(provider, iface, topicMap, lastBlock);
+      if (newLastBlock !== lastBlock) {
+        lastBlock = newLastBlock;
+        await saveLastBlock(lastBlock);
+      }
 
       // Run proactive checks every 5 cycles
       proactiveCycle++;
