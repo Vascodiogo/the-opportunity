@@ -64,7 +64,7 @@ footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margi
 
       <div class="posture-grid">
         <div class="posture-card"><h4>Non-Custodial By Design</h4><p>Funds move directly from subscriber wallet to merchant wallet via on-chain smart contract execution. AuthOnce never holds funds in transit or in escrow.</p></div>
-        <div class="posture-card"><h4>No Fiat Touchpoints</h4><p>AuthOnce does not convert, receive, or transmit fiat currency. All protocol activity is USDC on Base Network. Fiat settlement where applicable is offloaded to a licensed payment processor.</p></div>
+        <div class="posture-card"><h4>No Fiat Touchpoints</h4><p>AuthOnce does not convert, receive, hold, or transmit fiat currency, ever. All protocol activity is USDC on Base Network. Where a subscriber funds their wallet via card, an onramp partner (e.g. Circle, Coinbase) delivers USDC directly to the subscriber's own wallet — AuthOnce has no visibility into or involvement in that step.</p></div>
         <div class="posture-card"><h4>BSL 1.1 Licensed Contracts</h4><p>Protocol contracts are published under Business Source License 1.1. The license protects the codebase while allowing independent verification of protocol mechanics.</p></div>
         <div class="posture-card"><h4>Open Execution Flow</h4><p>The Keeper triggers <a href="eip2612-explained.html" class="ilink">EIP-2612 permit</a> execution but does not authorize or approve transfers. Authorization comes from the subscriber's cryptographic signature — executed by the USDC smart contract directly.</p></div>
       </div>
@@ -78,14 +78,12 @@ footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margi
       <p>The most important regulatory threshold in both FATF and MiCA frameworks is custody. An entity that controls or holds client assets is providing a custody service and is squarely within regulatory scope. An entity that provides software tools for users to control their own assets does not cross this threshold — provided the software genuinely does not control or access funds independently.</p>
       <p>In AuthOnce's architecture, the subscriber controls their USDC at all times until the moment of authorized execution. The <a href="what-is-noncustodial-billing.html" class="ilink">non-custodial design</a> means no AuthOnce-controlled address ever holds subscriber funds. The Keeper triggers contract execution but cannot redirect funds — the smart contract enforces the recipient address as the merchant's registered wallet, hardcoded at subscription creation.</p>
 
-      <h2>Fiat Offloading Architecture</h2>
-      <p>Where AuthOnce operates a fiat onramp, the fiat settlement flow is handled entirely by a licensed payment processor. This cleanly separates the on-chain crypto subscription billing (AuthOnce's domain, software-only) from any fiat money transmission (the processor's domain, fully licensed). The architectural decision to route fiat flows through a regulated intermediary eliminates any ambiguity about AuthOnce operating as a payment service provider in the fiat dimension.</p>
+      <h2>No Fiat Leg, By Architecture</h2>
+      <p>AuthOnce has no fiat settlement relationship of any kind. A subscriber who wants to fund their wallet with a card does so through an independent onramp partner (Circle, Coinbase Onramp) — the partner converts fiat to USDC and delivers it directly to the subscriber's own wallet. AuthOnce is never a counterparty to that transaction, never touches the fiat leg, and never holds a settlement relationship with any processor. This is not fiat activity routed through AuthOnce and offloaded — it is upstream of AuthOnce entirely, structurally outside the protocol's scope.</p>
 
       <h2>BSL 1.1 Licensing</h2>
       <p>The Business Source License 1.1 governing AuthOnce's smart contracts serves two functions: it protects the protocol from unauthorized commercial forks in the near term, and it provides full code transparency for audit, verification, and regulatory review. Any regulator, auditor, or merchant can read the complete protocol logic via the <a href="https://authonce.io" class="ilink">AuthOnce developer portal</a> and verify that the custody claims above are accurate at the contract level. Protocol transparency is itself a compliance tool.</p>
 
-      <h2>Pre-Mainnet Safety Cap</h2>
-      <p>During the pre-audit period, AuthOnce enforces a $200 per-transaction cap hardcoded in the protocol. This is a risk management measure, not a regulatory requirement — it limits potential impact of any undiscovered contract vulnerability before the formal security audit is complete. The cap will be reviewed and potentially raised at mainnet launch following audit completion.</p>
 
       <div class="related-inline">
         <h4>Related Reading</h4>
@@ -111,9 +109,8 @@ footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margi
         <li><a href="#">VASP vs CASP frameworks</a></li>
         <li><a href="#">Software-only architecture</a></li>
         <li><a href="#">Non-custody as legal foundation</a></li>
-        <li><a href="#">Fiat offloading architecture</a></li>
+        <li><a href="#">No fiat leg, by architecture</a></li>
         <li><a href="#">BSL 1.1 licensing</a></li>
-        <li><a href="#">Pre-mainnet safety cap</a></li>
       </ul>
     </div>
     <div class="sidebar-cta">
