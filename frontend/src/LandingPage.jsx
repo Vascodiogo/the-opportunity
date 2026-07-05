@@ -2,6 +2,7 @@
 // Light mode default · Dark mode toggle · Full screen hero · Web3 native
 
 import { useState, useEffect, useRef } from "react";
+import { VAULT_ADDRESS } from "./config.js";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
 
@@ -641,7 +642,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </span>
         </div>
         <a
-          href="https://sepolia.basescan.org/address/0x483f59367b2e5BEbbF33a6A110B1F1C42C706564"
+          href={`https://sepolia.basescan.org/address/${VAULT_ADDRESS}`}
           target="_blank" rel="noopener noreferrer"
           style={{ fontSize: 11, color: isDark ? "#93c5fd" : "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap", fontWeight: 500 }}
         >

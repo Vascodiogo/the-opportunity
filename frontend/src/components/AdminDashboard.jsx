@@ -3,6 +3,7 @@
 // Tabs: Overview · Merchants · Subscriptions · Subscribers · Payments · Webhooks · Analytics · Tax · Audit · Contracts
 import { useState, useEffect, useCallback, useRef } from "react";
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { VAULT_ADDRESS as VAULT_ADDRESS_TESTNET, REGISTRY_ADDRESS as REGISTRY_ADDRESS_TESTNET } from "../config.js";
 
 // ─── Analytics helpers ────────────────────────────────────────────────────────
 function buildMonthlyGTV(payments) {
@@ -524,8 +525,8 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   const [selectedMerchant, setSelectedMerchant] = useState(null);
   const isMainnet = import.meta.env.VITE_NETWORK === "mainnet";
 
-  const REGISTRY_ADDRESS = isMainnet ? "[MAINNET]" : "0xBa8071912Ce59cD9D3D153120C59516fBae10A5C";
-  const VAULT_ADDRESS    = isMainnet ? "[MAINNET]" : "0x9ce26F5d8C4cc7942022FFCa9D4D574D8c497662";
+  const REGISTRY_ADDRESS = isMainnet ? "[MAINNET]" : REGISTRY_ADDRESS_TESTNET;
+  const VAULT_ADDRESS    = isMainnet ? "[MAINNET]" : VAULT_ADDRESS_TESTNET;
   const basescanBase     = isMainnet ? "https://basescan.org" : "https://sepolia.basescan.org";
 
   const apiFetch = useCallback(async (path) => {
@@ -1090,7 +1091,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
         {tab === "contracts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { label: "SubscriptionVault v5", address: VAULT_ADDRESS,    note: "Subscription lifecycle, executePull, EIP-712, multi-token" },
+              { label: "SubscriptionVault v7", address: VAULT_ADDRESS,    note: "Subscription lifecycle, executePull, EIP-712, multi-token, agent pull cap" },
               { label: "MerchantRegistry v2",  address: REGISTRY_ADDRESS, note: "Merchant whitelist, self-serve toggle, two-step admin transfer" },
               { label: "USDC",                 address: isMainnet ? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" : "0x036CbD53842c5426634e7929541eC2318f3dCF7e", note: "Primary payment token" },
             ].map(c => (
@@ -1127,7 +1128,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)", marginBottom: 12 }}>Mainnet deployment checklist</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {[
-                  ["Deploy SubscriptionVault v5 to Base Mainnet",          false],
+                  ["Deploy SubscriptionVault v7 to Base Mainnet",          false],
                   ["Deploy MerchantRegistry v2 to Base Mainnet",           false],
                   ["Update VITE_NETWORK=mainnet in Cloudflare env",        false],
                   ["Update VAULT_ADDRESS + REGISTRY_ADDRESS in config.js", false],
