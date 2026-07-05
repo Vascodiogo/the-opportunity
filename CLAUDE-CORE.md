@@ -8,7 +8,8 @@
 **AuthOnce** — Non-custodial multi-token subscription protocol on Base Network.
 **Tagline:** Authorize once. Pay forever. Stay in control.
 **Domain:** authonce.io · **Target mainnet:** September 2026
-**Founder:** Vasco (solo, Swiss/PT). Full-time employment in Switzerland. Exit target: €3–10M, retire at 54–55.
+**Founder:** Vasco (solo, Swiss/PT). Full-time employment in Switzerland (Hinti GmbH / Assa Abloy partner). Employer unaware of AuthOnce. Public builder identity: @VascoBuilds on X.
+**Exit target:** €3–10M, retire at 54–55.
 **Local project:** `C:\The-Opportunity\` (frontend: `C:\The-Opportunity\frontend`) — paste files, not synced here.
 **Local docs:** `C:\AuthOnce-Docs\` — CLAUDE-CORE.md, CLAUDE-REFERENCE.md, BusinessPlan v2, FinancialProjections, TechnicalDocs, AuthOnce-InvestorQA-2026.docx.
 
@@ -18,68 +19,90 @@
 
 | Layer | Technology | Status |
 |---|---|---|
-| Smart Contracts | Solidity 0.8.24 via **Hardhat** | ✅ Base Sepolia v6 (all audit fixes applied May 31) |
-| Keeper Bot | Node.js v6 on Railway | ✅ Dedicated service — authonce-keeper |
-| Notifier | Node.js v6 on Railway | ✅ Dedicated service — authonce-notifier |
-| X Bot | Node.js on Railway | ✅ Dedicated service — authonce-x-bot |
-| Backend API | Express.js on Railway | ✅ Dedicated service — the-opportunity (API only) |
-| Database | PostgreSQL on Railway | ✅ Schema live |
+| Smart Contracts | Solidity 0.8.24 via **Hardhat** | ✅ Base Sepolia — EIP-2612 permit added June 30. SubscriptionVault verified on Basescan July 4 |
+| Keeper Bot | Node.js on Railway | ✅ 20s polling, 5 parallel batch concurrency (June 30). `NotKeeper` revert fixed July 4 — constructor had passed deployer address as `_keeper` instead of keeper wallet; corrected via `setKeeper()` |
+| Notifier | Node.js on Railway | ✅ Push Protocol + AI agent webhooks (June 28). v4.2 (July 4): persists `lastBlock` checkpoint to DB — prior version silently dropped any event during a restart window, with no error and no recovery. Also fixed `lastPulledAt` ReferenceError that had silently broken the 3-day payment reminder since inception |
+| X Bot | Node.js on Railway | ✅ Mon/Wed/Fri 12:00 UTC |
+| Backend API | Express.js on Railway | ✅ /api/subscriptions/link endpoint live |
+| Database | PostgreSQL on Railway | ✅ subscriber_email, subscriber_webhook_url, is_contract_vault columns |
 | Frontend | React + Vite on Cloudflare Pages | ✅ Live at authonce.io |
-| Auth (subscriber) | Google OAuth via Passport.js | ✅ Verified + Published May 17 2026 |
-| Auth (merchant/admin) | MetaMask / RainbowKit + JWT | ✅ Working |
-| Admin security | Cloudflare Access + rate limiting | ✅ May 24 2026 |
-| Fiat Onramp | Stripe Checkout (card/MB Way/Multibanco/SEPA) | ✅ Phase A built May 24. SEPA mandate options + MB Way fix Jun 7 |
-| Stripe Connect | Merchant OAuth flow | ✅ Built in api.js |
-| Notifications | Resend (notifications@authonce.io) + webhooks | ✅ Branded HTML templates v5 |
-| Custom Sender Domains | Resend domain API (Business+ tier) | ✅ Built in resend-domains.js |
-| DNS | Cloudflare (authonce.io) | ✅ Configured |
-| Email receiving | Zoho — vasco@authonce.io | ✅ Working |
+| Auth (subscriber) | Google OAuth via Passport.js | ✅ |
+| Auth (merchant/admin) | MetaMask / RainbowKit + JWT | ✅ |
+| Admin security | Cloudflare Access + rate limiting | ✅ |
+| Fiat Onramp | Stripe Checkout (card/MB Way/Multibanco/SEPA) | ✅ Phase A built |
+| Stripe Connect | Merchant OAuth flow | ✅ |
+| Notifications | Resend + Push Protocol + webhooks | ✅ Branded HTML + wallet-native alerts |
+| Custom Sender Domains | Resend domain API (Business+ tier) | ✅ |
+| DNS | Cloudflare (authonce.io) | ✅ |
+| Email receiving | Zoho — vasco@authonce.io | ✅ |
 | Railway plan | Hobby ($5/month) | ✅ Active |
-| Landing page | LandingPage.jsx v3 — Web3 native, gradient hero | ✅ Updated May 30 |
+| Landing page | LandingPage.jsx — AI agent payments section + interactive product creator | ✅ June 28 |
+| Blog | blog.authonce.io — 12 SEO-optimised articles | ✅ Sitemap valid XML |
 
-**Contract addresses — Base Sepolia testnet (redeployed June 14 with all Hacken AI fixes — v7/v4):**
-- SubscriptionVault v7: `0xeb068B47731261F7B4A5ae8535686D67D7f72321`
-- MerchantRegistry v4:  `0xAE681E431c353f5930dDFfBC74037d3f2afE3264`
-- USDC Sepolia:         `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+---
 
-**Old/inactive contracts (Base Sepolia):**
-- SubscriptionVault v6 (old): `0x55180314174B30e778f35357035d49cAEF55C835`
-- MerchantRegistry v3 (old):  `0x989376ff6195be2e76871535Db21CB8BdC9175D4`
+## 2a. Contract Addresses
 
-**Contract addresses — Base Mainnet (not yet deployed):**
-- USDC Mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- SubscriptionVault v6: `[DEPLOY AND RECORD HERE]`
-- MerchantRegistry v3:  `[DEPLOY AND RECORD HERE]`
-- Protocol Treasury:    `0x737D4EeAEF67f776724482a29367615703A2DEB1`
+**Base Sepolia testnet — CURRENT (vault-only redeploy July 5 2026, adds agent pull cap):**
+- SubscriptionVault: `0x0C8668dE16BDaF4FC6aAddc5Ac24954e5EFBb95d` — ✅ **verified on Basescan July 5** via Standard-JSON-Input, `input` object extracted from build-info wrapper (same method as July 4). Adds `maxAgentPullAmount` / `setAgentPullCap()` — see §Agent Pull Cap below. Confirmed via keeper set correctly (`check-keeper.js` ✅ MATCH) and on-chain test: subscription id 0 (50 USDC) and id 1 (199 USDC, exact cap) both succeeded; two attempts at 250 USDC never reached the chain (consistent with cap rejection, though the exact revert string was never directly captured — MetaMask smart-account wrapper transactions blocked inspection of the failed calls specifically).
+- MerchantRegistry:  `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` — ⬜ **still not verified** — unchanged since July 4, reused as-is by the vault-only redeploy (not redeployed itself)
+- USDC Sepolia:      `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+- Keeper wallet:     `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151`
+
+⚠️ **Superseded July 5 — do not use for new subscriptions, do not reference in docs/blog/deck:**
+- SubscriptionVault: `0x483f59367b2e5BEbbF33a6A110B1F1C42C706564` (July 4 — verified, but predates agent pull cap)
+
+**Agent Pull Cap (`maxAgentPullAmount` / `setAgentPullCap()`):**
+- Applies only to contract-wallet (ERC-1271) subscribers — EOA subscribers unaffected, checked once at creation via `_isContract(safeVault)`
+- Starting value: `199_000000` (199 USDC, matches Business tier price)
+- One-way ratchet — admin can only raise it, never lower it
+- Admin control: no in-app write UI (dashboard is read-only for all contract state, by design) — `AdminDashboard.jsx` shows a static card with a direct Basescan `#writeContract` link, same pattern as `setKeeper`/`setFeeBps`
+- **Known bug found and fixed July 5:** `AdminDashboard.jsx` and `LandingPage.jsx` both had their own separate hardcoded vault/registry addresses, not imported from `config.js` — three different wrong values across the two files (neither matching the June 30, July 4, or July 5 deployments). This means the agent-pull-cap admin card added earlier this session was silently pointing at the wrong contract from the moment it was built. **Structural fix applied, not just a value correction:** both files now `import { VAULT_ADDRESS, REGISTRY_ADDRESS } from "./config.js"` (or `"../config.js"` for `AdminDashboard.jsx`'s nested path) instead of maintaining their own copies. `config.js` is now the single source of truth — a future redeploy only requires updating it there, not hunting for every hardcoded copy across the frontend. Lesson: a variable's name is not proof of its value — always check the actual constant, don't assume a file imports correctly just because sibling files in the same codebase do.
+- Protocol Treasury Safe: `0x737D4EeAEF67f776724482a29367615703A2DEB1`
+
+⚠️ **These two addresses are dead — superseded June 30, confirmed via constructor-argument decode July 4. Do not reuse anywhere (docs, templates, saved preferences):**
+- SubscriptionVault (June 14): `0xeb068B47731261F7B4A5ae8535686D67D7f72321`
+- MerchantRegistry (June 14):  `0xAE681E431c353f5930dDFfBC74037d3f2afE3264`
+- SubscriptionVault (June 30 first attempt): `0x2ED847da7f88231Ac6907196868adF4840A97f49`
+- MerchantRegistry (June 30 first attempt):  `0xE62aF1DcADeF946ecC08978dec565344A63B8f9b`
+
+**Base Mainnet (not yet deployed):**
+- USDC:              `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- USDT:              `0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2`
+- DAI:               `0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb`
+- EURC:              `0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42`
+- SubscriptionVault: `[DEPLOY AND RECORD HERE]`
+- MerchantRegistry:  `[DEPLOY AND RECORD HERE]`
+- Protocol Treasury: `0x737D4EeAEF67f776724482a29367615703A2DEB1`
 
 **Wallets:**
-- Deployer: `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` (new — May 30 2026)
-- Keeper:   `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151` (confirmed May 31 2026)
+- Deployer:  `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` — ⚠️ MetaMask smart account active, acts as contract-wallet on-chain. Use Rabby for subscriber testing.
+- Keeper:    `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151`
+- Subscriber test (Rabby): `0x128cE652e31Ef886376696Adf92ce6E36057c832`
+- Push Channel: `0xd3350...2fd0e` (AuthOnce Push Channel, MetaMask)
 - Protocol Treasury (Safe 2/2): `0x737D4EeAEF67f776724482a29367615703A2DEB1`
   - Signer 1: Ledger `0x94FD52B6a6FcAcCb41BBE5717264BC9e95a35B4a`
   - Signer 2: MetaMask `0x00df2Dbb2455C372204EdD901894E27281fA02C0`
   - Threshold: 2/2 — upgrade to 2/3 when sister added
 
-✅ **Security:** Deployer key replaced May 30. Keeper wallet confirmed May 31. DEPLOYER_PRIVATE_KEY corrected in Railway Jun 7. STRIPE_SECRET_KEY confirmed sk_live_ Jun 7.
-
-⚠️ **Mainnet wallet balances (Jun 7):**
-- Keeper `0xdCEa737...` — 0 ETH on Base Mainnet (testnet topped up Jun 7)
-- Safe multisig `0x737D4...` — 0.0009 ETH on Base Mainnet
-- Both need top-up to 0.05 ETH before September mainnet
+⚠️ **Mainnet wallet balances:**
+- Keeper `0xdCEa737...` — needs top-up to 0.05 ETH before mainnet
+- Safe multisig `0x737D4...` — needs top-up to 0.05 ETH before mainnet
 
 ---
 
 ## 3. Locked Business Rules — Do Not Change
 
-- **Multi-token** — USDC, USDT, DAI, EURC for subscriptions. WETH/cbBTC blocked until v6 Chainlink oracle.
+- **Multi-token** — USDC, USDT, DAI, EURC for subscriptions. WETH/cbBTC blocked until Chainlink oracle.
 - Admin whitelist controls approved tokens. All whitelisted tokens available to all tiers.
 - **Protocol fee: 0.5% global** — same for all merchants, all tokens, all tiers. Hard ceiling 2% hardcoded.
 - **Fee is one-way ratchet** — can only be lowered, never raised. Enforced in setFeeBps().
 - **Vault funded at exactly 1× subscription amount** — no over-funding, no balance, no refund UX.
 - **Keeper bot is the only caller of `executePull()`** — signature: `executePull(id, deadline, signature)`
-- **safeVault must equal msg.sender** — enforced in createSubscription() to prevent unauthorised subscriptions.
+- **safeVault must equal msg.sender** — enforced in createSubscription() and createSubscriptionWithPermit().
 - **EOA subscribers:** pass `deadline=0, signature="0x"` — ERC-1271 check skipped by contract.
 - **EIP-712 + ERC-1271** — contract wallet / AI agent subscribers use structured pull authorisation.
+- **EIP-2612 permit:** USDC and EURC support one-signature subscribe via createSubscriptionWithPermit(). DAI uses non-standard permit (Phase 2). USDT has no permit — always two-step fallback.
 - **Protocol never holds funds** — non-custodial is non-negotiable, eliminates FINMA licence.
 - **Payment token at signup = all future pulls** — token is immutable per subscription.
 - **Merchant pays all fees** — subscriber always pays the exact price shown.
@@ -96,114 +119,111 @@
 - **Product limits:** 10 products per Starter merchant — enforced in API, not contract.
 - **Self-serve merchant registration:** off by default (`selfServeEnabled = false`). Admin flips post-launch.
 - **Two-step admin transfer** — both vault and registry use propose/accept pattern. No single-step transfer.
-- **Stablecoin-only subscriptions** — WETH/cbBTC require Chainlink USD oracle. Planned v6.
+- **Stablecoin-only subscriptions** — WETH/cbBTC require Chainlink USD oracle. Planned future version.
 - **Multi-currency fiat pricing** — 15 currencies: EUR, USD, GBP, CHF, BRL, CAD, AUD, SEK, NOK, DKK, SGD, HKD, INR, JPY, KRW. No RUB (OFAC).
 - **Price type toggle** — merchant sets price in USDC (crypto) or fiat currency. Both supported.
 - **Merchant pause cooldown** — 30-day cooldown + 90-day lifetime cap enforced in contract.
 - **Blacklist mechanism** — permanently banned merchants cannot re-register.
 - **MAX_MERCHANTS cap** — 10,000 merchants maximum in MerchantRegistry.
 - **Fee-on-transfer tokens not supported** — admin whitelist enforces standard ERC-20 only.
+- **Blog rule** — never name competing payment processors in blog content.
 
 ---
 
 ## 4. Backend File Map
 ```
 scripts/
-  keeper.js           — polls subscriptions, executes pulls, expires grace periods (v6)
-  notifier.js         — on-chain event polling, sends branded notifications (v6)
-  api.js              — Express REST API + Google OAuth + Stripe + admin endpoints
-  db.js               — PostgreSQL schema, queries, migrations (auto-runs on startup)
+  keeper.js           — 20s poll, 5-parallel batch, executePull, expire grace (June 30)
+  notifier.js         — Push Protocol wallet alerts + AI agent webhooks + email (June 28)
+  api.js              — Express REST API + Google OAuth + Stripe + /api/subscriptions/link
+  db.js               — PostgreSQL schema + subscriber_email + subscriber_webhook_url + is_contract_vault
   webhook.js          — HMAC-SHA256 dispatcher, branded fallback emails, 5-attempt backoff
   admin-auth.js       — JWT admin auth (email/password + rate limiting)
   email-templates.js  — Branded HTML email templates (all notification types, whitelabel)
   resend-domains.js   — Merchant custom sender domain management via Resend API
-  deploy.js           — Hardhat deployment script (MerchantRegistry → SubscriptionVault → tokens)
+  deploy.js           — Hardhat deploy (MerchantRegistry → 20s delay → SubscriptionVault → 15s delay → tokens → auto-approve deployer on testnet)
+  approve-token.js    — Whitelist USDC on new vault (run after deploy)
+  approve-merchant.js — Approve deployer as first merchant on new registry (run after deploy)
+  set-keeper.js       — Set correct keeper address on vault (run if deployer != keeper)
   x-bot.js            — X/Twitter bot (Mon/Wed/Fri 12:00 UTC)
 ```
 
-**Stripe Checkout (Phase A — built May 24, SEPA + MB Way fixed Jun 7):**
+**Keeper architecture:**
+- Poll interval: 20 seconds
+- Concurrency: 5 parallel pulls per batch (Promise.all)
+- Builder code `bc_ca3k7b52` appended to executePull calldata for Base leaderboard attribution
+- Scaling path: sequential (current, <20 merchants) → parallel EOAs → Gelato/Chainlink (>50 merchants)
+
+**Notification routing priority:**
+1. AI agent webhook (if subscriber_webhook_url set)
+2. Subscriber email (if subscriber_email set)
+3. Push Protocol wallet notification (always, for wallet-native subscribers)
+
+**Stripe Checkout (Phase A):**
 - `POST /api/stripe/checkout` — creates session with live CoinGecko fiat rate
 - `checkout.session.completed` → subscriber wallet auto-created + admin vault funding email
 - `payment_intent.payment_failed` → grace period + subscriber email
-- `charge.dispute.created` → pauses subscription, notifies merchant, logs to audit_log ✅ Jun 7
-- `charge.dispute.closed` → logs outcome to audit_log ✅ Jun 7
-- SEPA mandate options + `setup_future_usage: "off_session"` ✅ Jun 7
-- MB Way fixed: `mb_way` (was wrongly `card`) ✅ Jun 7
-- Admin receives: exact USDC amount, vault address, treasury address, exchange rate
+- `charge.dispute.created` → pauses subscription, notifies merchant
+- SEPA mandate options + `setup_future_usage: "off_session"`
 - Phase B (post-audit): automate treasury → vault USDC transfer
-
-**Admin API routes (built):**
-- `GET /api/admin/subscriptions` — searchable, filterable
-- `GET /api/admin/subscribers` — email/wallet lookup
-- `DELETE /api/admin/subscribers/:email` — GDPR right to erasure ✅ Jun 7
-- `GET /api/admin/gdpr/pending` — pending on-chain cancellations ✅ Jun 7
-- `POST /api/admin/gdpr/pending/:id/resolve` — mark resolved ✅ Jun 7
-- `GET /api/admin/payments` — full history with token + fiat
-- `GET /api/admin/webhooks` — delivery log
-- `GET /api/admin/audit-log` — admin action history
-- `POST /api/admin/subscriptions/:id/cancel` — force cancel
-- `GET /api/admin/tax/protocol-fees` — AuthOnce CSV (EUR + CHF)
-- `GET /api/admin/tax/merchant` — merchant XLSX (payments + guide tab)
-
-**Whitelabel / branding routes (built):**
-- `POST /api/merchant/branding` — set brand_name + brand_color (Growth+)
-- `POST /api/merchant/email-domain` — register custom sender domain (Business+)
-- `POST /api/merchant/email-domain/verify` — verify DNS with Resend
-- `GET/DELETE /api/merchant/email-domain` — manage domain
 
 ---
 
 ## 5. Frontend File Map
 ```
 frontend/src/
-  App.jsx                       — main app, light mode default, lang switching (localStorage)
-  LandingPage.jsx               — v3: Web3 native, gradient hero, GTM, competition ✅ May 30
+  App.jsx                       — main app, light mode default, lang switching
+  LandingPage.jsx               — AI agent payments section + interactive product creator + ROI calculator
   i18n.js                       — internationalisation (EN/PT)
-  config.js                     — v6 ABI, contract addresses, VITE_ALCHEMY_KEY
+  config.js                     — ABI (including createSubscriptionWithPermit), contract addresses
   components/
     Dashboard.jsx               — subscriber view
-    MerchantDashboard.jsx       — merchant portal + VAT/country/billing fields ✅ Jun 7
-    PayPage.jsx                 — pay link page (Google OAuth ✅, Stripe Phase A ✅)
-    MySubscriptions.jsx         — subscriber portal ✅
-    AdminDashboard.jsx          — admin portal v2 (10 tabs + GDPR pending + wallet balances) ✅ Jun 7
+    MerchantDashboard.jsx       — merchant portal + VAT/country/billing fields
+    PayPage.jsx                 — EIP-2612 permit flow (USDC/EURC one-signature) + two-step fallback (USDT/DAI) + subscriber email/webhook opt-in
+    MySubscriptions.jsx         — subscriber portal
+    AdminDashboard.jsx          — admin portal (10 tabs + GDPR pending + wallet balances)
     Pricing.jsx                 — pricing page
 ```
-- Pay link URL: `authonce.io/pay/:merchantAddress/:productSlug` ✅
+- Pay link URL: `authonce.io/pay/:merchantHandle/:productSlug` ✅
 - Subscriber portal: `authonce.io/my-subscriptions` ✅
 - Admin: `authonce.io/admin` — Cloudflare Access (vasco@authonce.io only) + JWT
 - Light mode default · Dark mode toggle · Bilingual EN/PT · Deployed Cloudflare Pages
-- VITE_ALCHEMY_KEY set in frontend/.env and Cloudflare Pages env vars
+
+**EIP-2612 permit flow in PayPage.jsx:**
+- USDC/EURC: `useSignTypedData` → EIP-712 Permit signature → `createSubscriptionWithPermit(v, r, s, deadline)` — one on-chain tx
+- USDT/DAI: `approve()` → `createSubscription()` — two on-chain txs (fallback)
+- Token domain: `{name: "USDC"/"EURC", version: "2", chainId: 84532}`
+- Nonce read via `useReadContract` → `nonces(address)` on token contract
+- Deadline: now + 30 minutes
+- Auto-fallback: if permit signing rejected or permit() reverts, falls back to approve+subscribe silently
+- UI: TrustRow shows "One signature" for USDC/EURC, "Two transactions" for USDT/DAI
 
 ---
 
-## 6. Phase Status
+## 6. Smart Contract — Key Functions
 
-| Phase | Description | Status |
-|---|---|---|
-| 0–4 | Contracts, Keeper, Backend, Webhooks, Frontend | ✅ Complete |
-| 5a | Google OAuth subscriber auth | ✅ Complete May 5 2026 |
-| 5b | Stripe Checkout Phase A — manual USDC bridge | ✅ Complete May 24 2026 |
-| 5c | Stripe webhook wiring | ✅ Complete May 24 2026 |
-| v5 | Multi-token, EIP-712, ERC-1271, DataOnce, external registry | ✅ Complete May 23 2026 |
-| 6 | Geofencing middleware (HTTP 451 OFAC) | ✅ Built — in api.js |
-| 7 | Legal docs | 🔄 Fio Legal contacted — Patent Box €1,200 offer pending decision |
-| 8 | Smart contract audit | 🔄 Cyfrin proposal received ($12K, 3 days, August) — awaiting funds |
-| 9 | Safe multisig + Ledger | ✅ Complete May 30 — Safe confirmed on Base Mainnet |
-| 10 | Subscriber portal | ✅ Built May 17 |
-| 11 | SEPA bank transfer | ✅ Wired Jun 7 — mandate options + dispute handlers |
-| 12 | Security fixes applied to contracts | ✅ Complete May 30 |
-| 13 | Contracts redeployed to Base Sepolia | ✅ Complete May 30 |
-| 14 | Landing page v3 | ✅ Complete May 30 |
-| 15 | Pitch deck v2 | ✅ Complete May 30 |
-| 16 | GDPR right to erasure | ✅ Complete Jun 7 |
-| 17 | Railway service separation | ✅ Complete Jun 7 |
-| 18 | Mainnet deployment | ⬜ Blocked by audit |
+**SubscriptionVault.sol (current: June 30 deployment with EIP-2612):**
+
+- `createSubscription(...)` — standard two-step (requires prior approve). Calls `_createSubscriptionInternal()`.
+- `createSubscriptionWithPermit(... permitDeadline, v, r, s)` — calls token's `permit()` then `_createSubscriptionInternal()` atomically. Reverts with "PermitFailed" if token doesn't support EIP-2612. USDC + EURC only.
+- `_createSubscriptionInternal(...)` — shared validation logic used by both entry points. Single auditable code path.
+- `executePull(id, deadline, signature)` — keeper only. EOA: deadline=0, sig="0x". Contract wallet: ERC-1271 path (not yet in keeper).
+- `expireSubscription(id)` — keeper only. Marks expired after grace period.
+
+**Permit security notes:**
+- `permit()` called with `owner = msg.sender`, `spender = address(this)` — signer must be the caller
+- `value` = exact subscription amount, not unlimited approval
+- Future pulls use existing `executePull()` allowance checks — no change to recurring security model
+- DAI uses non-standard permit interface (bool allowed) — not supported, falls back to two-step
+- USDT has no permit() — always two-step
+
+**MAINNET DEPLOY WARNING:**
+- Uncomment `require(_admin.code.length > 0)` in MerchantRegistry constructor before mainnet
+- Deploy Safe multisig first, pass Safe address as `_admin`
 
 ---
 
-## 7. Smart Contract Security Fixes (May 30)
-
-Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
+## 7. Smart Contract Security Fixes (May 30 — all applied)
 
 **SubscriptionVault.sol:**
 - [H2] `require(safeVault == msg.sender)` — prevents unauthorised subscription creation
@@ -212,96 +232,100 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 - [M3] SafeERC20 used for all token transfers
 - [M6] Merchant pause cooldown (30 days) + lifetime cap (90 days)
 - [M7] Merchant transfer uses try/catch — merchant cannot DoS pulls
-- [L1] `approvedTokenList()` filters revoked tokens
-- [L3] Guardian can resume subscription
-- [L4] `updateSafeVault()` added
-- [L5] `nextPullDue()` returns block.timestamp when lastPulledAt == 0
-- [L7] Dead pausedAt == 0 branch removed
+- [V7-H2] prevLastPulledAt cached before state mutation in executePull
+- [V7-P1] createSubscriptionWithPermit() + _createSubscriptionInternal() added June 30
 
 **MerchantRegistry.sol:**
 - [H1] `require(_admin.code.length > 0)` — commented out for Sepolia, MUST uncomment for mainnet
 - [M2] Blacklist mapping added
 - [M3] `setSelfServe()` no-op guard
-- [L2] Cancellation event on admin nomination overwrite
 - [L3] MAX_MERCHANTS = 10,000 cap
 - [L4] `batchApproveMerchants()` + `batchRevokeMerchants()` added
 
-⚠️ **MAINNET DEPLOY:** Uncomment `require(_admin.code.length > 0)` in MerchantRegistry constructor before mainnet. Deploy Safe multisig first, pass Safe address as `_admin`.
+---
+
+## 8. Audit Status (June 30)
+
+**Platform:** Areta Market — 6 proposals received
+
+| Firm | Cost | Completion | Notes |
+|---|---|---|---|
+| Softstack | $4,600 | July 7 | ISO 27001, TÜV SÜD, 0 exploits, on Areta allowlist ⭐ |
+| Hashlock | $5,000 | July 8 | Known relationship (Rafail), on Areta allowlist |
+| Beosin | $8,000 | July 3 | |
+| Nethermind | $9,000 | July 3 | Brand credibility |
+| Composable | $11,000 | July 10 | |
+| Statemind | $15,000 | July 6 | |
+
+**Decision pending:** Waiting for Areta EF subsidy reply (follow-up sent June 30 to team@areta.io).
+**If subsidy confirmed:** Accept Softstack ($4,600) — cheapest, ISO 27001 certified, on allowlist.
+**If no reply in 48h:** Accept Softstack regardless — $4,600 is the most defensible choice.
+**Funding reality:** No confirmed audit funding. Do NOT spend personal savings on audit.
+**Inform winning auditor:** EIP-2612 `createSubscriptionWithPermit()` + `_createSubscriptionInternal()` added June 30 — must be included in audit scope.
+**Hashlock reply (June 30):** Rafail following up, offering small discount. Replied: holding pending EF subsidy.
+
+**Previous audit contacts (superseded by Areta):**
+- Cyfrin: $12K proposal (old, no longer primary)
+- Electisec, Sherlock, Hacken: contacted
 
 ---
 
-## 8. Audit Outreach Status (Jun 7)
-
-| Firm | Contact | Status |
-|---|---|---|
-| Cyfrin | will@cyfrin.io | ✅ Proposal received: $12K, 3 days, August. Awaiting funds to confirm. Replied "what did you have in mind?" — awaiting Will's response. |
-| Hashlock | fletcher@hashlock.com.au | ✅ Call done May 30. $5-10K range. Deck sent. Deferred payment declined. |
-| Hacken | prusela.andrade@hacken.io | 🔄 João no-show — Prusela Andrade covering — email sent Jun 5 |
-| Guardian | audits@guardianaudits.com | 🔄 Awaiting reply |
-
-**Decision:** Will not commit to Cyfrin until funds secured. Proposal is live and available.
-
----
-
-## 9. Investment & Fundraising Status (Jun 7)
+## 9. Investment & Fundraising Status
 
 **Raising:** €150,000 pre-seed · 10-15% equity
-**Use of funds:** 40% audit · 35% business co-founder · 15% legal · 10% operations
+**Use of funds:** 40% audit (€60K) · 35% business co-founder (€52.5K) · 15% legal (€22.5K) · 10% operations (€15K)
+**Status: ZERO active conversations. This is the real blocker.**
 
 | Channel | Status |
 |---|---|
-| Mission Fund (Startup Portugal) | ✅ Form submitted with deck |
-| OpenVC | ✅ Profile live · Deck uploaded · Outreach email set · 1 submission left |
-| RR² Capital (investments@rr2.capital) | ✅ Email sent with deck |
-| Nuno Correia / SumCap | ✅ LinkedIn connection request sent |
-| Colin Armstrong / Paragraph | ✅ Email sent Jun 2 — colin@armstr.ng |
-| Subvisual intro call | ✅ Booked June 9th 13:30 |
-| João Andrade / Hacken Portugal | ✅ Replied Jun 2 — personal contact established |
-| Cyfrin (Will) — VC intro asked | 🔄 Pending |
-| Hashlock (Fletcher) — VC intro asked | 🔄 Pending |
-| Jesse Pollak (@jessepollak) | ✅ Two X replies posted |
-| Cuatrecasas Acelera (11th edition) | ✅ Application submitted Jun 7 — deadline June 26 |
-| JoynIgnite | ⬜ Post-July — after PME Certification (FinTech focus, max €375K) |
-| Shilling Capital Partners II | ⬜ Post-July — rjacinto@shillingcapital.com |
-| BrainCapital | ⬜ Post-July — tiago.morais.santos@braintrust.pt |
+| Mission Fund (Startup Portugal) | ✅ Submitted |
+| OpenVC | ✅ Profile live |
+| RR² Capital | ✅ Email sent — no reply |
+| Nuno Correia (Utrust co-founder) | 🔄 Warm contact — first outreach target |
+| 3 Comma Capital | ✅ Dealflow form submitted |
+| Colin Armstrong / Paragraph | ✅ Email sent |
+| Subvisual intro call | ✅ Done June 9 |
+| Cuatrecasas Acelera | ✅ Applied |
+| JoynIgnite | ⬜ Post-incorporation |
+| Shilling Capital Partners | ⬜ Post-incorporation |
+| BrainCapital | ⬜ Post-incorporation |
 
-**Pitch deck:** `AuthOnce-PitchDeck-v2-2026.pptx` — 12 slides including GTM + Competition
-**Business Plan:** `AuthOnce_BusinessPlan_2026_Updated.pdf` — updated Jun 7 ✅
-**Investor Q&A:** `AuthOnce-InvestorQA-2026.docx` — 30 Q&A for founder preparation (not to share)
+**Pitch deck:** `AuthOnce-PitchDeck-v4-2026.pptx` — 12 slides
+**Target exit:** €3–10M acquisition in 3–5 years
 
 ---
 
-## 10. Regulatory & Legal Status (Jun 7)
+## 10. Regulatory & Legal Status
 
 | Item | Status |
 |---|---|
 | Banco de Portugal FinTech enquiry | ✅ Submitted — ref 2026/49323/000419 |
 | IAPMEI consultation | ✅ Response received — referred to Banco de Portugal |
-| Fio Legal — Patent Box | 🔄 Offer €1,200+VAT pending decision |
-| Fio Legal — MiCA | ❌ Out of scope at current budget |
-| Portugal FinLab | ❌ Edition 7 closed — next edition late 2026 |
+| Fio Legal — Patent Box | 🔄 €1,200+VAT offer pending decision |
 | Company incorporation | ⬜ July 2026 — Empresa Online ~€180 |
-| Cuatrecasas Acelera | ✅ Application submitted Jun 7 |
-| PME Certification | ⬜ Post-incorporation — free, 2-4 weeks, required for Business Angels funds |
-
-**Post-incorporation sequence:**
-1. Incorporate July 2026 (~€180)
-2. Apply PME Certification (free, 2-4 weeks)
-3. Approach JoynIgnite, Shilling, BrainCapital
-4. Flag to Fio Legal: BSL 1.1 must be assigned to Lda, supports commercial licensing
+| PME Certification | ⬜ Post-incorporation |
+| Cuatrecasas Acelera | ✅ Applied |
 
 ---
 
-## 11. Social & Community (Jun 7)
+## 11. Social & Community
 
 | Channel | Status |
 |---|---|
-| authonce.io | ✅ Live — Landing page v3 deployed |
-| @VascoAlgoTrader on X | ✅ Handle change to @VascoBuilds pending X approval. Bio updated Jun 7. Birthday set to private. |
-| @AuthOnce on X | ✅ Pinned post live. X bot running Mon/Wed/Fri 12:00 UTC. |
-| @authonce on Warpcast (FID: 3324301) | ✅ Farcaster bot posting daily 12:00 UTC — 21 posts, 3-week rotation |
-| LinkedIn company page | ✅ Created May 30 — linkedin.com/company/authonce |
-| builders.to | ⬜ Register after mainnet — do-follow backlinks + build-in-public audience |
+| authonce.io | ✅ Live |
+| @VascoBuilds on X | ✅ Public builder identity |
+| @AuthOnce on X | ✅ X bot Mon/Wed/Fri 12:00 UTC |
+| @authonce on Farcaster (FID: 3324301) | ✅ Daily 12:00 UTC — 3-week rotation |
+| LinkedIn company page | ✅ linkedin.com/company/authonce — Overview updated June 30, tagline set, auto-invite ON |
+| blog.authonce.io | ✅ 12 articles, valid XML sitemap, submitted to Search Console |
+
+**LinkedIn company page status (June 30):**
+- Tagline: "Non-custodial USDC subscription billing on Base Network. Authorise once. Get paid every cycle. 0.5% flat. AI agent ready."
+- Overview: full description written and set
+- Workplace policy: Remote
+- CTA button: Visit website → authonce.io
+- 2 followers (new — invite credits available but personal profile has no connections to invite)
+- Auto-invite engagers: ON
 
 ---
 
@@ -310,677 +334,264 @@ Both contracts fixed following AI audit (Hashlock AI tool). Key fixes:
 | Tier | Price | Protocol fee | Features |
 |---|---|---|---|
 | Starter | Free | 0.5% on-chain | Full protocol, all tokens, webhooks, basic notifications |
-| Growth | €49/month | 0.5% on-chain | + Branded emails (merchant name/color), lower Stripe app fee |
-| Business | €199/month | 0.5% on-chain | + Custom sender domain (noreply@merchant.com), advanced analytics |
+| Growth | €49/month | 0.5% on-chain | + Branded emails, lower Stripe app fee |
+| Business | €199/month | 0.5% on-chain | + Custom sender domain, advanced analytics |
 | Enterprise | Custom | 0.5% on-chain | + Custom integrations, SLA, white-label |
 
 20 Growth merchants = €980/month guaranteed before a single transaction.
 
 ---
 
-## 13. Pre-Mainnet Checklist (Code)
-- [x] Stripe Checkout Phase A — manual USDC bridge ✅ May 24
-- [ ] Stripe Checkout Phase B — automate USDC transfer (post-audit)
-- [x] SEPA bank transfer — mandate options + dispute handlers ✅ Jun 7
-- [x] MB Way Stripe identifier fixed (card → mb_way) ✅ Jun 7
-- [x] Geofencing — HTTP 451 OFAC ✅
-- [x] Subscriber portal ✅
-- [x] 3-day pre-payment notification ✅
-- [x] Price change 30-day notification ✅
-- [x] Whitelabel notifications (Growth+) + custom domain (Business+) ✅
-- [x] Admin dashboard v2 — 10 tabs ✅ May 24
-- [x] Tax exports — XLSX with accountant guide tab ✅ May 24
-- [x] Multi-currency pricing — 15 currencies ✅ May 24
-- [x] Stablecoin restriction — WETH/cbBTC blocked ✅
-- [x] Subscriber import DB schema ✅
-- [ ] Subscriber import UI — CSV upload (post-mainnet ready)
-- [x] MRR + GTV charts — AdminDashboard + MerchantDashboard Analytics ✅ Jun 4-5
-- [x] ARPU, LTV, churn rate, new vs churned — MerchantDashboard Analytics ✅ Jun 5
-- [x] Separate keeper/notifier/x-bot Railway services ✅ Jun 7
-- [x] New deployer + keeper wallets ✅ May 30
-- [x] DEPLOYER_PRIVATE_KEY corrected in Railway ✅ Jun 7
-- [x] STRIPE_SECRET_KEY confirmed sk_live_ ✅ Jun 7
-- [x] Cloudflare Access on /admin ✅ May 24
-- [x] Rate limiting on admin login ✅ May 24
-- [x] Basescan API key ✅ Etherscan V2
-- [x] Update local .env RESEND_API_KEY ✅
-- [ ] Smart contract audit — Cyfrin $12K proposal on table, awaiting funds
-- [x] PostgreSQL session store — MemoryStore warning fixed ✅ May 31
-- [x] Merchant webhook route POST /api/merchants/:address/webhook added ✅ May 31
-- [x] Keeper resumeSubscription removed — keeper only calls executePull + expireSubscription ✅ May 31
-- [x] Bot state PostgreSQL-backed — survives Railway restarts ✅ May 31
-- [ ] Pay link dark/light mode toggle (post-mainnet)
-- [x] Stripe application_fee_amount 0.5% wired ✅ Jun 3
-- [x] Multi-token product creation fixed ✅ Jun 3
-- [x] Railway PORT fix — API on port 8080 ✅ Jun 3
-- [x] Keeper DB-driven subscription scan + on-chain fallback ✅ Jun 5
-- [x] Keeper cycle timer + heartbeat to DB (system_health table) ✅ Jun 5
-- [x] /api/status public endpoint ✅ Jun 5
-- [x] Status.jsx — public status page at authonce.io/status ✅ Jun 5
-- [x] AdminDashboard System ⚙ tab ✅ Jun 5
-- [x] DM Sans self-hosted — Google Fonts removed ✅ Jun 5
-- [x] Cloudflare Bot Fight Mode + AI crawler blocking ✅ Jun 5
-- [x] security@authonce.io Zoho group + security.txt ✅ Jun 5
-- [x] Netlify fully decommissioned — Git unlinked, domains removed ✅ Jun 7
-- [x] Google OAuth app publishing ✅
-- [x] Cloudflare Pages SPA routing ✅
-- [x] Legal pages live ✅
-- [x] v6 contracts — all ChainShield audit fixes applied ✅ May 31
-- [x] v6 contracts redeployed + verified Base Sepolia ✅ May 31
-- [x] Safe multisig confirmed on Base Mainnet ✅ May 30
-- [x] Landing page v3 deployed ✅ May 30
-- [x] End-to-end Sepolia subscriber flow test ✅ May 31 — all 10 flows passed
-- [x] GDPR delete endpoint + auto on-chain cancellation ✅ Jun 7
-- [x] GDPR pending on-chain dashboard ✅ Jun 7
-- [x] Keeper/Safe/Deployer/Treasury wallet balance monitoring ✅ Jun 7
-- [x] ETH balance email alerts — 24h cooldown ✅ Jun 7
-- [x] Merchant VAT number + country + billing address ✅ Jun 7
-- [ ] Keeper + Safe ETH top-up on Base Mainnet (both at 0 — do before September)
-- [ ] MerchantRegistry H1 guard — uncomment before mainnet deploy
-- [ ] Stripe webhook events: charge.dispute.created + charge.dispute.closed registered ✅ Jun 7
+## 13. Phase Status
 
----
-
-## 14. Go-To-Market
-
-**Phase 1 (Months 1-6) — Crypto-native merchants**
-- Pay link live — authonce.io/pay/yourname — share anywhere, no code
-- Full merchant dashboard live — products, webhooks, exports, 15 currencies
-- Founding merchant offer: 0% fees for 3 months
-- Channels: Base Discord, Farcaster, X/crypto Twitter
-- Target: 10 founding merchants
-
-**Phase 2 (Months 6-18) — B2B2C partnerships**
-- Integration partnerships: Dune Analytics, Nansen, Messari
-- Stripe fiat onramp — subscribers pay by card, merchant receives stablecoins
-- Coinbase Base ecosystem grants and co-marketing
-- Target: 100+ merchants
-
-**Phase 3 (Months 18+) — Fiat merchants + AI agents**
-- Embeddable widget and REST API for any platform
-- Zapier integration — connect AuthOnce to 6,000+ apps
-- AI agent marketplaces — ERC-1271 native integration
-- Target: 1,000+ merchants
-
----
-
-## 15. Infrastructure Reference
-
-**Frontend hosting:** Cloudflare Pages
-  Project: authonce · Build: `npm run build` · Dist: `dist` · Root: `frontend`
-  Domain: authonce.io (Cloudflare DNS, auto-updated on push)
-  Env vars: VITE_ALCHEMY_KEY, VITE_API_URL, VITE_NETWORK, VITE_STRIPE_PUBLISHABLE_KEY
-
-**Railway API port:** 8080 (Railway injects PORT=8080 · Public networking configured to port 8080 · Do not change)
-
-**Admin security:** Cloudflare Zero Trust → Access → Applications → AuthOnce Admin
-  Domain: authonce.io/admin · Policy: Emails → vasco@authonce.io · Session: 24h
-  Team: frosty-lake-d608.cloudflareaccess.com
-
-**Railway project:** supportive-prosperity (Hobby $5/month)
-  Services (Jun 7 — fully separated):
-  - the-opportunity → `node scripts/api.js` (public port 8080)
-  - authonce-keeper → `node scripts/keeper.js` (no public port)
-  - authonce-notifier → `node scripts/notifier.js` (no public port)
-  - authonce-x-bot → `node scripts/x-bot.js` (no public port)
-  - farcaster-bot → separate service (existing)
-  - monitor → separate service (existing)
-  - postgres → database
-
-  Build command for all services: `echo "build done"` (prevents Nixpacks build-time script execution)
-  nixpacks.toml in repo root: `[phases.build] cmds = []`
-
-  Key env vars: VAULT_ADDRESS, KEEPER_PRIVATE_KEY, DEPLOYER_PRIVATE_KEY, DATABASE_URL,
-                RESEND_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-                GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET, ENCRYPTION_KEY,
-                PROTOCOL_TREASURY_ADDRESS, BASE_SEPOLIA_RPC_URL, BASESCAN_API_KEY,
-                ADMIN_EMAIL, ADMIN_PASSWORD, NOTIFY_EMAIL, NETWORK
-
-**Farcaster Bot:**
-  Service: farcaster-bot on Railway
-  Account: @authonce on Warpcast (FID: 3324301)
-  Posts: Daily 12:00 UTC — 21 posts, 3-week rotation. PostgreSQL state (survives restarts).
-
-**Hardhat networks:**
-  - `base-sepolia` — chainId 84532
-  - `base-mainnet` — chainId 8453
-
-**Deploy command:** `npx hardhat run scripts/deploy.js --network base-sepolia`
-**Verify command:** `npx hardhat verify --network base-sepolia <address> <constructor args>`
-
----
-
-## 16. Next Session Priorities
-
-**RESOLVED THIS SESSION (June 14 2026):**
-- ✅ All Hacken AI audit findings addressed — v7 contracts (SubscriptionVault v7, MerchantRegistry v4)
-- ✅ v7 contracts deployed to Base Sepolia and verified on Sourcify
-- ✅ config.js updated with new addresses + ABI additions (pendingFees, IS_MAINNET)
-- ✅ Railway VAULT_ADDRESS updated to v7
-- ✅ api.js fixed: GET /api/products list was missing payment_methods/fiat_currency/crypto_discount_pct
-- ✅ api.js fixed: PUT product route now applies same whitelist filter as POST
-- ✅ PayPage.jsx: 5 bugs fixed (token selector SELECTABLE_TOKENS filter, introAmount decimals, fiat currency label, hardcoded USDC text, selectedToken reset)
-- ✅ Merchant re-approved on new MerchantRegistry v4
-- ✅ stress-test-setup.js: vault address updated to v7, approve() call added (root cause of IDs 10-21 grace period)
-- ✅ Stripe Connect activated on Stripe dashboard (under review — 1-3 days)
-
-**[CRITICAL] Still outstanding:**
-1. **stress-test-setup.js** — run against v7 contracts to create fresh subscriptions with correct approve() flow
-2. **Keeper pull on v7** — confirm at least one successful executePull() on new contracts
-3. **Tally outreach** — send June 16
-4. **Cyfrin follow-up** — share Hacken AI findings, ask about moving August slot earlier
-5. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
-6. **CLAUDE-CORE.md push** — git commit after session
-
-**MetaMask EIP-7702 issue (testnet only):**
-- All MetaMask accounts on Base Sepolia are auto-enrolled in delegation framework
-- Causes gas simulation failures for createSubscription (420M gas limit)
-- Not a contract bug — won't affect real EOA subscribers on mainnet
-- Workaround: use stress-test-setup.js (pure ethers.js, no browser wallet)
-
-**Stripe Connect:**
-- Activated Platform model on Stripe dashboard June 14
-- Under review — STRIPE_CONNECT_CLIENT_ID still ca_placeholder in Railway
-- Update Railway once Stripe approves and provides real ca_ client ID
-
-**Partnership outreach tracker:**
-1. CharmVerse (Alex Poon) — email sent June 10, awaiting reply
-2. Snapshot Pro/Labs (Fabien Marino) — sent June 13 (scheduled)
-3. Tally — send June 16
-4. DeepDAO — send June 19
-5. Boardroom — send June 22
-6. Dune Analytics — send June 25
-7. Messari — send June 28
-
-**RESOLVED THIS SESSION (June 13 2026):**
-- ✅ keeper.js wallet-scope ReferenceError fixed (commit f4dd98f) — 0 pulls for 6+ days since v6 deploy
-- ✅ notifier.js 6× stale v4 ABI signatures fixed (commit c953b12) — all events silently dropped since May 31
-- ✅ 12 stress-test subscriptions (IDs 10-21) backfilled into DB via backfill-stress-test.js
-- ✅ Hacken AI audit reviewed and triaged — v7 contract fix list defined
-
-**[CRITICAL] v7 contract fixes (must ship before mainnet):**
-1. **updateSafeVault: add `require(newSafeVault == msg.sender)`** — current implementation allows any address to become the safeVault; safeVault must always equal msg.sender (same H2 rule as createSubscription). Missing check = anyone can redirect funds.
-2. **MerchantRegistry MAX_MERCHANTS: use `_approvedMerchantCount` not `_merchantList.length`** — _merchantList.length includes revoked merchants, so the cap is incorrectly consumed by removed entries; swap to the approved count.
-
-**[HIGH] v7 contract fixes:**
-3. **Fee transfer: wrap in try/catch, accumulate in `pendingFees`** — if treasury transfer reverts (e.g. contract recipient), the entire executePull reverts and the subscriber's payment is stuck; buffer fees and allow manual withdrawal.
-4. **Cache `prevLastPulledAt` before state mutation for reversion** — if executePull partially succeeds (transfer ok, state update fails), the subscription's lastPulledAt is stale; capture before modifying so revert path restores correct state.
-
-**Standard items:**
-5. **Safe multisig ETH top-up** — still at 0 ETH on Base Mainnet — send 0.05 ETH via bridge.base.org
-6. **Keeper wallet ETH top-up** — send 0.05 ETH via bridge.base.org
-7. **Tally outreach** — send June 16 (per partnership tracker)
-8. **Cyfrin follow-up** — share Hacken AI audit findings as context; may move their July slot earlier
-9. **stress-test-setup.js: add USDC approve()** — test subscriptions (IDs 10-21) in grace period because script never called approve(); add before createSubscription so keeper can pull
-10. **System tab: keeper pull failure alerting** — surface "0 pulls in last 24h despite N due subscriptions" as red warning on AdminDashboard System tab
-11. **Circle Alliance follow-up** — 6 weeks no response, Arc launch is the hook — draft and send
-12. **Base Ecosystem Fund** — follow up late June (no reply since May 14)
-
-**Partnership outreach tracker:**
-1. CharmVerse (Alex Poon) — email sent June 10 2026, awaiting reply
-2. Snapshot Pro/Labs (Fabien Marino) — sent June 13 (scheduled)
-3. Tally — send June 16
-4. DeepDAO — send June 19
-5. Boardroom — send June 22
-6. Dune Analytics — send June 25
-7. Messari — send June 28
-
-**SEO completed June 8-12:**
-- sitemap.xml + robots.txt live ✅
-- Google Search Console configured + sitemap submitted ✅
-- authonce.io indexed on Google ✅
-- blog.authonce.io live with index page listing both posts ✅
-- comparison page: blog.authonce.io/vs-custodial ✅
-- FAQ + Organization JSON-LD schema in frontend/index.html ✅
-- Base App Dashboard registration + app_id verification ✅
-- noscript static content block for Google crawling ✅
-- Blog link added to LandingPage.jsx nav ✅
-- Full OG/Twitter/Bing meta tags ✅
-
-**Forms fixed June 8:**
-- EN form (authonce.io) → Formspree mwvjlyyy → vasco@authonce.io ✅
-- PT form (authonce.io/pt) → Formspree mwvjlyyy → vasco@authonce.io ✅
-- Railway API CORS fixed — api.js + keeper.js running together ✅
-
-**Audit outreach status:**
-- Cyfrin (Will): declined Wednesday slot, asked for July — awaiting response
-- Hacken: João no-show — Prusela Andrade covering — email sent Jun 5
-- Hashlock: deferred payment declined — $5-10K proposal on table
-- Spearbit/Cantina, Electisec, Sherlock: no reply
-
-**Contract addresses — Base Sepolia (current — active):**
-- SubscriptionVault: `0x55180314174B30e778f35357035d49cAEF55C835`
-- MerchantRegistry v3: `0x989376ff6195be2e76871535Db21CB8BdC9175D4`
-
-**Old/inactive contracts:**
-- SubscriptionVault v5 (old): `0x2ED847da7f88231Ac6907196868adF4840A97f49` — 64 days inactive
-- MerchantRegistry v2 (old): `0xE62aF1DcADeF946ecC08978dec565344A63B8f9b` — never used
-
-**Monthly burn: ~€25-30/month**
-- Railway Hobby: ~$10-15
-- Neynar/Farcaster: $10/month ($120/year)
-- Zoho Mail: ~$5
-- Resend: free tier (26/3,000 emails used)
-- Cloudflare/Formspree: free
-
----
-
-## 17. Scaling Roadmap
-
-**Keeper scaling — when to act:**
-
-| Merchants | Subscribers | Action needed |
+| Phase | Description | Status |
 |---|---|---|
-| 1-20 | up to 10,000 | Current sequential keeper — fine |
-| 20-50 | up to 25,000 | Add parallel batch processing (25 concurrent workers) |
-| 50+ | 25,000+ | Multiple keeper wallets + nonce management |
-
-**Why 25 concurrent workers:**
-- Target: process all due subscriptions within 1 hour of billing date
-- 25,000 subs ÷ 3,600 seconds = 7 tx/second needed
-- Each worker: 1 tx per 3 seconds = 0.33 tx/second
-- 25 workers = ~8 tx/second — covers target with buffer
-- Single keeper EOA causes nonce collisions above ~5 concurrent — need multiple wallets at scale
-
-**Gas costs at scale (Base Network):**
-- Per executePull(): ~50,000-80,000 gas, ~$0.0001-$0.002
-- 25,000 tx/month: ~$10-15/month in gas — negligible
-- Keep 0.05 ETH in keeper wallet = 3-5 months gas at 25K tx/month
-- Keep 0.1 ETH as comfortable buffer at scale
-
-**Immediate action (before September mainnet):**
-- Top up keeper wallet to 0.05 ETH via bridge.base.org
-- Top up Safe multisig to 0.05 ETH via bridge.base.org
-- Both currently at 0 ETH on Base Mainnet
-
-**Keeper infrastructure — how others solve it:**
-
-Current AuthOnce keeper: custom Node.js, single EOA, sequential execution. Fine for launch.
-
-Industry standard solutions:
-- **Gelato Network** — decentralised executor, Web3 Functions, multiple independent wallets, no nonce problems. Used by MakerDAO, Uniswap, Base projects. Pay per execution.
-- **Chainlink Automation** — decentralised keeper nodes, pay in LINK. Used by Aave, Synthetix.
-- **OpenZeppelin Defender** — centralised but battle-tested, manages nonces/retries/gas automatically.
-
-All three solve the nonce problem via multiple independent wallets running in parallel.
+| 0–4 | Contracts, Keeper, Backend, Webhooks, Frontend | ✅ Complete |
+| 5a | Google OAuth subscriber auth | ✅ Complete |
+| 5b | Stripe Checkout Phase A | ✅ Complete |
+| 5c | Stripe webhook wiring | ✅ Complete |
+| v5 | Multi-token, EIP-712, ERC-1271, DataOnce, external registry | ✅ Complete |
+| 6 | Geofencing middleware (HTTP 451 OFAC) | ✅ Complete |
+| 7 | Legal docs | 🔄 Pending |
+| 8 | Smart contract audit | 🔄 Pending funds + EF subsidy reply |
+| 9 | Safe multisig + Ledger | ✅ Complete |
+| 10 | Subscriber portal | ✅ Complete |
+| 11 | SEPA bank transfer | ✅ Complete |
+| 12–13 | Security fixes + Sepolia redeploy | ✅ Complete |
+| 14 | Landing page v3 | ✅ Complete |
+| 15 | Pitch deck v4 | ✅ Complete June 30 |
+| 16 | GDPR right to erasure | ✅ Complete |
+| 17 | Railway service separation | ✅ Complete |
+| 18 | EIP-2612 gasless permit | ✅ Complete June 30 |
+| 19 | Push Protocol notifications + AI agent webhooks | ✅ Complete June 28 |
+| 20 | Keeper 5x parallel throughput + 20s polling | ✅ Complete June 30 |
+| 21 | Mainnet deployment | ⬜ Blocked by audit |
 
 ---
 
-## 19. Session Summary — June 13 2026
+## 14. Pre-Mainnet Checklist
 
-**CRITICAL BUG FOUND + FIXED: keeper.js wallet-scope ReferenceError**
-- `processDueSubscriptions()` referenced `wallet` (defined only inside `run()`) but was declared at module level — never in scope
-- Every `executePull()` attempt threw `ReferenceError: wallet is not defined`, caught silently by try/catch
-- Result: 0 successful pulls since v6 deploy on May 31 (6+ days)
-- Fix: added `wallet` as third parameter to `processDueSubscriptions(vault, wallet, ids)` and updated the call site
-- Commit: `f4dd98f` — deployed to Railway, confirmed working
+- [x] EIP-2612 permit — createSubscriptionWithPermit() live and tested ✅ June 30
+- [x] Keeper 20s polling + 5 parallel batch ✅ June 30
+- [x] Push Protocol wallet notifications ✅ June 28
+- [x] AI agent webhooks ✅ June 28
+- [x] PayPage permit flow with USDT/DAI fallback ✅ June 30
+- [x] Blog 12 articles + valid XML sitemap ✅
+- [x] Stripe Checkout Phase A ✅
+- [x] SEPA + MB Way fixed ✅
+- [x] Geofencing HTTP 451 ✅
+- [x] Subscriber portal ✅
+- [x] 3-day pre-payment notification ✅ **note: was silently broken since inception (ReferenceError), only actually functional as of July 4 fix — do not assume historical reminders were sent**
+- [x] Admin dashboard 10 tabs ✅
+- [x] Tax exports XLSX ✅
+- [x] Multi-currency pricing 15 currencies ✅
+- [x] Cloudflare Access on /admin ✅
+- [x] Bot state PostgreSQL-backed ✅
+- [x] Pay link step indicator — three-mode `PermissionSteps` component (permit / legacy-two-step / already-approved-direct), shown above Subscribe button ✅ July 4
+- [x] SubscriptionVault verified on Basescan ✅ July 4
+- [x] Keeper `NotKeeper` revert fixed — constructor had `_keeper` set to deployer address, not keeper wallet ✅ July 4
+- [x] Notifier `lastBlock` checkpoint now persisted to DB — prevents silent event loss on every restart ✅ July 4
+- [x] Wallet-connect + signature login added to `/my-subscriptions` — self-custody subscribers no longer require Google ✅ July 4
+- [x] `/api/subscriber/subscriptions/:walletAddress` now requires signature or matching JWT — was previously open to any address in the URL ✅ July 4
+- [ ] Smart contract audit — Softstack $4,600 pending acceptance
+- [ ] Stripe Checkout Phase B — automate USDC transfer (post-audit)
+- [ ] Subscriber import UI — CSV upload
+- [ ] **MerchantRegistry verification on Basescan** — Vault done, Registry still pending
+- [ ] **Backfill subscription id 2 into Postgres** — succeeded on-chain, never inserted due to notifier restart gap (fixed going forward, not retroactively)
+- [ ] **Seal Railway secrets** — `ENCRYPTION_KEY`, `PUSH_CHANNEL_PRIVATE_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY` across all 4 services (in progress July 4)
+- [ ] Demo video — still not recorded (blocks Base grant nomination)
+- [ ] Base grant nomination form — needs demo video
+- [ ] CLAUDE-CORE.md update — this file ✅ done now
+- [ ] Mainnet deployment — blocked by audit
 
-**SECONDARY BUG FOUND + FIXED: notifier.js stale v4 event ABI signatures**
-- 6 event ABIs in notifier.js still matched v4 signatures — different topic hashes → all events silently dropped since May 31 v6 deploy
-- Affected: `SubscriptionCreated` (9 params vs 13), `PaymentExecuted`/`InsufficientFunds`/`InsufficientAllowance` (missing `address indexed token`), `SubscriptionPaused` (missing `string reason`), `SubscriptionCancelled` (`cancelledBy` wrongly `indexed`)
-- Result: 0 subscriptions indexed into DB; keeper scan returned 0 candidates
-- Fix: corrected all 6 event strings + added `VAULT_ADDRESS` hard-fail guard (was silently falling back to v4 address)
-- Commit: `c953b12` — deployed
+---
 
-**Stress test: 12 subscriptions created on Base Sepolia (IDs 10-21)**
-- `stress-test-setup.js` written, debugged (2-confirmation ETH funding fix for RPC state lag), and run
-- All 12 backfilled into DB via `backfill-stress-test.js`; merchant email fallback confirmed (12 emails received)
-- IDs 10-21 in grace period — script never called `approve()` on vault (USDC allowance = 0); test gap, not production bug
+## 15. Partnership Outreach Tracker
 
-**Hacken AI audit reviewed — v7 fix list defined**
-- Critical: `updateSafeVault` missing `require(newSafeVault == msg.sender)` — anyone can redirect funds
-- Critical: `MerchantRegistry` MAX_MERCHANTS cap uses `_merchantList.length` (includes revoked) instead of `_approvedMerchantCount`
-- High: fee transfer not wrapped in try/catch → executePull reverts if treasury is a rejecting contract; fix: accumulate in `pendingFees`
-- High: `prevLastPulledAt` not cached before state mutation — partial failure leaves stale state
-- Next: implement all v7 fixes, redeploy to Sepolia, run full stress test, then book Cyfrin/Hacken for formal review
+| Company | Contact | Channel | Status |
+|---|---|---|---|
+| CharmVerse | Alex Poon | Email sent June 10 | Awaiting reply |
+| Snapshot Pro | Fabien | Email sent June 13 | Awaiting reply |
+| Tally | Dennison (@frolic) | Email sent June 16 | Awaiting reply |
+| DeepDAO | Eyal (@eithco) | Email sent June 19 | Awaiting reply |
+| Boardroom | Kevin (@kevin_leffew) | Email sent June 22 | Awaiting reply |
+| Dune Analytics | Fredrik (@hagaetc) | Email sent June 25 | Awaiting reply |
+| Messari | Ryan (@twobitidiot) | Email sent June 28 | Awaiting reply |
 
-## 18. Session Summary — June 11-12 2026
+**Next step for all:** Follow up via Discord (not email) — find partnerships/integrations channel per project.
 
-**Base ecosystem integration completed:**
-- AuthOnce registered on Base App Dashboard (dashboard.base.org) — logo, tagline "USDC subscriptions on Base.", description added
-- `base:app_id` meta tag added to frontend/index.html, domain verified ✅
-- Builder Code `bc_ca3k7b52` added to keeper.js — appends to executePull() calldata for leaderboard attribution
-- Base Weekly Leaderboards: ON. Base App Notifications: OFF.
-- Submitted to Base Ecosystem directory via Google Form (old GitHub PR route archived)
+---
 
-**SEO completed:**
-- FAQ + Organization JSON-LD schema added to frontend/index.html (5 FAQ questions, sameAs links)
-- blog.authonce.io index page built — Blog schema JSON-LD, lists both posts (vs-custodial + why-onchain-recurring-payments-are-broken)
-- Fixed: blog nav only linked to 1 post — now has proper index
+## 16. Co-Founder Search
 
-**CSV Subscriber Import — built and deployed:**
-- POST /api/products/:address/subscribers/import — validates email/wallet/amount/interval, max 1,000 rows
-- subscriber_imports table auto-created on first use
-- MerchantDashboard.jsx: CsvImport component in Subscribers tab — upload, preview, error reporting, CSV template download
-- Fixed isDark undefined bug (prop wasn't passed — removed dependency)
+**Looking for:** Commercial co-founder — Web3 or fintech background, merchant acquisition, partnership development, investor relations.
 
-**Unified Pricing Model — major refactor, deployed:**
-- Removed price_type/fiat_price/fiat_yearly_price split entirely
-- Single `amount` field = price across USDC/USDT/DAI/EURC/fiat (1:1)
-- New "crypto discount %" field (0-50%) — common Web3 pattern, incentivizes on-chain payment
-- AddProductModal completely rewritten (unified token + fiat method checkboxes)
-- EditProductModal updated with same fields + save-success feedback
-- api.js: POST/PUT product endpoints updated, Stripe checkout simplified to 1:1
-- db.js: crypto_discount_pct column added, upsertProduct updated
-- PayPage.jsx: payment method selector now shows when wallet connected (was hidden after connect — bug fixed), applies crypto discount, fixed token-filter bug (was showing ALL tokens regardless of merchant selection)
-- Fixed: payment_methods camelCase/snake_case mismatch in db.js upsertProduct (root cause of "settings not saving")
+| Platform | Status |
+|---|---|
+| CoFoundersLab | ✅ Profile created, 8 messages sent, Riccardo Ferighi replied |
+| LinkedIn (Yanislava Hristova) | ✅ Message sent June 30 — talent partner, Web3/FinTech network |
+| Top CoFoundersLab leads | Lauritz (Berlin) > Michaela (Glasgow, legal) > Maeve (London) > Andrea (London) > Riccardo (Milan) |
 
-**Payment method selector bugs fixed:**
-- Root cause #1: db.js destructuring mismatch (paymentMethods vs payment_methods)
-- Root cause #2: PayPage selector hidden when flowStatus=="connected" (only showed at "idle")
-- Root cause #3: Stripe/Card showing as available even when merchant has no Stripe account — now filtered server-side in /payment-methods
+---
 
-**Pricing page (/pricing) bugs — partially fixed:**
-- Root cause found: lang-detection effect in App.jsx did `history.replaceState(..., "/pt")` on ANY route if localStorage.ao_lang==="pt" — flipped isPricingRoute to false, broke the page. Fixed to only rewrite URL on homepage "/".
-- "Launch App" button converted from onClick to `<a href="/?launch=true">` — works now ✅
-- Auto-opens wallet connect modal via useConnectModal when arriving with ?launch=true
-- PT/EN switcher on /pricing fixed to stay on /pricing (was redirecting to homepage)
-- REMAINING MINOR ISSUES (low priority, no merchant impact):
-  - Theme toggle (moon icon) on /pricing still doesn't respond to clicks — converted to label+checkbox, untested after deploy
-  - Navigating /pt → /pricing shows EN instead of PT
+## 17. Session Summary — June 28–30 2026
 
-**ETHGlobal Lisbon — REMOVED from roadmap:** Vasco can't attend. Replaced with "Built for AI Agents" positioning task (ERC-1271 already supported, just needs comms).
+**Contracts:**
+- Added IERC20Permit interface, createSubscriptionWithPermit(), _createSubscriptionInternal() to SubscriptionVault.sol
+- Redeployed contracts — final addresses: Vault `0x483f593...6564`, Registry `0x393BA721...0299`
+- Verified on Sourcify (Sourcify brownout June 30 — Etherscan V2 pending)
+- USDC approved on new vault ✅
+- Deployer approved as first merchant ✅
+- Keeper address set on new vault via set-keeper.js ✅
+- Stale DB subscriptions cleared ✅
 
-**Product vision additions to CLAUDE-REFERENCE.md:**
-- Section 19a "RevOnce" — revenue-based financing layered on AuthOnce's verified on-chain MRR (Phase 3, post-DataOnce, post-mainnet only). AuthOnce stays infrastructure-only (never the lender) to preserve no-CASP/VASP positioning.
+**Keeper:**
+- 60s polling → 20s polling
+- Sequential processing → 5 parallel batch (Promise.all)
+- ~5x throughput improvement
+- Builder code `bc_ca3k7b52` retained for Base leaderboard attribution
 
-**Outreach status:**
-- CharmVerse (Alex Poon) — emailed June 10, awaiting reply
-- Snapshot Labs (Fabien Marino) — scheduled June 13, 08:45 Phuket time
-- Stan Trenev (@sstrenev) — DeFi engineer, $300M+ deployed, followed by jesse.base.eth — identified as integration target (build recurring billing on AuthOnce's deployed contracts directly), reply not yet drafted/sent
+**Frontend:**
+- PayPage.jsx: EIP-2612 permit flow with useSignTypedData, per-token routing, fallback to approve+subscribe for USDT/DAI
+- config.js: new contract addresses + createSubscriptionWithPermit ABI
+- LandingPage.jsx: AI agent payments section, interactive product creator, API code snippet
 
-**Stress test prep:**
-- Keeper wallet funded with 0.1 testnet ETH on Base Sepolia (sent from 0x00df2...A02C0)
-- Plan: 30-100 real on-chain pulls this weekend + DB seeder for 20K rows (seeder not yet built)
-- Daily faucet claims ongoing
+**Backend:**
+- notifier.js: Push Protocol SDK, sendPushNotification(), sendAgentWebhook(), notifySubscriber() smart routing
+- api.js: POST /api/subscriptions/link endpoint
+- db.js: subscriber_email, subscriber_webhook_url, is_contract_vault columns
 
-*Last updated: 2026-06-12*
-
-## 20. Session Summary — June 14 2026
-
-**v7 contracts — all Hacken AI findings addressed and deployed:**
-
-SubscriptionVault v7 fixes:
-- [V7-C1] CRITICAL: updateSafeVault missing require(newSafeVault == msg.sender)
-- [V7-H1] HIGH: fee transfer to treasury wrapped in try/catch + pendingFees accounting
-- [V7-H2] HIGH: prevLastPulledAt cached before state mutation in executePull
-- [V7-M6] MEDIUM: approveToken enforces require(IERC20(token).decimals() == 6)
-- [V7-L3] LOW: _tokenEverAdded mapping prevents duplicate _tokenList entries
-
-MerchantRegistry v4 fixes:
-- [V7-C2] CRITICAL: MAX_MERCHANTS cap uses _approvedMerchantCount not _merchantList.length
-- [V7-L2/L3] LOW: blacklistMerchant guards against blacklisting admin or pendingAdmin
-- [V7-L5] LOW: IS_MAINNET stored as public immutable
-
-**New contract addresses (Base Sepolia):**
-- SubscriptionVault v7: 0xeb068B47731261F7B4A5ae8535686D67D7f72321
-- MerchantRegistry v4:  0xAE681E431c353f5930dDFfBC74037d3f2afE3264
-
-**Bug fixes shipped:**
-- api.js: GET /api/products list missing payment_methods/fiat_currency/crypto_discount_pct — root cause of edit product always reverting to USDC
-- api.js: PUT product route missing whitelist filter and normalisation
-- PayPage.jsx: token selector used SELECTABLE_TOKENS (network whitelist) instead of product.payment_methods — selector never showed on Sepolia
-- PayPage.jsx: introAmount hardcoded 6 decimals (wrong for DAI)
-- PayPage.jsx: fiat currency label showed "USDC" instead of EUR/USD etc
-- PayPage.jsx: "Approving USDC..." hardcoded text
-- PayPage.jsx: selectedToken never reset on product load
-- stress-test-setup.js: missing approve() call — root cause of IDs 10-21 in grace period
-
-**Stripe Connect:**
-- Activated Platform model on Stripe live account
-- Under Stripe review (1-3 days)
-- STRIPE_CONNECT_CLIENT_ID still needs real ca_ value once approved
-
-*Last updated: 2026-06-14*
-
-## 21. Session Summary — June 15 2026
-
-**SEO audit and implementation completed:**
-
-**Cloudflare:**
-- www → non-www 301 redirect configured via Cloudflare Redirect Rules ✅
-- HSTS enabled (Full Strict already set) ✅
-
-**Google Analytics 4:**
-- GA4 property created — Measurement ID: G-5NE0QK40WZ ✅
-- GA4 tag added to frontend/index.html and index-pt.html ✅
-- GA4 confirmed live in Realtime (1 active user, 4 page views tracked) ✅
+**Tested end-to-end (June 30):**
+- Permit flow: Rabby wallet signed typed data → createSubscriptionWithPermit confirmed → keeper detected within 45s → subscription #0 active as EOA ✅
+- MetaMask deployer wallet flagged as contract-wallet (ERC-1271) due to smart account feature — use Rabby for subscriber testing
+- Transaction speed on Base Sepolia: ~8 seconds per confirmation
+- Keeper cycle time: ~900ms per poll, 20s interval
 
 **Blog:**
-- Second blog post created: blog-site/why-onchain-recurring-payments-are-broken/index.html ✅
-- Full SEO: title, meta description, canonical, OG, Twitter, Article + FAQPage JSON-LD, favicon ✅
-- GA4 tag added to all 3 blog pages (index, vs-custodial, why-onchain) ✅
-- Favicon added to all blog pages ✅
-- blog.authonce.io added to Google Search Console (auto-verified) ✅
-- Blog sitemap.xml created and submitted to Search Console ✅
-- robots.txt created for blog.authonce.io ✅
+- 12 articles live at blog.authonce.io
+- Sitemap rebuilt as valid XML — submitted to Search Console
+- New article: ai-agent-trading-bot-payments.html
 
-**Main site:**
-- hreflang EN/PT added to index.html and index-pt.html ✅
-- og:image confirmed exists at frontend/public/og-image.png ✅
+**Pitch deck v4:**
+- Slide 2: "Stripe charges" → "Traditional processors charge"
+- Slide 9: audit status updated, Push Protocol + AI webhooks added, blog updated to 12 articles
 
-**SEO score: 84/100 — all technical gaps resolved. Remaining gap: backlinks (1 referring domain only).**
+**LinkedIn (June 30):**
+- Overview set, tagline set, workplace policy Remote, CTA button → authonce.io
+- Auto-invite ON
+- Message sent to Yanislava Hristova (co-founder search)
+- Message sent to crypto investor (Kevin Miller) — identified as scam, ignored
 
-**Remaining SEO actions (next session):**
-- Custom 404 page in App.jsx (low priority)
-- Backlinks: submit blog posts to Paragraph, dev.to, Base ecosystem newsletter
-- Next blog post — write and publish to build topical authority
+**Audit:**
+- Softstack proposal received ($4,600, July 7, ISO 27001, on Areta allowlist) — new cheapest option
+- EF subsidy follow-up sent to team@areta.io June 30
+- Hashlock follow-up received from Rafail — holding pending subsidy
 
-*Last updated: 2026-06-15*
+**Pending items:**
+1. Demo video — blocks Base grant nomination
+2. Areta EF subsidy reply — 48h deadline before accepting Softstack regardless
+3. Verify contracts on Basescan (retry July 1 after Sourcify brownout)
+4. PayPage step indicator UI — show "1 free signature → 2 confirm transaction"
+5. Blog post + X + Farcaster on EIP-2612 permit implementation
+6. Partnership follow-ups via Discord
+7. Start fundraising outreach — Nuno Correia first target
+8. grace-periods.html — old contract addresses hardcoded, needs update
+9. Landing page Basescan testnet banner link — points to old vault address
 
-## 22. Session Summary — June 16 2026
+*Last updated: 2026-06-30*
 
-**Stripe Connect — fully live ✅**
-- Stripe Connect Platform approved: `acct_1TRzB99OrTZ08FUb`
-- Live Client ID: `ca_UhbS2B4nN4rjwy3BZuzwkoa49qpY5ubS` — updated in Railway
-- Standard OAuth enabled in Stripe Dashboard → Connect → Onboarding Options → OAuth tab
-- Redirect URIs added:
-  - `https://authonce.io/api/connect/callback`
-  - `https://the-opportunity-production.up.railway.app/api/connect/callback`
-- **Bug fixed:** api.js line 1659 — redirect URI used `FRONTEND_URL` instead of `API_URL`
-- `API_URL` = `https://the-opportunity-production.up.railway.app` added to Railway variables
-- Merchant `0xbb6d960b...` connected Stripe account `acct_1TizydDpTvv1ELrs` ✅
-- Card payments confirmed working end-to-end — Stripe Checkout loads with CHF/EUR selector ✅
+---
 
-**Stripe KYC completed:**
-- Business type: Individual, Portugal
-- Website: authonce.io
-- Category: Software/SaaS
-- Statement descriptor: AUTHONCE.IO
-- Bank account: Swiss IBAN via Wise personal account
+## 18. Session Summary — July 4 2026
 
-**Wise account created:**
-- Personal account, Switzerland
-- EUR balance (Belgian IBAN — not used for Stripe)
-- Swiss IBAN used for Stripe payouts
+**Contracts:**
+- SubscriptionVault verified on Basescan — required extracting Hardhat's raw `input` object from `artifacts/build-info/*.json` (the full build-info wrapper fails silently with empty bytecode; Basescan needs only `{language, sources, settings}`, not Hardhat's `{id, input, output, ...}` wrapper)
+- MerchantRegistry still unverified — same process needed
 
-**Google Cloud Web3 Startup Program:**
-- Application submitted June 16 ✅
-- Account: `admin@authonce.io` (Google account created, Zoho alias)
-- Billing account: `01BB2F-594210-BA4958` — `admin@authonce.io` added as Billing Account Administrator
-- Program tier: Start (pre-seed/bootstrapped)
-- Response expected: 3-5 business days
-- Potential: up to $200,000 in Google Cloud credits over 2 years
+**Critical bug found and fixed — `NotKeeper` revert on every pull:**
+- Every `executePull()` call had been reverting since the June 30 redeploy — confirmed via constructor-argument decode: `_keeper` was mistakenly passed the deployer's own address (`0xbb6d960b...EE7782`) instead of the keeper wallet (`0xdCEa737e...C151`) at deploy time
+- Fixed via `setKeeper()` on Basescan Write Contract, called from the deployer/admin wallet
+- Verified fixed via a small standalone script (`check-keeper.js`) reading the public `keeper()` getter directly
 
-**PayPage.jsx bug fixed:**
-- Wallet steps (Approve USDC, Create subscription on-chain) now hidden when `paymentMethod === 'card'`
-- Previously showed wallet steps even when card was selected
+**Critical bug found and fixed — silent event loss in notifier.js:**
+- `lastBlock` (the poll checkpoint) only ever lived in memory — every restart reset it to "now," silently skipping any `SubscriptionCreated`/other events in the gap, with no error and no recovery
+- This is why a real, on-chain-confirmed test subscription (id 2) never appeared in Postgres — notifier restarted between the transaction confirming and its next poll cycle
+- Fixed: `lastBlock` now persisted to a new `notifier_state` table, reloaded on startup. Verified via restart log: `"Resumed from saved checkpoint: block ..."`
+- Subscription id 2 itself was not backfilled — fix is forward-only
 
-**Merchant dashboard updates:**
-- Merchant renamed to **AuthOnce Labs**
-- Product renamed to **Pro Plan** — $2.00/Monthly, USDC + Card
-- Pay link: `authonce.io/pay/authonce-labs/new-plan`
+**Separate bug found in the same file — 3-day payment reminder silently broken since inception:**
+- `checkUpcomingPayments()` referenced `lastPulledAt` without ever reading it from the on-chain struct — plain `ReferenceError`, caught and logged every cycle, meaning this notification has likely never successfully fired for any subscriber
+- Fixed with a one-line addition: `const lastPulledAt = Number(onchain.lastPulledAt);`
 
-**Deployer wallet imported to MetaMask:**
-- `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` imported as "AuthOnce Deployer"
-- Used to connect merchant dashboard and complete Stripe OAuth flow
+**Frontend — permission step indicator (`PermissionSteps.jsx`), built and wired into `PayPage.jsx`:**
+- Original ask was 2-step indicator (permit vs. legacy). Testing surfaced a third real code path: **already-approved / direct** — when USDC allowance is already sufficient, `handleApprove()` skips straight to `createSubscription()` with zero signing and zero approval step. Component now handles all three modes correctly, driven by actual `flowMode` state derived from existing variables (`tokenSupportsPermit`, `approveTxHash`, allowance check) — no new state added to `PayPage.jsx`
 
-**Rabby wallet — ready for video demo:**
-- Address: `0x128cE652e31Ef886376696Adf92ce6E36057c832`
-- Balance: 46 USDC, 0.02 ETH (Base Sepolia)
-- Clean EOA — no EIP-7702 delegation ✅
-- Will be used as subscriber wallet in video demo
+**Backend — subscriber identity gap closed:**
+- `/my-subscriptions` previously hard-gated on Google OAuth — self-custody subscribers (the entire non-custodial value prop) had no path in at all, not even an empty list
+- Added wallet-connect + free-signature login (`"AuthOnce: view my subscriptions (<timestamp>)"`, no gas, no transaction) as an equal path alongside Google, merging results from both sources
+- `/api/subscriber/subscriptions/:walletAddress` was previously unauthenticated — any address in the URL returned that address's full subscription list. Now requires either a matching Google JWT or a verified signature, 5-minute replay window
 
-**Video demo — scheduled for tomorrow (June 17):**
-- Script written and ready (6 scenes, 60 seconds)
-- PC only — Rabby as subscriber, MetaMask Deployer as merchant
-- Tool: Loom or ShareX + CapCut
-- Pay link: `authonce.io/pay/authonce-labs/new-plan`
-- 6 tabs prepared: landing page, merchant dashboard, pay link, Basescan, Railway logs, closing shot
+**Custody model clarified (not yet resolved):**
+- Google/fiat subscribers: AuthOnce's backend derives and holds a real private key per email (`generateSubscriberWallet()`), can sign transactions unilaterally — this is genuine custody, not just permission
+- Self-custody (crypto) subscribers: unaffected, wallet never touches AuthOnce
+- Three options discussed, not yet decided: (A) SIWE-based identity for self-custody subscribers — doesn't touch the custodial side; (B) third-party custody provider (Turnkey, Privy, Circle Programmable Wallets) for the fiat path — moves custody, doesn't eliminate it; (C) remove the on-chain wallet for fiat subscribers entirely, treat as pure off-chain Stripe billing — only option that is actually zero-custody
+- Needs a real legal opinion before mainnet, not just an audit — current regulatory stance assumes non-custodial throughout, which is not true for the Google/fiat path today
 
-**Stale DB subscriptions:**
-- IDs 6-22 deleted from DB (v6 stress test leftovers)
-- Active: IDs 0-4 (weekly, next due ~June 21)
-- Grace: ID 5 (116h remaining, 0 USDC)
+**Infrastructure:**
+- Docker/Nixpacks build warnings surfaced 4 secrets (`ENCRYPTION_KEY`, `PUSH_CHANNEL_PRIVATE_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY`) baked into image `ARG`/`ENV` — this is inherent to how Railway's Nixpacks builder works for any Node service reading `process.env`, not a fixable misconfiguration. No Railway API/CLI mutation exists for sealing — dashboard-only, one-way, 3-dot menu → Seal. In progress.
+- `fix-keeper.js` found and deleted — targeted a wrong, unrecognized contract address (`0x55180314174B30e778f35357035d49cAEF55C835`), unrelated to any known deployment. Not needed; real fix done via Basescan directly.
 
-**Railway variables updated this session:**
-- `STRIPE_CONNECT_CLIENT_ID`: `ca_UhbS2B4nN4rjwy3BZuzwkoa49qpY5ubS`
-- `API_URL`: `https://the-opportunity-production.up.railway.app`
+**Faucet automation:**
+- `fund-test-wallet.js` built using Coinbase CDP's official Faucet API (`cdp.evm.requestFaucet`) — legitimate, documented, rate-respecting automation, not a captcha/UI bypass
+- Used to fund two test wallets with Base Sepolia ETH for permit-path vs. already-approved-path testing
 
-*Last updated: 2026-06-16*
+**Pending items:**
+1. MerchantRegistry verification on Basescan
+2. Backfill subscription id 2 into Postgres, if wanted
+3. Finish sealing the 4 Railway secrets across all services (not just notifier)
+4. Decide on custody model for fiat subscribers (A/B/C above) before mainnet
+5. Confirm frontend push of `PayPage.jsx` / `PermissionSteps.jsx` / `MySubscriptions.jsx` actually reached Cloudflare
+6. Legal review of non-custodial claim vs. actual fiat-path custody, ideally via Fio Legal
+7. Everything carried over from June 30 session (demo video, audit funding, fundraising outreach) — unchanged, not addressed this session
 
-## 23. Session Summary — June 20 2026
+*Last updated: 2026-07-04*
 
-**Outreach:**
-- ✅ DeepDAO tool listing request sent to info@deepdao.io (Treasury category)
-- ✅ Base Ecosystem Fund — ecosystem-fund@coinbase.com confirmed dead (bounces); Jesse Pollak DM drafted via Farcaster (@jessepollak / warpcast.com/jessepollak); identity: authonce.base.eth
-- ✅ Cuatrecasas Acelera — already applied previously, skipped
+---
 
-**v7 Stress Test — PASSED:**
-- stress-test-setup.js run against v7 contracts with approve() fix
-- 10 fresh EOA subscriptions created (IDs 6-15), all with correct USDC allowance
-- Keeper executed 9 successful executePull() transactions on v7 SubscriptionVault
-- First confirmed tx: 0xecb088969850a2ae3d881e9e52c18c2fff51e6aa235163ec3e19b15b1347fb2e (block 43101529)
-- Subscriptions #12 and #13 failed (approve() timing issue) — isolated, not a keeper bug
-- IDs 0-4 (original weekly subs) also failing — created on v6, don't exist on v7 vault
-- RPC rate limiting hit once under load — confirmed need for paid Alchemy RPC pre-mainnet
+## 19. Session Summary — July 5 2026
 
-**Social:**
-- ✅ First on-chain proof post published on @AuthOnce (X + Farcaster)
-- Images: Railway keeper logs + Basescan transaction showing 0.995 USDC to merchant + 0.005 USDC to treasury
-- Tagged @base and @jessepollak
-- @VascoBuilds repost drafted
+**Custody pivot decided — full stablecoin, no fiat processor, permanently:**
+- Decision: AuthOnce goes crypto-only. No Stripe, anywhere, for any purpose — including AuthOnce's own merchant SaaS tier billing (Growth/Business/Enterprise), which is now billed in USDC via AuthOnce's own protocol (AuthOnce as a merchant inside its own system)
+- Fiat access, if built, is via onramp partner (Circle/Coinbase Onramp) delivering USDC directly to the subscriber's own wallet — AuthOnce never touches the fiat leg. **Not yet built** — Coinbase Onramp application still "Pending" as of this session
+- Reasoning: closes the actual custody gap found July 4 (Google/fiat subscribers had a real custodial wallet + key, not just "less non-custodial") without needing a legal opinion on a hybrid model; shrinks audit scope; matches actual Day-1 GTM (Web3 SaaS, DAOs) already in this doc
+- AI agent payments deliberately NOT promoted to Phase 2 — real institutional momentum (Visa, Mastercard, Coinbase, Stripe all shipped agent-payment infra in 2026) but near-zero actual volume industry-wide (~$28K/day on x402, largely gamed), and current standards (x402/AP2) are per-call micropayments, a different primitive from AuthOnce's recurring subscriptions. Stays Phase 3.
 
-**Blog — 11 new posts fixed and deployed:**
-- Files: index.html, grace-periods.html, why-switched.html, real-cost-custodial.html, what-is-noncustodial-billing.html, eip2612-explained.html, base-network-subscriptions.html, integration-guide.html, compliance.html, ai-agent-payments.html, complete-guide.html
-- Fixes applied: GA4 (G-5NE0QK40WZ), DM Sans font, og:image, Stripe removed, v7 contract addresses, favicon
+**New feature: Agent Pull Cap — built, deployed, verified, and tested on-chain this session.** See §2a for full detail. Starting value 199 USDC (Business tier), one-way-up ratchet, admin-controlled via Basescan (no in-app write UI, by design).
 
-**SEO improvements:**
-- HSTS enabled on Cloudflare (6 months, includeSubDomains, Preload, No-Sniff) ✅
-- Meta title trimmed: "AuthOnce — USDC Subscription Payments on Base" (46 chars) ✅
-- Keywords added: stablecoin subscriptions, Web3 billing, Base Network payments ✅
-- Email protected in index.html noscript block ✅
-- SEO score: 89/100
+**Vault-only redeploy process established** — `scripts/deploy-vault-only.js`, reuses existing `MerchantRegistry` instead of redeploying it, avoiding re-approval of every merchant. Hard-fails if `KEEPER_ADDRESS` env var is missing (no silent fallback to deployer — this was the exact root cause of the June 30 `NotKeeper` incident). Warns (doesn't block) if `KEEPER_ADDRESS` doesn't match the known-correct keeper, in case of legitimate rotation.
 
-**LandingPage.jsx audit and fixes:**
-- "Audited contracts" → "Audit Q3 2026" (trust bar + card detail)
-- All vasco@authonce.io and support@authonce.io plain HTML links removed
-- Founding offer consistent: First 10 get 0% fees, First 5 get lifetime Growth
-- Embeddable Widget tagged "Coming Soon"
-- SDK removed from Developer API card
-- Card payment mention added to How It Works section
-- PayPage.jsx currency symbol fix (FIAT_SYMBOLS lookup) included in same commit
+**`.env` variable naming gotcha found:** `deploy.js`/`deploy-vault-only.js` read `KEEPER_ADDRESS`. A pre-existing `KEEPER_WALLET` variable (different name, different address — `0x08d3817E...`, itself unverified against Railway) was silently ignored by the deploy scripts, which would have re-triggered the deployer-as-keeper fallback bug on this redeploy if not caught. Fixed by adding `KEEPER_ADDRESS` explicitly; `KEEPER_WALLET` left in place in case something else reads it.
 
-**Email system overhaul:**
-- email-templates.js: added productName + subscriberWallet + subscriberEmail to all merchant templates; fiat-aware merchantPaymentReceived (uses merchant preferred currency CHF/EUR/USD); merchantFiatPaymentReceived new template for card payments; priceChangeNotice shows new price; gracePeriodDays dynamic; cancelledBy displayed; noreply footer added
-- notifier.js: fully migrated all 11 email types from raw HTML to email-templates.js; FROM changed to noreply@authonce.io with reply-to support@authonce.io; merchant preferred currency passed to payment received template
-- webhook.js: fallback emails now sent to merchant's registered email (not NOTIFY_EMAIL); getMerchant imported; subscription ID in all subjects; noreply from address; automated message footer
+**RPC config bug found:** `hardhat.config.js` reads `BASE_SEPOLIA_RPC_URL` from `.env`; an existing value pointed at an Infura project without Base Sepolia enabled, blocking deploy entirely (`HH110` error). Fixed by clearing the variable, falling back to the public `sepolia.base.org` endpoint already used successfully all session.
 
-**Zoho email setup:**
-- Aliases created: notification@authonce.io, noreply@authonce.io
-- Filters created: Notifications (→ Alerts, mark read), Merchant Applications (→ folder, flag important), Payment Failed (→ Alerts, flag important), Low ETH Alert (→ Alerts, flag important)
+**Verification repeated successfully** for the new vault (`0x0C8668dE...`), same method as July 4 — extract Hardhat's `input` object from `artifacts/build-info/*.json`, discard the wrapper, upload via Standard-JSON-Input. `npx hardhat verify` was tried first (config already had the Etherscan plugin set up) — succeeded on Sourcify, failed on Basescan itself due to a deprecated V1 API key format (Etherscan V2 migration needed) — not investigated further since the manual method is already proven faster.
 
-**DB subscriptions status (June 20):**
-- IDs 0-4: failing (v6 subs on v7 vault — expected, will expire)
-- ID 5: grace period
-- IDs 6-15: stress test subs, 9 pulled successfully, 2 failed (approve timing)
-- stress-test-keys.json and stress-test-results.json in .gitignore ✅
+**Real bug found in `AdminDashboard.jsx`, unrelated to anything built this session:** `VAULT_ADDRESS` and `REGISTRY_ADDRESS` were hardcoded locally in this file, not imported from `config.js` — and both were wrong, pointing at two previously-unseen stale addresses matching neither the June 30 nor July 4/5 deployments. This means the agent-pull-cap admin card added earlier in this same session was silently pointing at the wrong contract from the moment it was built, until caught and fixed. Lesson: a variable's name is not proof of its value — should have checked the actual constant, not assumed it matched `config.js` just because the pattern looked similar to other files that do import correctly (`PayPage.jsx`, `MySubscriptions.jsx` do import from `config.js`; `AdminDashboard.jsx` does not).
 
-**Video demo — still pending (tomorrow June 21):**
-- Script ready: 6 scenes, 90 seconds max, Loom
-- Use existing Pro Plan product (do NOT create new products on camera)
-- Basescan tx ready: 0xecb088969850a2ae3d881e9e52c18c2fff51e6aa235163ec3e19b15b1347fb2e
-- Rabby wallet subscriber: 0x128cE652... (Base Sepolia, check USDC balance before recording)
-- MetaMask Deployer as merchant: 0xbb6d960b...
+**On-chain proof method for MetaMask smart-account testing:** transaction-hash lookups (via MetaMask's own "view on explorer" link, or Basescan's Transactions tab) were unreliable for this specific wallet — repeatedly resolved to unrelated "Redeem Delegations" wrapper transactions instead of the actual contract call. Reading contract state directly (`subscriptions(id)` on Basescan's Read Contract tab) was the reliable method instead — confirmed subscription creation, exact amounts, and `isContractVault` flag directly, sidestepping the wrapper-transaction problem entirely. Worth using this method first for any future smart-account testing on this setup, rather than chasing transaction hashes.
 
-**Jesse DM (send tomorrow):**
-- Platform: Farcaster @jessepollak (warpcast.com/jessepollak)
-- Message: "Hi Jesse — I'm Vasco, building AuthOnce (authonce.base.eth), a non-custodial USDC subscription protocol on Base. Applied to the Base Ecosystem Fund in April and sent a follow-up in May, but just discovered ecosystem-fund@coinbase.com bounced both times. Didn't want to fall through the cracks — is there a right person or channel to reach? Happy to share the deck."
+**Pitch deck (v4) and public site content reviewed for the custody pivot** — landing page, `compliance.html`, `complete-guide.html`, `index-pt.html` all had Stripe/dual-fee/fiat-offloading language removed or rewritten. One **false compliance claim found and removed**: `compliance.html` asserted a "$200 pre-audit per-transaction cap hardcoded in the protocol" — checked against actual verified contract source, confirmed it never existed. Removed entirely rather than replaced, since no real mitigation existed to describe truthfully in its place.
 
-**Commits this session:**
-- 48b0ae8 — email: add product name, subscriber identity, fiat template, fix grace period
-- 81981d1 — emails: merchant dynamic routing, noreply from, templates migration, preferred currency
-- webhook commit — webhook: merchant dynamic email routing, noreply from, subscription ID in subjects
-- LandingPage + PayPage commit
-- blog + index.html SEO commit
+**Pending items, carried and new:**
+1. MerchantRegistry verification on Basescan — still not done, unchanged since July 4
+2. Backfill subscription id 2 into Postgres (from July 4's notifier checkpoint gap) — still not done
+3. Finish sealing the 4 Railway secrets across all services — status unconfirmed this session
+4. Legal review of non-custodial claim — now simpler given the full-stablecoin pivot decision, but still not started
+5. Google for Startups Cloud Program — rejected for lacking a visible founder/team page with verifiable third-party links; reapply once landing page fixes are live and a real team page exists (not a jobs page — solo founder, jobs page would read worse than none)
+6. Farcaster bot repeating content in rotation — reported, not yet investigated (need the actual bot script, not yet uploaded)
+7. Confirm `config.js` itself has the new vault address — session ended before this was verified directly; check for the same hardcoded-vs-imported issue found in `AdminDashboard.jsx`
+8. Update Railway env vars for `VAULT_ADDRESS` across all 4 services to `0x0C8668dE16BDaF4FC6aAddc5Ac24954e5EFBb95d` — user confirmed done this session, not independently verified
 
-*Last updated: 2026-06-20*
+**Note on this file's size:** 547 lines / ~33KB / ~8,150 tokens as of this session, before this section. Not near any practical size limit for project knowledge. Worth considering, purely for human readability, whether older fully-closed session summaries (§17 particularly) could move to `CLAUDE-REFERENCE.md` or a dedicated archive file, keeping this file focused on current state rather than full history — a maintenance choice, not a technical requirement.
 
-## 23. Session Summary — June 24 2026
-
-**Co-founder search — CoFoundersLab:**
-- Profile created: CoFoundersLab free trial (30 days, $29/month after)
-- 8 outreach messages sent: Carlota Costa (Porto), Riccardo Ferighi (Milan), Sarah Guadagnino (NYC), Maeve Buatsi (London, verified), Tanya Mohan (Dubai), Andrea Geltrude (London), Michaela Girvan (Glasgow, legal LL.M), Lauritz Elmshaeuser (Berlin)
-- Riccardo Ferighi replied — conversation active, asked about location and incorporation
-- Top leads ranked: Lauritz (Berlin, proven operator) > Michaela (Glasgow, legal + BD) > Maeve (London, verified commercial) > Andrea (London, sales + BD) > Riccardo (Milan, broadest skills)
-- Scam pattern identified: Gosuke + David Gomez (Worklo) — both ignored
-
-**Pitch deck v3:**
-- 7 fixes applied → AuthOnce-PitchDeck-v3-2026.pptx
-- Slide 2: dunning/failed payments added as 4th problem bullet
-- Slide 3: restructured — Recurring by design / Non-custodial + dunning / AI Agent Native + multi-token
-- Slide 4: fiat accuracy fix — "Payment lands directly in merchant wallet or Stripe account"
-- Slide 7: Phase 2 fiat error fixed
-- Slide 9: contract versions v5/v2 → v7/v4
-- Slide 10: "hired" → "in place"; equity removed → "Terms on request"
-- Slide 11: "evenings and weekends" removed
-
-**3 Comma Capital:**
-- Dealflow form submitted: hello@3commafunds.com
-- Lisbon VC, CMVM-regulated, €100K–€1.5M pre-seed, Web3 infrastructure focus
-- Found via Circle Alliance Partner Directory
-
-**Ordana (joinordana.com):**
-- Profile created, Stripe connected
-- MPI (Ordana team) sent inbound: "we use Stripe and they're expensive"
-- Top collaboration targets: Spotlaiz, Guideless, VantalabsAI
-
-**Base App Dashboard:**
-- Description filled (157 chars)
-
-**Leadverse.ai Reddit lead finder:**
-- Best leads: r/ethtrader (USDC self-custody), r/srilanka (Stripe alternatives), r/fintech (crypto payments)
-- Reddit karma = 5 — too low for r/fintech; r/srilanka and r/ethtrader replies drafted
-
-**Code fixes shipped:**
-
-db.js:
-- product_slug column added to subscriptions table + ALTER TABLE migration
-- upsertSubscription accepts productSlug
-
-notifier.js:
-- Both subscription queries JOIN products table → product_name in all emails
-- Stale v6 sub IDs (0,1,2,3,4,7,8,12,13,14,15) deleted from DB — were causing CALL_EXCEPTION spam in logs
-
-api.js:
-- POST /api/subscriptions/link — stores product_slug by tx_hash, retries 5×
-
-PayPage.jsx:
-- Calls /api/subscriptions/link after subscribeConfirmed
-
-MerchantDashboard.jsx:
-- CSV import hint text + inline download template link
-- Product dropdown in import panel
-- Pay link displayed after successful import with Copy button
-
-**Tier billing system — planned, not built:**
-- Path A: fiat via Stripe; Path B: crypto via AuthOnce (AuthOnce bills own merchants using AuthOnce)
-- 6 items: tier products on AuthOnce, Stripe subscription products, upgrade UI, webhook handlers, downgrade logic, payment method switch (fiat↔crypto)
-- Flagged for next sprint
-
-**Commits:**
-- fix: product name in emails via tx_hash link
-- feat: CSV import hint text and download template link
-- feat: product selector and pay link display after CSV import
-
-*Last updated: 2026-06-24*
+*Last updated: 2026-07-05*

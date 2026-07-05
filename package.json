@@ -21,20 +21,21 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "exceljs": "^4.4.0",
     "hardhat": "^2.22.0",
     "hardhat-gas-reporter": "^1.0.10",
     "solidity-coverage": "^0.8.12"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "^1.51.2",
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@openzeppelin/contracts": "^5.0.2",
     "@pushprotocol/restapi": "^1.7.32",
     "@wagmi/connectors": "^8.0.1",
     "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
-    "ethers": "^6.16.0",
+    "ethers": "^6.17.0",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "jsonwebtoken": "^9.0.3",
