@@ -2,7 +2,7 @@
   "name": "authonce-farcaster-bot",
   "version": "1.0.0",
   "description": "AuthOnce Farcaster bot — daily posts via Neynar API",
-  "main": "../scripts/farcaster-bot.js",
+  "main": "farcaster-bot.js",
   "dependencies": {
     "pg": "^8.11.3"
   }

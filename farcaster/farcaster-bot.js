@@ -1,16 +1,17 @@
 // scripts/farcaster-bot.js
 // AuthOnce Farcaster Bot
 // Posts daily at 12:00 UTC via Neynar API
-// 21-post bank — 3-week rotation, never repetitive
+// 28-post bank — 4-week rotation, never repetitive
 // Mix: builder updates, hot takes, funny, technical, questions, polls
 //
 // Railway env vars:
 //   NEYNAR_API_KEY       — Neynar API key
 //   NEYNAR_SIGNER_UUID   — Signer UUID for @authonce (FID: 3324301)
 //   FARCASTER_FID        — AuthOnce FID (3324301)
+//   DATABASE_URL         — Postgres connection string (rotation index persistence)
 
-const fs   = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
 
 const NEYNAR_API_KEY     = process.env.NEYNAR_API_KEY;
 const NEYNAR_SIGNER_UUID = process.env.NEYNAR_SIGNER_UUID;
@@ -18,22 +19,86 @@ const NEYNAR_SIGNER_UUID = process.env.NEYNAR_SIGNER_UUID;
 if (!NEYNAR_API_KEY)     throw new Error('NEYNAR_API_KEY not set');
 if (!NEYNAR_SIGNER_UUID) throw new Error('NEYNAR_SIGNER_UUID not set');
 
-// ─── State ────────────────────────────────────────────────────────────────────
-const STATE_FILE = '/tmp/farcaster-bot-state.json';
+// ─── State — PostgreSQL backed (survives Railway restarts) ───────────────────
+// This service runs as its own isolated Railway deployment (Root Directory =
+// "farcaster"), so it can't reach scripts/db.js on disk — connection/query
+// pattern below matches db.js exactly (same pool config, same logged query
+// wrapper) rather than importing it or hand-rolling a bare `new Pool()`.
+//
+// Table is named farcaster_bot_state (not a generic "bot_state") so x-bot.js
+// can adopt the same checkpoint pattern later without a name collision.
+if (!process.env.DATABASE_URL) {
+  console.error(
+    '[farcaster-bot] ⚠️  DATABASE_URL not set — rotation index cannot persist. ' +
+    'Every restart will silently reset to post #1 instead of resuming the rotation.'
+  );
+}
 
-function getState() {
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+pool.on("error", (err) => {
+  console.error("[farcaster-bot] Unexpected pool error:", err.message);
+});
+
+async function query(text, params) {
+  const start = Date.now();
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-  } catch {
-    return { index: 0 };
+    const res = await pool.query(text, params);
+    const duration = Date.now() - start;
+    if (duration > 1000) {
+      console.warn(`[farcaster-bot] Slow query (${duration}ms):`, text.substring(0, 80));
+    }
+    return res;
+  } catch (err) {
+    console.error("[farcaster-bot] Query error:", err.message, "\nQuery:", text.substring(0, 120));
+    throw err;
   }
 }
 
-function saveState(state) {
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state), 'utf8');
+async function ensureStateTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS farcaster_bot_state (
+      key        TEXT PRIMARY KEY,
+      value      TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
-// ─── Post bank — 21 posts, 3-week rotation ────────────────────────────────────
+async function getState() {
+  try {
+    const result = await query(`SELECT value FROM farcaster_bot_state WHERE key = 'index'`);
+    if (result.rows.length > 0) {
+      const saved = parseInt(result.rows[0].value, 10);
+      if (Number.isFinite(saved)) return { index: saved };
+    }
+  } catch (err) {
+    console.error("[farcaster-bot] Failed to load state, defaulting to 0:", err.message);
+  }
+  return { index: 0 };
+}
+
+async function saveState(state) {
+  try {
+    await query(
+      `INSERT INTO farcaster_bot_state (key, value, updated_at) VALUES ('index', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [String(state.index)]
+    );
+  } catch (err) {
+    console.error("[farcaster-bot] Failed to save state:", err.message);
+  }
+}
+
+// ─── Post bank — 28 posts, 4-week rotation ────────────────────────────────────
 // Types:
 //   [builder]   — honest build-in-public updates
 //   [funny]     — humour that lands with crypto-native audience
@@ -48,9 +113,9 @@ const POSTS = [
   `My smart contract has better uptime than my sleep schedule.
 
 Keeper bot: running 24/7 ✅
-Me: questionable 🤔
+Me: shipping anyway 🤔
 
-Building @authonce solo. Evenings and weekends.
+Building @authonce — solo founder, moving fast.
 
 /authonce /base /buildinpublic`,
 
@@ -266,10 +331,10 @@ Sure. Like PayPal.
 Use of funds:
 40% — smart contract audit (Cyfrin)
 35% — business co-founder
-15% — legal (MiCA, Portugal FinLab)
+15% — legal (MiCA, regulatory)
 10% — operations
 
-Solo founder. Swiss resident. Portugal incorporated.
+Solo founder. Swiss resident. Building for Europe.
 
 If you know someone who backs early Web3 infrastructure — I'd appreciate the intro.
 
@@ -298,6 +363,96 @@ Everything else — non-custodial, grace periods, webhooks, multi-token — is j
 authonce.io
 
 /defi /base /web3`,
+
+  // WEEK 4
+
+  // 22 [take]
+  `Unpopular opinion: grace periods are more important than gas fees.
+
+A 7-day retry window recovers more failed payments than any gas optimisation.
+
+People obsess over transaction costs. Nobody talks about dunning.
+
+Dunning is the boring word for "how do you get paid when the vault runs dry."
+
+We built a whole layer for it.
+
+/defi /base /buildinpublic`,
+
+  // 23 [question]
+  `What's the Web3 equivalent of a SaaS trial?
+
+With AuthOnce: merchant generates a trial link. Subscriber gets N days free. After that — vault gets funded, keeper pulls on schedule.
+
+No card required. No credit check. Just a wallet and a grace period.
+
+Would you use this for your project?
+
+/base /defi /saas`,
+
+  // 24 [technical]
+  `AuthOnce contracts enforce a 30-day minimum notice on price changes.
+
+Merchant calls setProductExpiry(). The new price only takes effect after 30 days on-chain.
+
+Subscribers get notified automatically. They can cancel before the change kicks in.
+
+This isn't a policy. It's not in the terms of service. It's in the bytecode.
+
+/solidity /defi /base`,
+
+  // 25 [funny]
+  `Things I've explained to non-crypto people this week:
+
+• "The vault is yours, not ours" — "So like a bank?"
+• "The keeper bot pulls USDC on-chain" — "Pulls what from where?"
+• "It's non-custodial by design" — "Is that legal?"
+• "0.5% flat fee, enforced in bytecode" — "So… like a bank?"
+
+We've come full circle.
+
+/buildinpublic /base /web3`,
+
+  // 26 [builder]
+  `Hardest product decision so far:
+
+Should the vault hold exactly 1× the subscription amount, or let subscribers over-fund?
+
+We chose exactly 1×.
+
+No refund UX. No partial balance confusion. No "why is there €3.47 stuck in my vault."
+
+Vault has the right amount: pull succeeds. It doesn't: grace period starts.
+
+Simple rules compound into good UX.
+
+/buildinpublic /defi /base`,
+
+  // 27 [take]
+  `Web3 payments are not competing with Stripe.
+
+They're competing with nothing — because nothing reliable exists for crypto-native merchants.
+
+Stripe doesn't accept USDC subscriptions. PayPal doesn't know what a vault is.
+
+The competition isn't a better product. It's "just use a spreadsheet and chase payments manually."
+
+We can do better than that.
+
+/defi /base /web3`,
+
+  // 28 [question]
+  `If you ran a DAO and wanted to charge membership fees on-chain —
+
+How would you do it today?
+
+Manual transfers? Snapshot off-chain? Guild.xyz gates?
+
+AuthOnce handles this natively — USDC subscription, subscriber keeps custody, merchant gets pulled on schedule.
+
+Is DAO membership billing a real pain point or am I imagining demand?
+
+/dao /base /defi`,
 ];
 
 // ─── Post via Neynar API ──────────────────────────────────────────────────────
@@ -324,7 +479,7 @@ async function castToFarcaster(text) {
 
 // ─── Post ─────────────────────────────────────────────────────────────────────
 async function post() {
-  const state = getState();
+  const state = await getState();
   const index = state.index % POSTS.length;
   const text  = POSTS[index];
 
@@ -335,7 +490,7 @@ async function post() {
     const result = await castToFarcaster(text);
     const hash   = result?.cast?.hash || 'unknown';
     console.log(`[farcaster-bot] ✅ Cast posted: ${hash}`);
-    saveState({ index: index + 1 });
+    await saveState({ index: index + 1 });
   } catch (err) {
     console.error(`[farcaster-bot] ❌ Error: ${err.message}`);
   }
@@ -355,5 +510,6 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
+ensureStateTable().catch(e => console.error('[farcaster-bot] DB init failed:', e.message));
 console.log('[farcaster-bot] Running — posts daily at 12:00 UTC');
 console.log(`[farcaster-bot] Post bank: ${POSTS.length} posts (${Math.ceil(POSTS.length / 7)}-week rotation)`);
