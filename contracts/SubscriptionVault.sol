@@ -60,9 +60,12 @@ pragma solidity 0.8.24;
 //            expiresAt if set. keeper.js updated to include billingPausedUntil
 //            in isDue logic.
 //
-//    [SV-04] MEDIUM — Merchant transfer now uses SafeERC20.safeTransferFrom
-//            wrapped in a low-level try/catch via a helper. Both merchant and
-//            fee transfers use SafeERC20. Asymmetry eliminated.
+//    [SV-04] MEDIUM — Merchant transfer now uses the same low-level,
+//            return-data-checking transferFrom pattern as the fee transfer,
+//            wrapped in try/catch via a helper. Asymmetry eliminated.
+//            (Originally implemented via a separate SafeERC20 library that
+//            duplicated this pattern; removed in [SV-14] as dead code once
+//            it was confirmed nothing actually called it — see below.)
 //
 //    [SV-06] MEDIUM — updateSafeVault updates isContractVault flag to match
 //            new vault address type. Vault type switch is explicit and auditable.
@@ -81,7 +84,8 @@ pragma solidity 0.8.24;
 //    [H2] safeVault must equal msg.sender
 //    [M1] setFeeBps one-way ratchet
 //    [M2] CEI pattern in executePull
-//    [M3] SafeERC20 for all token transfers (now fully consistent — SV-04)
+//    [M3] Safe (return-data-checked) transferFrom for all token transfers,
+//         now fully consistent — SV-04. (Library removed as dead code, SV-14.)
 //    [M6] merchantPauseSubscription cooldown + lifetime cap
 //    [M7] Merchant transfer DoS protection (try/catch)
 //    [L1] approvedTokenList filters revoked tokens
@@ -156,29 +160,15 @@ interface IERC20Permit {
 }
 
 // -----------------------------------------------------------------------------
-// SafeERC20 (inlined — handles non-standard ERC-20 tokens like USDT)
-// Wraps transferFrom/transfer to handle missing return values.
-// Used for ALL token transfers in this contract — merchant and fee paths.
-// [SV-04] Asymmetry between merchant and fee transfer paths eliminated in v6.
-// -----------------------------------------------------------------------------
-
-library SafeERC20 {
-    function safeTransferFrom(
-        IERC20 token,
-        address from,
-        address to,
-        uint256 amount
-    ) internal {
-        (bool success, bytes memory data) = address(token).call(
-            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount)
-        );
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "SafeERC20: transferFrom failed"
-        );
-    }
-}
-
+// [SV-14] NOTE — a standalone SafeERC20 library previously lived here but was
+// never actually invoked (no `.safeTransferFrom()` dot-call existed anywhere
+// in this contract — it was dead code left over from an earlier refactor).
+// All real token transfers go through `_safeTransferFromWithCatch` at the
+// bottom of this file, which independently implements the same
+// low-level-call-plus-return-data-check pattern, but returns a bool instead
+// of reverting, so a misbehaving merchant/treasury can never brick a pull.
+// Removed to avoid two parallel implementations of the same logic — the
+// remaining single implementation is the actual source of truth.
 // -----------------------------------------------------------------------------
 // Interface — ERC-1271
 // Smart contract wallet signature validation standard.
@@ -277,8 +267,6 @@ abstract contract EIP712 {
 
 contract SubscriptionVault is ReentrancyGuard, EIP712 {
 
-    using SafeERC20 for IERC20;
-
     // -------------------------------------------------------------------------
     // Watermark — origin proof baked into bytecode forever
     // -------------------------------------------------------------------------
@@ -329,8 +317,13 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
 
     /// @notice [SV-11] Maximum subscription amount: 1,000,000 tokens (6-decimal basis).
     ///         Prevents misconfigured subscriptions with absurd amounts.
-    ///         Expressed in base units — works for USDC/USDT/DAI/EURC at 6 decimals.
-    ///         If an 18-decimal token is ever whitelisted, this constant must be reviewed.
+    ///         Expressed in base units — works for USDC/USDT/EURC at 6 decimals.
+    ///         DAI is 18 decimals and is NOT supported by this contract — approveToken()
+    ///         enforces decimals() == 6, so DAI can never be whitelisted as-is. Any doc,
+    ///         UI, or pitch material listing DAI as a supported token is stale and must
+    ///         be corrected. If 18-decimal token support is ever required, this constant
+    ///         and maxAgentPullAmount must both become per-token, decimals-aware values —
+    ///         do not attempt a partial fix.
     uint256 public constant MAX_SUBSCRIPTION_AMOUNT = 1_000_000 * 1e6;
 
     /// @notice [SV-09] Maximum number of tokens ever added to the whitelist.
@@ -414,6 +407,24 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     ///         Admin must fix treasury via setProtocolTreasury() to restore fee collection.
     mapping(address => uint256) public pendingFees;
 
+    /// @notice [SV-15] Consecutive merchant-transfer failures per subscription.
+    ///         Reset to zero on any successful merchant payment, and on manual
+    ///         resumeSubscription(). Once MAX_CONSECUTIVE_MERCHANT_FAILURES is
+    ///         reached, the subscription is auto-paused (see executePull) so a
+    ///         permanently broken merchant address (blacklisted, self-destructed,
+    ///         reverting receiver) cannot cause the keeper to retry the same
+    ///         failing pull forever, burning gas with no possible outcome.
+    mapping(uint256 => uint256) public consecutiveMerchantFailures;
+
+    /// @notice [SV-15] Number of consecutive merchant-transfer failures tolerated
+    ///         before auto-pausing a subscription. Deliberately small and fixed —
+    ///         allows for genuinely transient failures (e.g. a momentary merchant-
+    ///         side issue) without leaving a permanently-broken merchant retried
+    ///         indefinitely. Kept as a constant rather than admin-configurable to
+    ///         minimise attack surface and audit scope; revisit only if real
+    ///         operational data shows the threshold is wrong.
+    uint256 public constant MAX_CONSECUTIVE_MERCHANT_FAILURES = 3;
+
     // -------------------------------------------------------------------------
     // Events
     // -------------------------------------------------------------------------
@@ -461,6 +472,8 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     );
 
     event MerchantTransferFailed(uint256 indexed id, address indexed merchant);
+    event MerchantNotApproved(uint256 indexed id, address indexed merchant); // [SV-16]
+    event SubscriptionAutoPausedRepeatedFailures(uint256 indexed id, address indexed merchant, uint256 failureCount); // [SV-15]
     event FeeAccumulated(uint256 indexed id, address indexed token, uint256 amount);   // [V7-H1]
 
     event InsufficientFunds(
@@ -645,15 +658,52 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         // owner — never on behalf of a third party relaying a signature.
         require(safeVault == msg.sender, "VaultMustBeCaller");
 
-        // Submit the EIP-2612 permit signature to the token contract.
-        // Approves this vault to pull exactly `amount` from msg.sender.
+        // -------------------------------------------------------------------
+        // [SV-13] CRITICAL FIX — standing max allowance, not per-cycle amount.
+        //
+        // Previous version passed `amount` as permit's `value`, so allowance
+        // was fully consumed by the FIRST executePull(). Every subsequent
+        // cycle then failed InsufficientAllowance and auto-paused the
+        // subscription — silently breaking recurring billing for every
+        // permit-based (USDC/EURC) subscriber after their first payment.
+        //
+        // Fix: permit() approves type(uint256).max once. USDC and EURC (like
+        // most modern ERC-20s, following the OpenZeppelin/USDC convention)
+        // special-case max-uint allowance and never decrement it on
+        // transferFrom — so this is a genuine "authorise once" approval that
+        // survives indefinitely across billing cycles, and is also more gas
+        // efficient (no allowance-decrement SSTORE every pull).
+        //
+        // The frontend MUST sign the EIP-712 Permit typed-data with
+        // `value: type(uint256).max` to match what's submitted here — a
+        // mismatched signed value will cause permit() to revert (invalid
+        // signature), which is caught below and surfaces as "PermitFailed".
+        // PayPage.jsx needs a corresponding update; this contract cannot
+        // silently coerce a differently-signed value.
+        //
+        // Standing max allowance is a materially larger blast radius than a
+        // single-cycle allowance if this contract ever has a bug that lets
+        // an unintended caller trigger a transferFrom — this must be called
+        // out explicitly to the auditor as a first-class item, not folded
+        // into general scope.
+        // -------------------------------------------------------------------
         try IERC20Permit(token).permit(
-            msg.sender, address(this), amount, permitDeadline, v, r, s
+            msg.sender, address(this), type(uint256).max, permitDeadline, v, r, s
         ) {
             // permit succeeded — allowance is now set on-chain
         } catch {
             revert("PermitFailed");
         }
+
+        // Defensive check: confirm the resulting on-chain allowance actually
+        // covers at least this cycle's amount. Protects against a
+        // non-standard token whose permit() succeeds without granting the
+        // expected allowance (e.g. a deviant implementation that silently
+        // caps or ignores the value). Cheap — one extra staticcall.
+        require(
+            IERC20(token).allowance(msg.sender, address(this)) >= amount,
+            "InsufficientAllowanceAfterPermit"
+        );
 
         id = _createSubscriptionInternal(
             merchant, safeVault, token, amount, introAmount, introPulls,
@@ -783,6 +833,14 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         );
         sub.status   = SubscriptionStatus.Active;
         sub.pausedAt = 0;
+
+        // [SV-15] Clear any accumulated merchant-failure streak on resume —
+        // otherwise a subscription auto-paused by the circuit breaker would
+        // immediately re-trip on its very next pull attempt.
+        if (consecutiveMerchantFailures[id] != 0) {
+            consecutiveMerchantFailures[id] = 0;
+        }
+
         emit SubscriptionResumed(id, block.timestamp);
     }
 
@@ -892,7 +950,11 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     ///         [SV-01] Uses stored isContractVault flag — not live extcodesize check.
     ///                 Constructor-bypass eliminated.
     ///         [SV-02] Due-date check gates on both lastPulledAt and billingPausedUntil.
-    ///         [SV-04] Both merchant and fee transfers use SafeERC20.
+    ///         [SV-04] Both merchant and fee transfers use the same safe,
+    ///                 return-data-checked transferFrom pattern (SV-14).
+    ///         [SV-16] Re-checks MerchantRegistry.isApproved() live on every pull —
+    ///                 a revoked/blacklisted merchant stops collecting immediately,
+    ///                 and auto-resumes with no subscriber action if re-approved.
     ///         [M2]    CEI pattern — state updated before external calls.
     ///         [M7]    Merchant transfer uses try/catch — cannot DoS pulls.
     function executePull(
@@ -934,6 +996,47 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         address token           = sub.token;
         address safeVault       = sub.safeVault;
         address merchant        = sub.merchant;
+
+        // ---------------------------------------------------------------
+        // [SV-16] CRITICAL — re-verify merchant is still approved.
+        //
+        // Without this, revokeMerchant() and blacklistMerchant() in
+        // MerchantRegistry had ZERO effect on subscriptions already
+        // running — `merchant` here is an immutable snapshot taken once
+        // at createSubscription(), never re-checked. A merchant admin
+        // blacklists for fraud/abuse would keep collecting recurring
+        // payments from every existing subscriber forever, with no
+        // protocol-level way to stop it. Blacklist is supposed to be a
+        // kill switch; it wasn't one for money already in motion.
+        //
+        // Deliberately does NOT set sub.status = Paused. Confirmed
+        // product decision: if the merchant is later re-approved, its
+        // subscriptions must resume automatically with no subscriber
+        // action required. Setting Paused here would force every
+        // affected subscriber to call resumeSubscription() manually even
+        // after the merchant is clean again — that's the wrong behavior
+        // for this case specifically (contrast with the insufficient
+        // funds/allowance paths above, which SHOULD require subscriber
+        // action, since those are the subscriber's own problem to fix).
+        // Leaving status untouched means the very next executePull() call
+        // where isApproved() returns true again just succeeds normally —
+        // no manual resume, no stuck state, no separate re-activation path
+        // needed anywhere else in the contract.
+        //
+        // Trade-off, stated explicitly, not hidden: while a merchant stays
+        // unapproved, the keeper will keep retrying this subscription
+        // every poll cycle, each attempt costing one submitted
+        // transaction's gas (cheap here — this returns before any token
+        // call or ERC-1271 signature check). keeper.js should track
+        // repeated MerchantNotApproved events per subscription id and
+        // back off its own retry frequency for that id specifically.
+        // That's an off-chain gas-efficiency optimisation only — the
+        // on-chain auto-resume guarantee holds either way.
+        // ---------------------------------------------------------------
+        if (!IMerchantRegistry(merchantRegistry).isApproved(merchant)) {
+            emit MerchantNotApproved(id, merchant);
+            return;
+        }
 
         uint256 pullAmount = (introAmount > 0 && pullCount < introPulls)
             ? introAmount
@@ -996,7 +1099,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         sub.lastPulledAt = block.timestamp;
         sub.pullCount    = pullCount + 1;
 
-        // [SV-04] Merchant transfer uses SafeERC20 wrapped in try/catch.
+        // [SV-04] Merchant transfer uses the safe transferFrom helper, try/catch-wrapped.
         // [M7]    Merchant contract cannot DoS pulls by reverting on receive.
         bool merchantPaid = _safeTransferFromWithCatch(
             IERC20(token), safeVault, merchant, merchantReceives
@@ -1007,7 +1110,25 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             sub.lastPulledAt = prevLastPulledAt;
             sub.pullCount    = pullCount;
             emit MerchantTransferFailed(id, merchant);
+
+            // [SV-15] Circuit breaker — bound the retry loop.
+            uint256 failures = consecutiveMerchantFailures[id] + 1;
+            consecutiveMerchantFailures[id] = failures;
+
+            if (failures >= MAX_CONSECUTIVE_MERCHANT_FAILURES) {
+                sub.status   = SubscriptionStatus.Paused;
+                sub.pausedAt = block.timestamp;
+                emit SubscriptionAutoPausedRepeatedFailures(id, merchant, failures);
+                emit SubscriptionPaused(id, address(this), "repeated_merchant_failures");
+            }
             return;
+        }
+
+        // [SV-15] Merchant payment succeeded — clear any accumulated failure streak.
+        // Guarded by a nonzero check so the common (never-failed) case costs no
+        // extra SSTORE.
+        if (consecutiveMerchantFailures[id] != 0) {
+            consecutiveMerchantFailures[id] = 0;
         }
 
         // [V7-H1] Fee transfer wrapped in try/catch.
@@ -1279,10 +1400,12 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         return size > 0;
     }
 
-    /// @notice [SV-04] SafeERC20 transferFrom wrapped in a low-level try/catch.
+    /// @notice [SV-04] Return-data-checked transferFrom wrapped in a low-level try/catch.
     ///         Returns true if the transfer succeeded, false if it reverted.
-    ///         Used for merchant transfer path to maintain DoS protection [M7]
-    ///         while using SafeERC20 for consistent non-standard token handling.
+    ///         Used for both merchant and fee transfer paths to maintain DoS
+    ///         protection [M7] while consistently handling non-standard tokens
+    ///         (e.g. USDT, which doesn't return a bool). This is now the single
+    ///         implementation of this pattern in the contract — see [SV-14].
     function _safeTransferFromWithCatch(
         IERC20 token,
         address from,
