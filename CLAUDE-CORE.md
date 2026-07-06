@@ -595,3 +595,37 @@ frontend/src/
 **Note on this file's size:** 547 lines / ~33KB / ~8,150 tokens as of this session, before this section. Not near any practical size limit for project knowledge. Worth considering, purely for human readability, whether older fully-closed session summaries (§17 particularly) could move to `CLAUDE-REFERENCE.md` or a dedicated archive file, keeping this file focused on current state rather than full history — a maintenance choice, not a technical requirement.
 
 *Last updated: 2026-07-05*
+
+---
+
+## 20. Session Summary — July 5 2026 (continued)
+
+**Confirmed done this session (commit hash cited for each):**
+
+1. **Smart contract fixes SV-13 through SV-16** (`contracts/SubscriptionVault.sol`) — commit `fe74812`:
+   - SV-13: permit-based subscriptions now grant `type(uint256).max` allowance via `permit()`, not just the one-cycle `amount` — fixes recurring pulls silently reverting after the first cycle for any permit-based subscriber.
+   - SV-14: removed the dead, unused `SafeERC20` library.
+   - SV-15: circuit breaker — auto-pauses a subscription after 3 consecutive merchant-transfer failures.
+   - SV-16: `executePull()` now re-checks `MerchantRegistry.isApproved()` live on every pull — closes the gap where revoking/blacklisting a merchant had zero effect on subscriptions already created against them.
+
+2. **Deleted the stale v4.0.0 `frontend/src/components/SubscriptionVault.sol`** — confirmed via full diff to have no functional relationship to the real deployed contract (single hardcoded USDC token, no EIP-712/ERC-1271/permit/MerchantRegistry, missing every v5–v7 security fix). Commit `6f0e3fb`.
+
+3. **Added `CLAUDE.md`** to repo root for Claude Code session persistence. Commit `8e60e47`.
+
+4. **Rotated the Postgres password** via Railway's Credentials-tab Regenerate button, after the previous password was pasted in plaintext into this chat session. Confirmed working — all 5 dependent services (API, keeper, notifier, farcaster-bot, Postgres itself) reconnected cleanly, verified via each service's own post-redeploy logs.
+
+5. **Farcaster bot stale-rotation bug — root-caused and fixed.** Confirmed via Railway's own dashboard (Source Repo + Custom Start Command both point here) that the live farcaster-bot service (Root Directory: `farcaster/`) had been running `farcaster/farcaster-bot.js`'s old 21-post/3-week bank the entire time, while a fixed 28-post/4-week version sat unused in `scripts/farcaster-bot.js` since June 18. Merged the newer post bank into the live file, replaced ephemeral `/tmp` rotation state with a Postgres `farcaster_bot_state` table (same connection/query pattern as `scripts/db.js`, same checkpoint shape as `notifier.js`'s `notifier_state`), added a startup warning if `DATABASE_URL` is missing, deleted the now-redundant `scripts/farcaster-bot.js`. Commit `7bd4008`, confirmed pushed to `origin/main`.
+
+**Still open — explicitly unresolved, not to be read as done:**
+
+1. Farcaster Railway service has **not** been redeployed/verified with the new code via fresh logs yet — last log checked predates this fix.
+2. `set-keeper.js` contains a hardcoded vault address (`0xAd7B4b66F5C0145cbC52c56918F7D6C2871d8c5d`) matching no known deployment. Never verified on-chain whether it even has contract code. Also violates the established Basescan-Write-Contract-only admin pattern — recommend deleting the script rather than fixing the address.
+3. `package.json`/`package-lock.json` diff from an earlier accidental `git add -A` sweep was never actually reviewed. The `stripe` dependency is still listed despite the full-stablecoin custody pivot (§19) — unconfirmed whether it's dead weight or still imported in `api.js`/`webhook.js`.
+4. A `stripe_check...` Postgres table and a separate `bot_state` table (distinct from the new `farcaster_bot_state`) exist in the database — purpose and ownership not investigated.
+5. DAI references found across 21 files (grepped and listed, not yet removed) — confirmed decision to drop DAI support entirely; removal itself not started.
+6. **Blocking dependency:** `PayPage.jsx`'s EIP-2612 permit signing still signs `amount` as the permit value, not `type(uint256).max` — must be fixed before SV-13 (above) reaches subscribers in practice, or every permit-based subscription will revert with a signature mismatch on the second pull.
+7. `keeper.js` has no backoff logic for repeated `MerchantNotApproved` (SV-16) or `MerchantTransferFailed` (SV-15) events — will retry every 20s indefinitely against a merchant that stays unapproved/failing.
+8. Farcaster-bot service's Dockerfile declares `ANTHROPIC_API_KEY`, `APPROVAL_SECRET`, `NEYNAR_API_KEY` — the first two don't match `farcaster/farcaster-bot.js`'s actual functionality (static post bank, no AI generation, no approval flow). Unexplained — possibly a leftover from the separate `C:\farcaster-bot` repo's design, never cleaned up.
+9. Three local directories confirmed distinct: `C:\The-Opportunity` (this repo), `C:\farcaster-bot` (separate `authonce-farcaster-bot.git` repo, not connected to any live Railway service, likely dead), `C:\AuthOnce-Deploy` (not a git repo at all — stale static Netlify mirror, safe to delete given Netlify is fully decommissioned).
+
+*Last updated: 2026-07-05*
