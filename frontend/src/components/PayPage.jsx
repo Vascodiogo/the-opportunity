@@ -10,7 +10,7 @@ import {
   useReadContract, useChainId, useSwitchChain,
   useSignTypedData,
 } from "wagmi";
-import { parseUnits } from "viem";
+import { parseUnits, maxUint256 } from "viem";
 import { baseSepolia } from "wagmi/chains";
 
 import PermissionSteps from "./PermissionSteps";
@@ -412,7 +412,12 @@ export default function PayPage() {
         message: {
           owner: address,
           spender: VAULT_ADDRESS,
-          value: amountRaw,
+          // [SV-13] Must match the vault's on-chain permit() call exactly —
+          // it now requests a standing type(uint256).max allowance, not the
+          // per-cycle amount. A mismatched signed value fails signature
+          // verification inside the token's permit(), surfacing as
+          // "PermitFailed". See contracts/SubscriptionVault.sol SV-13.
+          value: maxUint256,
           nonce,
           deadline,
         },
@@ -471,9 +476,15 @@ export default function PayPage() {
     }
     setFlowStatus("approving");
     try {
+      // Standing max allowance, not the per-cycle amount — a plain approve()
+      // for exactly amountRaw would be fully consumed by the first
+      // executePull(), pausing the subscription on cycle 2 with the same
+      // failure mode SV-13 fixed for the permit path. Applies to USDT/DAI
+      // (their only path) and to USDC/EURC subscribers who land on this
+      // fallback (e.g. permit signature rejected).
       const hash = await writeContractAsync({
         address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "approve",
-        args: [VAULT_ADDRESS, amountRaw],
+        args: [VAULT_ADDRESS, maxUint256],
       });
       setApproveTxHash(hash);
     } catch (err) {
