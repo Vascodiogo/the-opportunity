@@ -159,6 +159,47 @@ const VAULT_ABI = [
     ],
     outputs: [{ name: "", type: "bytes32" }],
   },
+  {
+    name: "PaymentExecuted", type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "amount", type: "uint256" },
+      { name: "merchantReceived", type: "uint256" },
+      { name: "fee", type: "uint256" },
+      { name: "pullCount", type: "uint256" },
+      { name: "timestamp", type: "uint256" },
+    ],
+  },
+  {
+    name: "MerchantNotApproved", type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "merchant", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "MerchantTransferFailed", type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "merchant", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "SubscriptionPaused", type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "pausedBy", type: "address" },
+      { name: "reason", type: "string" },
+    ],
+  },
+  {
+    name: "SubscriptionExpired", type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "timestamp", type: "uint256" },
+    ],
+  },
 ];
 
 const STATUS        = { Active: 0, Paused: 1, Cancelled: 2, Expired: 3 };
@@ -220,6 +261,17 @@ async function getSubscriptionIds(vault) {
 // so batching directly multiplies effective pulls/minute.
 const CONCURRENCY = 5;
 
+// [Keeper backoff] Tracks consecutive MerchantNotApproved outcomes per
+// subscription id. In-memory only — resets to empty on keeper restart,
+// which is harmless (worst case: one extra cycle of retries before the
+// pattern re-establishes). Not persisted to DB; this is purely an
+// RPC/gas-efficiency optimization, not a correctness requirement, since
+// the contract itself (SV-16) already guarantees auto-resume regardless
+// of what the keeper does.
+const notApprovedBackoff = new Map(); // id -> { count: number, skipUntil: number }
+const NOT_APPROVED_BACKOFF_THRESHOLD = 3;
+const NOT_APPROVED_BACKOFF_MS = 10 * 60 * 1000; // 10 minutes
+
 async function processOneSubscription(vault, wallet, id) {
   const sub    = await vault.subscriptions(id);
   const status = Number(sub.status);
@@ -264,6 +316,13 @@ async function processOneSubscription(vault, wallet, id) {
       return { pulled: 0, skipped: 1 };
     }
 
+    const backoffState = notApprovedBackoff.get(id);
+    if (backoffState && Date.now() < backoffState.skipUntil) {
+      const minsLeft = Math.ceil((backoffState.skipUntil - Date.now()) / 60000);
+      console.log(`  Subscription #${id} in MerchantNotApproved backoff — ${minsLeft}min remaining, skipping.`);
+      return { pulled: 0, skipped: 1 };
+    }
+
     try {
       const BUILDER_CODE = "0x62635f6361336b376235320b0080218021802180218021802180218021";
       const encodedCall  = vault.interface.encodeFunctionData("executePull", [id, 0, "0x"]);
@@ -275,17 +334,56 @@ async function processOneSubscription(vault, wallet, id) {
       console.log(`     TX sent:  ${tx.hash}`);
       const receipt = await tx.wait();
       console.log(`     Confirmed in block ${receipt.blockNumber}`);
+
+      let outcome = "unknown";
+      for (const log of receipt.logs) {
+        try {
+          const parsed = vault.interface.parseLog(log);
+          if (parsed) { outcome = parsed.name; break; }
+        } catch { /* not a vault event, ignore */ }
+      }
+
+      if (outcome === "PaymentExecuted") {
+        notApprovedBackoff.delete(id);
+        await logPullAttempt({
+          subscriptionId: id, wallet: sub.owner, merchant: sub.merchant,
+          amountUsdc: ethers.formatUnits(pullAmount, 6),
+          status: "success", txHash: tx.hash, blockNumber: receipt.blockNumber,
+        });
+        console.log("");
+        return { pulled: 1, skipped: 0 };
+      }
+
+      if (outcome === "MerchantNotApproved") {
+        const prev = notApprovedBackoff.get(id) || { count: 0, skipUntil: 0 };
+        const count = prev.count + 1;
+        const skipUntil = count >= NOT_APPROVED_BACKOFF_THRESHOLD
+          ? Date.now() + NOT_APPROVED_BACKOFF_MS
+          : 0;
+        notApprovedBackoff.set(id, { count, skipUntil });
+        if (skipUntil > 0) {
+          console.log(`  Subscription #${id}: ${count} consecutive MerchantNotApproved — backing off 10min.`);
+        }
+        await logPullAttempt({
+          subscriptionId: id, wallet: sub.owner, merchant: sub.merchant,
+          amountUsdc: ethers.formatUnits(pullAmount, 6),
+          status: "skipped", error: "merchant_not_approved",
+        });
+        console.log("");
+        return { pulled: 0, skipped: 1 };
+      }
+
+      // MerchantTransferFailed, SubscriptionPaused, SubscriptionExpired,
+      // or anything else that confirmed without reverting: not a payment,
+      // not the specific backoff case — just log accurately and reset.
+      notApprovedBackoff.delete(id);
       await logPullAttempt({
-        subscriptionId: id,
-        wallet:   sub.owner,
-        merchant: sub.merchant,
+        subscriptionId: id, wallet: sub.owner, merchant: sub.merchant,
         amountUsdc: ethers.formatUnits(pullAmount, 6),
-        status:   "success",
-        txHash:   tx.hash,
-        blockNumber: receipt.blockNumber,
+        status: "skipped", error: outcome,
       });
       console.log("");
-      return { pulled: 1, skipped: 0 };
+      return { pulled: 0, skipped: 1 };
     } catch (err) {
       console.error(`     executePull failed: ${err.message}`);
       await logPullAttempt({
