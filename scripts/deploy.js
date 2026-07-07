@@ -5,7 +5,7 @@
 //   1. MerchantRegistry v3  (address _admin, bool _isMainnet)
 //   2. SubscriptionVault v6 (address _admin, address _keeper,
 //                            address _protocolTreasury, address _merchantRegistry)
-//   3. Approves USDC, USDT, DAI, EURC on the vault whitelist
+//   3. Approves USDC, USDT, EURC on the vault whitelist
 //
 // [MR-01] _isMainnet flag:
 //   - base-sepolia network → false  (EOA admin permitted, testnet convenience)
@@ -34,12 +34,11 @@ const hre = require("hardhat");
 const TOKENS = {
   "base-sepolia": {
     USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    // Add Sepolia USDT/DAI/EURC addresses when available for testing
+    // Add Sepolia USDT/EURC addresses when available for testing
   },
   "base-mainnet": {
     USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     USDT: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
-    DAI:  "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
     EURC: "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
   },
 };

@@ -100,7 +100,6 @@ function resolveTokenSymbol(tokenAddress) {
     "0x036cbd53842c5426634e7929541ec2318f3dcf7e": "USDC", // Base Sepolia
     "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC", // Base Mainnet
     "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": "USDT",
-    "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": "DAI",
     "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42": "EURC",
     "0x4200000000000000000000000000000000000006": "WETH",
     "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": "cbBTC",

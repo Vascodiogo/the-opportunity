@@ -156,7 +156,7 @@ Small thing. Big security difference.
   `AuthOnce update:
 
 ✅ Smart contracts audited and redeployed
-✅ 4 stablecoins: USDC · USDT · DAI · EURC
+✅ 3 stablecoins: USDC · USDT · EURC
 ✅ Stripe fiat onramp live
 ✅ Keeper bot running 24/7 on Base Sepolia
 ⏳ Mainnet: Q3 2026
@@ -302,12 +302,11 @@ AuthOnce supports this today. Most payment protocols don't.
 Which stablecoin do you actually hold and use day-to-day?
 
 🔵 USDC
-🟢 USDT  
-🟡 DAI
+🟢 USDT
 🔴 EURC
 🟠 Other
 
-AuthOnce supports all four for subscriptions. Curious what people actually use.`,
+AuthOnce supports all three for subscriptions. Curious what people actually use.`,
 
   // 18 [funny]
   `Things that are easier than explaining to my family what I'm building:

@@ -1255,7 +1255,7 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       if (invalidTokens.length > 0) {
         return res.status(400).json({
           error: "volatile_token",
-          message: `Volatile tokens (${invalidTokens.join(", ")}) require USD-denominated oracle pricing. Available in v6. Use USDC, USDT, DAI or EURC.`,
+          message: `Volatile tokens (${invalidTokens.join(", ")}) require USD-denominated oracle pricing. Available in v6. Use USDC, USDT or EURC.`,
           invalid_tokens: invalidTokens,
         });
       }
@@ -2415,7 +2415,7 @@ app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
       ["Date",                    "2026-05-23",    "Date of the payment in UTC. Use to sort by quarter or year for VAT returns."],
       ["Merchant",                "0x1234...abcd", "Your wallet address. Confirms this payment belongs to your account."],
       ["Subscription ID",         "42",            "Internal reference number. Use for cross-referencing with subscribers."],
-      ["Token",                   "USDC",          "Payment token. USDC, USDT, DAI and EURC are all stablecoins worth ~$1."],
+      ["Token",                   "USDC",          "Payment token. USDC, USDT and EURC are all stablecoins worth ~$1."],
       ["Amount (token)",          "9.950000",      "Amount you received after the 0.5% AuthOnce protocol fee."],
       ["Fee (token)",             "0.050000",      "Protocol fee deducted by AuthOnce (0.5%). Deductible platform cost."],
       [`${cur.toUpperCase()} equivalent`, "9.15", "Your received amount in your chosen currency at the payment date exchange rate. Use this column for your tax return."],
@@ -2458,7 +2458,7 @@ app.get("/api/admin/tax/merchant", requireAdminAuth, async (req, res) => {
 
     wg.addRow([]);
     addGuideRow("  4.  Note on Stablecoins", "", "", { sectionFill: true });
-    const scRow = wg.addRow(["USDC, USDT and DAI are stablecoins pegged to the US Dollar (1 token ≈ $1.00 USD). EURC is pegged to the Euro. For tax purposes treat each token as equivalent to its USD/EUR peg value at time of receipt, then converted using the Rate column. The fiat equivalent columns do this automatically."]);
+    const scRow = wg.addRow(["USDC and USDT are stablecoins pegged to the US Dollar (1 token ≈ $1.00 USD). EURC is pegged to the Euro. For tax purposes treat each token as equivalent to its USD/EUR peg value at time of receipt, then converted using the Rate column. The fiat equivalent columns do this automatically."]);
     scRow.height = 56;
     scRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
     scRow.getCell(1).font = { name: "Arial", size: 9, color: { argb: "FF475569" } };
