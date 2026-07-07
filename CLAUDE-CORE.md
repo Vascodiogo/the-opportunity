@@ -662,3 +662,18 @@ Before touching code, confirmed via direct DB query that removal was safe: `stri
 4. Two leftover `grep -r` background shells from double-checking `sendBrandedEmail` were left running against `node_modules` for longer than intended — killed manually, no actual impact, but a reminder to prefer the `Grep` tool over `Bash grep -r` for whole-repo searches to avoid this.
 
 *Last updated: 2026-07-07*
+
+---
+
+## 22. ERC-1271 Automated Signing (Keeper v6.1) — Deliberately Deferred
+
+**Status:** Deferred, not a bug.
+
+**Reason:** All current testnet subscriptions are internal testing only — no real merchants or AI-agent subscribers exist yet. The two contract-wallet subscriptions (IDs 0, 1) were confirmed self-subscription test artifacts (owner == merchant == safeVault, all the deployer wallet `0xbb6d960b...EE7782`) — `isContractVault = true` was set because MetaMask's smart-account feature makes that wallet appear as a contract on-chain, not because of any real contract-wallet subscriber. Both cancelled and verified via Basescan's Read Contract tab — `subscriptions(0)` and `subscriptions(1)` both show `status: 2` (Cancelled), checked directly rather than trusted from the transaction page, which showed a misleading "Redeem Delegations" wrapper call — the same known MetaMask smart-account quirk already documented from the July 5 session (§19).
+
+**Decision:**
+- `isValidSignature()` verification remains correctly implemented in `SubscriptionVault.sol` — no contract changes needed.
+- No automated signing path (webhook-based agent signing, or session-key delegation) will be built until a real integration partner requires it.
+- When a real partner appears: the implementation choice depends on their wallet standard. Single-owner ERC-1271 (agent backend signs directly) is the cheapest and most common near-term pattern — build that first. Safe modules or ERC-4337 session-key support only if a specific partner using those standards appears.
+
+**Revisit trigger:** Real AI-agent or smart-wallet integration request.
