@@ -69,7 +69,6 @@
 **Base Mainnet (not yet deployed):**
 - USDC:              `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 - USDT:              `0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2`
-- DAI:               `0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb`
 - EURC:              `0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42`
 - SubscriptionVault: `[DEPLOY AND RECORD HERE]`
 - MerchantRegistry:  `[DEPLOY AND RECORD HERE]`
@@ -93,7 +92,7 @@
 
 ## 3. Locked Business Rules — Do Not Change
 
-- **Multi-token** — USDC, USDT, DAI, EURC for subscriptions. WETH/cbBTC blocked until Chainlink oracle.
+- **Multi-token** — USDC, USDT, EURC for subscriptions. DAI dropped (§21). WETH/cbBTC blocked until Chainlink oracle.
 - Admin whitelist controls approved tokens. All whitelisted tokens available to all tiers.
 - **Protocol fee: 0.5% global** — same for all merchants, all tokens, all tiers. Hard ceiling 2% hardcoded.
 - **Fee is one-way ratchet** — can only be lowered, never raised. Enforced in setFeeBps().
@@ -102,7 +101,7 @@
 - **safeVault must equal msg.sender** — enforced in createSubscription() and createSubscriptionWithPermit().
 - **EOA subscribers:** pass `deadline=0, signature="0x"` — ERC-1271 check skipped by contract.
 - **EIP-712 + ERC-1271** — contract wallet / AI agent subscribers use structured pull authorisation.
-- **EIP-2612 permit:** USDC and EURC support one-signature subscribe via createSubscriptionWithPermit(). DAI uses non-standard permit (Phase 2). USDT has no permit — always two-step fallback.
+- **EIP-2612 permit:** USDC and EURC support one-signature subscribe via createSubscriptionWithPermit(). USDT has no permit — always two-step fallback.
 - **Protocol never holds funds** — non-custodial is non-negotiable, eliminates FINMA licence.
 - **Payment token at signup = all future pulls** — token is immutable per subscription.
 - **Merchant pays all fees** — subscriber always pays the exact price shown.
@@ -179,7 +178,7 @@ frontend/src/
   components/
     Dashboard.jsx               — subscriber view
     MerchantDashboard.jsx       — merchant portal + VAT/country/billing fields
-    PayPage.jsx                 — EIP-2612 permit flow (USDC/EURC one-signature) + two-step fallback (USDT/DAI) + subscriber email/webhook opt-in
+    PayPage.jsx                 — EIP-2612 permit flow (USDC/EURC one-signature) + two-step fallback (USDT) + subscriber email/webhook opt-in
     MySubscriptions.jsx         — subscriber portal
     AdminDashboard.jsx          — admin portal (10 tabs + GDPR pending + wallet balances)
     Pricing.jsx                 — pricing page
@@ -191,12 +190,12 @@ frontend/src/
 
 **EIP-2612 permit flow in PayPage.jsx:**
 - USDC/EURC: `useSignTypedData` → EIP-712 Permit signature → `createSubscriptionWithPermit(v, r, s, deadline)` — one on-chain tx
-- USDT/DAI: `approve()` → `createSubscription()` — two on-chain txs (fallback)
+- USDT: `approve()` → `createSubscription()` — two on-chain txs (fallback)
 - Token domain: `{name: "USDC"/"EURC", version: "2", chainId: 84532}`
 - Nonce read via `useReadContract` → `nonces(address)` on token contract
 - Deadline: now + 30 minutes
 - Auto-fallback: if permit signing rejected or permit() reverts, falls back to approve+subscribe silently
-- UI: TrustRow shows "One signature" for USDC/EURC, "Two transactions" for USDT/DAI
+- UI: TrustRow shows "One signature" for USDC/EURC, "Two transactions" for USDT
 
 ---
 
@@ -214,8 +213,7 @@ frontend/src/
 - `permit()` called with `owner = msg.sender`, `spender = address(this)` — signer must be the caller
 - `value` = exact subscription amount, not unlimited approval
 - Future pulls use existing `executePull()` allowance checks — no change to recurring security model
-- DAI uses non-standard permit interface (bool allowed) — not supported, falls back to two-step
-- USDT has no permit() — always two-step
+- USDT has no permit() — always two-step. DAI dropped entirely (§21) — never whitelisted, blocked on-chain by `decimals() == 6`.
 
 **MAINNET DEPLOY WARNING:**
 - Uncomment `require(_admin.code.length > 0)` in MerchantRegistry constructor before mainnet
@@ -622,7 +620,7 @@ frontend/src/
 2. ~~`set-keeper.js` contains a hardcoded vault address (`0xAd7B4b66F5C0145cbC52c56918F7D6C2871d8c5d`) matching no known deployment. Never verified on-chain whether it even has contract code. Also violates the established Basescan-Write-Contract-only admin pattern — recommend deleting the script rather than fixing the address.~~ **RESOLVED — commit `a6b6420`:** file deleted.
 3. ~~`package.json`/`package-lock.json` diff from an earlier accidental `git add -A` sweep was never actually reviewed. The `stripe` dependency is still listed despite the full-stablecoin custody pivot (§19) — unconfirmed whether it's dead weight or still imported in `api.js`/`webhook.js`.~~ **RESOLVED — see §21.** Diff reviewed: just `dotenv`/`ethers` version bumps plus the legitimate `@coinbase/cdp-sdk` addition, unrelated to Stripe. `stripe` itself was confirmed actively used (not dead weight), then removed entirely.
 4. A `stripe_check...` Postgres table and a separate `bot_state` table (distinct from the new `farcaster_bot_state`) exist in the database — purpose and ownership not investigated.
-5. DAI references found across 21 files (grepped and listed, not yet removed) — confirmed decision to drop DAI support entirely; removal itself not started.
+5. ~~DAI references found across 21 files (grepped and listed, not yet removed) — confirmed decision to drop DAI support entirely; removal itself not started.~~ **RESOLVED — see §21.** Removed across docs, config, backend, and frontend. `contracts/SubscriptionVault.sol` deliberately untouched — its `decimals() == 6` check in `approveToken()` already permanently blocks DAI (18 decimals) on-chain; no contract change needed.
 6. ~~**Blocking dependency:** `PayPage.jsx`'s EIP-2612 permit signing still signs `amount` as the permit value, not `type(uint256).max` — must be fixed before SV-13 (above) reaches subscribers in practice, or every permit-based subscription will revert with a signature mismatch on the second pull.~~ **RESOLVED — commit `8092acf`:** permit `value` now signs `maxUint256`, matching the vault's on-chain call. Same commit also fixed the two-step `approve()` fallback (identical bug class, found separately) to request a standing allowance instead of the per-cycle amount.
 7. ~~`keeper.js` has no backoff logic for repeated `MerchantNotApproved` (SV-16) or `MerchantTransferFailed` (SV-15) events — will retry every 20s indefinitely against a merchant that stays unapproved/failing.~~ **RESOLVED — see §21.** Commit `6686fc7`.
 8. Farcaster-bot service's Dockerfile declares `ANTHROPIC_API_KEY`, `APPROVAL_SECRET`, `NEYNAR_API_KEY` — the first two don't match `farcaster/farcaster-bot.js`'s actual functionality (static post bank, no AI generation, no approval flow). Unexplained — possibly a leftover from the separate `C:\farcaster-bot` repo's design, never cleaned up.

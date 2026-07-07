@@ -7,7 +7,7 @@
 
 **Non-custodial recurring payments on Base. Authorize once. Pay forever.**
 
-AuthOnce is an on-chain subscription protocol built on Base Network. Merchants create subscription products. Subscribers authorize once using an **EIP-2612 gasless permit signature** and are billed automatically — in USDC, USDT, DAI, or EURC — without ever giving up custody of their funds.
+AuthOnce is an on-chain subscription protocol built on Base Network. Merchants create subscription products. Subscribers authorize once using an **EIP-2612 gasless permit signature** and are billed automatically — in USDC, USDT, or EURC — without ever giving up custody of their funds.
 
 ---
 
@@ -25,7 +25,7 @@ No funds are ever held by the protocol. The subscriber's wallet is never drained
 ## Key features
 
 - **EIP-2612 gasless authorization** — Subscribers sign once off-chain. No approval transaction, no gas cost at signup.
-- **Multi-token** — USDC, USDT, DAI, EURC. Admin-controlled whitelist.
+- **Multi-token** — USDC, USDT, EURC. Admin-controlled whitelist.
 - **EIP-712 + ERC-1271** — Standard wallet-native authorization. Compatible with MetaMask, Ledger, Coinbase Wallet, Gnosis Safe, and AI agent wallets.
 - **Programmable grace period** — 1–30 day configurable dunning window. Keeper retries daily before expiring.
 - **Intro pricing** — Up to 12 pulls at a reduced introductory rate before switching to full price.

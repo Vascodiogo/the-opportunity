@@ -314,7 +314,7 @@
         <tr><td><strong>Slug</strong></td><td>URL-friendly identifier. Auto-generated from the name. E.g. <code>pro-plan</code>.</td></tr>
         <tr><td><strong>Price</strong></td><td>Set in USDC or your preferred fiat currency. All tokens are priced 1:1 with USD.</td></tr>
         <tr><td><strong>Interval</strong></td><td>Weekly, Monthly, or Yearly. Immutable after the first subscriber.</td></tr>
-        <tr><td><strong>Payment methods</strong></td><td>Choose any combination: USDC, EURC, USDT, DAI, or card (requires connected payment processor account).</td></tr>
+        <tr><td><strong>Payment methods</strong></td><td>Choose any combination: USDC, EURC, USDT, or card (requires connected payment processor account).</td></tr>
         <tr><td><strong>Grace period</strong></td><td>1–30 days. How long a failed payment retries before the subscription expires. Default: 7 days.</td></tr>
         <tr><td><strong>Introductory pricing</strong></td><td>Optional. First N payments at a lower price. Useful for free trials and launch discounts.</td></tr>
         <tr><td><strong>Crypto discount</strong></td><td>Optional. 0–50% discount when subscribers pay with a crypto wallet instead of card.</td></tr>
@@ -344,7 +344,7 @@
     <h2 id="payment-methods">Payment methods</h2>
     <p>AuthOnce supports two flows that you control at the product level:</p>
 
-    <h3>Crypto wallet (USDC, EURC, USDT, DAI)</h3>
+    <h3>Crypto wallet (USDC, EURC, USDT)</h3>
     <p>The subscriber connects a wallet and signs a single EIP-2612 permit. No gas required. From that point, AuthOnce's keeper bot pulls the subscription amount on each billing date directly to your wallet. The subscriber never needs to approve again.</p>
 
     <div class="callout success">
