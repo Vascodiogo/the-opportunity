@@ -687,8 +687,6 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
     : 0;
 
-  const hasFiatMethods = paymentMethods.length > 0;
-
   const cryptoPrice = amount && hasCryptoDiscount && cryptoDiscountPct
     ? (parseFloat(amount) * (1 - parseFloat(cryptoDiscountPct) / 100)).toFixed(4)
     : amount ? parseFloat(amount).toFixed(2) : "";
@@ -698,10 +696,6 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
       if (prev.includes(id) && prev.length === 1) return prev; // keep at least one
       return prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id];
     });
-  };
-
-  const toggleFiatMethod = (id) => {
-    setPaymentMethods(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
   };
 
   // Validate all fields before submitting — no API call if form is invalid
@@ -971,44 +965,14 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               {errors.tokens && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.tokens}</div>}
             </div>
 
-            {/* Fiat payment methods */}
+            {/* Price display currency */}
             <div>
-              <label style={SECTION_LABEL}>
-                Fiat payments{" "}
-                <span style={{ textTransform: "none", fontWeight: 400, letterSpacing: 0 }}>(requires Stripe connected)</span>
-              </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {[
-                  { id: "card",       label: "Card"           },
-                  { id: "mbway",      label: "MB Way (PT)"    },
-                  { id: "multibanco", label: "Multibanco (PT)"},
-                  { id: "ideal",      label: "iDEAL (NL)"     },
-                  { id: "bancontact", label: "Bancontact (BE)"},
-                  { id: "eps",        label: "EPS (AT)"       },
-                  { id: "klarna",     label: "Klarna"         },
-                  { id: "blik",       label: "BLIK (PL)"      },
-                ].map(({ id, label }) => {
-                  const isEnabled = paymentMethods.includes(id);
-                  return (
-                    <div key={id} onClick={() => toggleFiatMethod(id)} style={TOKEN_ROW(isEnabled, false)}>
-                      <div style={CHECKBOX(isEnabled)}>
-                        {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
-                      </div>
-                      <span style={{ fontSize: 12, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              {hasFiatMethods && (
-                <div style={{ marginTop: 10 }}>
-                  <label style={SECTION_LABEL}>Settlement currency</label>
-                  <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
-                    {FIAT_CURRENCIES.map(c => (
-                      <option key={c.code} value={c.code}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <label style={SECTION_LABEL}>Price display currency</label>
+              <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
+                {FIAT_CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Pay link preview */}
@@ -1223,46 +1187,14 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
             <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>Only affects new subscribers — existing subscribers keep their original token.</div>
           </div>
 
-          {/* Fiat payment methods */}
+          {/* Price display currency */}
           <div>
-            <label style={S.label}>Accept fiat payments via</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {[
-                { id: "card",       label: "💳 Card (Stripe)" },
-                { id: "mbway",      label: "📱 MB Way (PT)" },
-                { id: "multibanco", label: "🏧 Multibanco (PT)" },
-                { id: "ideal",      label: "🇳🇱 iDEAL (NL)" },
-                { id: "bancontact", label: "🇧🇪 Bancontact (BE)" },
-                { id: "eps",        label: "🇦🇹 EPS (AT)" },
-                { id: "klarna",     label: "🛍 Klarna" },
-                { id: "blik",       label: "🇵🇱 BLIK (PL)" },
-              ].map(({ id, label }) => {
-                const isEnabled = paymentMethods.includes(id);
-                return (
-                  <div key={id} onClick={() => toggleMethod(id)} style={{
-                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
-                    cursor: "pointer",
-                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
-                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                  }}>
-                    <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`, background: isEnabled ? "var(--green)" : "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
-                    </div>
-                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {paymentMethods.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <label style={S.label}>Settlement currency</label>
-                <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
-                  {FIAT_CURRENCIES.map(c => (
-                    <option key={c.code} value={c.code}>{c.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <label style={S.label}>Price display currency</label>
+            <select value={fiatCurrency} onChange={e => setFiatCurrency(e.target.value)}>
+              {FIAT_CURRENCIES.map(c => (
+                <option key={c.code} value={c.code}>{c.label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Crypto discount toggle */}
@@ -1711,49 +1643,10 @@ export default function MerchantDashboard({ address }) {
   const [editProduct, setEditProduct]               = useState(null);
   const [testFiring, setTestFiring]                 = useState({});
   const [testResults, setTestResults]               = useState({});
-  const [stripeStatus, setStripeStatus]             = useState(null);
-  const [stripeConnecting, setStripeConnecting]     = useState(false);
   const [handle, setHandle]                         = useState(null);
   const [handleInput, setHandleInput]               = useState("");
   const [handleSaving, setHandleSaving]             = useState(false);
   const [handleMsg, setHandleMsg]                   = useState(null);
-
-  // Stripe Connect
-  useEffect(() => {
-    if (!address) return;
-    const params = new URLSearchParams(window.location.search);
-    const connectResult = params.get("connect");
-    if (connectResult) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("connect");
-      window.history.replaceState({}, "", url.toString());
-      if (connectResult === "success") alert("✅ Stripe connected successfully!");
-      else if (connectResult === "declined") alert("Stripe connection was cancelled.");
-      else if (connectResult === "error" || connectResult === "expired") alert("Stripe connection failed. Please try again.");
-    }
-    fetch(`${API_BASE}/api/connect/status`, { headers: { "X-Merchant-Address": address } })
-      .then(r => r.json()).then(data => setStripeStatus(data))
-      .catch(() => setStripeStatus({ connected: false }));
-  }, [address]);
-
-  const handleStripeConnect = async () => {
-    setStripeConnecting(true);
-    try {
-      const res  = await fetch(`${API_BASE}/api/connect/authorize`, { headers: { "X-Merchant-Address": address } });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else { alert(data.message || "Could not start Stripe connection."); setStripeConnecting(false); }
-    } catch { alert("Could not reach server."); setStripeConnecting(false); }
-  };
-
-  const handleStripeDisconnect = async () => {
-    if (!window.confirm("Disconnect Stripe? Card payments will be disabled for your subscribers.")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/connect/disconnect`, { method: "DELETE", headers: { "X-Merchant-Address": address } });
-      if (res.ok) { setStripeStatus({ connected: false }); alert("Stripe disconnected."); }
-      else alert("Could not disconnect. Please try again.");
-    } catch { alert("Could not reach server."); }
-  };
 
   // On-chain approval
   useEffect(() => {
@@ -2273,45 +2166,6 @@ export default function MerchantDashboard({ address }) {
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* Stripe Connect */}
-              <div style={{ ...S.card }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>💳 Stripe — Card & Bank Payments</div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                      Connect Stripe to accept card, MB Way, Multibanco and SEPA. Payments go directly to your Stripe account — AuthOnce never holds funds.
-                    </div>
-                  </div>
-                </div>
-                {stripeStatus === null ? (
-                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Checking Stripe status...</div>
-                ) : stripeStatus?.connected ? (
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, background: "rgba(29,158,117,0.12)", color: "var(--green)", fontWeight: 600 }}>✓ Connected</span>
-                      {stripeStatus.stripe_account_id && (
-                        <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>{stripeStatus.stripe_account_id}</span>
-                      )}
-                    </div>
-                    <button onClick={handleStripeDisconnect} style={S.btn.danger}>Disconnect</button>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                      {["💳 Visa / Mastercard", "🇵🇹 MB Way", "🏧 Multibanco", "🏦 SEPA Transfer"].map(m => (
-                        <span key={m} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--bg-tag)", color: "var(--text-muted)" }}>{m}</span>
-                      ))}
-                    </div>
-                    <button onClick={handleStripeConnect} disabled={stripeConnecting} style={{ ...S.btn.primary, background: "#635bff", opacity: stripeConnecting ? 0.7 : 1 }}>
-                      {stripeConnecting ? "Redirecting to Stripe..." : "Connect Stripe Account →"}
-                    </button>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-                      You'll be redirected to Stripe to connect your account.
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Vanity handle */}
