@@ -398,7 +398,7 @@ frontend/src/
 - [ ] Subscriber import UI — CSV upload
 - [ ] **MerchantRegistry verification on Basescan** — Vault done, Registry still pending
 - [ ] **Backfill subscription id 2 into Postgres** — succeeded on-chain, never inserted due to notifier restart gap (fixed going forward, not retroactively)
-- [ ] **Seal Railway secrets** — `ENCRYPTION_KEY`, `PUSH_CHANNEL_PRIVATE_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY` across all 4 services (in progress July 4)
+- [ ] **Seal Railway secrets on the combined api.js/keeper.js service** (`node scripts/api.js & node scripts/keeper.js`, one service, one variable set) — 16 secrets baked into `ARG`/`ENV` per Nixpacks build log, full list in §21. **Highest priority: `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY`** — wallet private keys slated for mainnet admin/keeper roles, not API keys. Remaining 12 (incl. `ENCRYPTION_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY`) lower urgency. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` also appear in the log but are stale — confirmed removed from Railway separately, post-dating this capture.
 - [ ] Demo video — still not recorded (blocks Base grant nomination)
 - [ ] Base grant nomination form — needs demo video
 - [ ] CLAUDE-CORE.md update — this file ✅ done now
@@ -538,7 +538,7 @@ frontend/src/
 - Needs a real legal opinion before mainnet, not just an audit — current regulatory stance assumes non-custodial throughout, which is not true for the Google/fiat path today
 
 **Infrastructure:**
-- Docker/Nixpacks build warnings surfaced 4 secrets (`ENCRYPTION_KEY`, `PUSH_CHANNEL_PRIVATE_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY`) baked into image `ARG`/`ENV` — this is inherent to how Railway's Nixpacks builder works for any Node service reading `process.env`, not a fixable misconfiguration. No Railway API/CLI mutation exists for sealing — dashboard-only, one-way, 3-dot menu → Seal. In progress.
+- Docker/Nixpacks build warnings surfaced 4 secrets (`ENCRYPTION_KEY`, `PUSH_CHANNEL_PRIVATE_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY`) baked into image `ARG`/`ENV` — this is inherent to how Railway's Nixpacks builder works for any Node service reading `process.env`, not a fixable misconfiguration. No Railway API/CLI mutation exists for sealing — dashboard-only, one-way, 3-dot menu → Seal. In progress. **Undercounted — see §21 for the corrected full list (16 secrets, including two wallet private keys) from a full build-log check.**
 - `fix-keeper.js` found and deleted — targeted a wrong, unrecognized contract address (`0x55180314174B30e778f35357035d49cAEF55C835`), unrelated to any known deployment. Not needed; real fix done via Basescan directly.
 
 **Faucet automation:**
@@ -548,7 +548,7 @@ frontend/src/
 **Pending items:**
 1. MerchantRegistry verification on Basescan
 2. Backfill subscription id 2 into Postgres, if wanted
-3. Finish sealing the 4 Railway secrets across all services (not just notifier)
+3. Finish sealing the 4 Railway secrets across all services (not just notifier) — **see §21: actually 16, on one combined service, not 4 across 4 services**
 4. Decide on custody model for fiat subscribers (A/B/C above) before mainnet
 5. Confirm frontend push of `PayPage.jsx` / `PermissionSteps.jsx` / `MySubscriptions.jsx` actually reached Cloudflare
 6. Legal review of non-custodial claim vs. actual fiat-path custody, ideally via Fio Legal
@@ -585,7 +585,7 @@ frontend/src/
 **Pending items, carried and new:**
 1. MerchantRegistry verification on Basescan — still not done, unchanged since July 4
 2. Backfill subscription id 2 into Postgres (from July 4's notifier checkpoint gap) — still not done
-3. Finish sealing the 4 Railway secrets across all services — status unconfirmed this session
+3. Finish sealing the 4 Railway secrets across all services — status unconfirmed this session — **see §21: actually 16, on one combined service, not 4 across 4 services**
 4. Legal review of non-custodial claim — now simpler given the full-stablecoin pivot decision, but still not started
 5. Google for Startups Cloud Program — rejected for lacking a visible founder/team page with verifiable third-party links; reapply once landing page fixes are live and a real team page exists (not a jobs page — solo founder, jobs page would read worse than none)
 6. Farcaster bot repeating content in rotation — reported, not yet investigated (need the actual bot script, not yet uploaded)
@@ -647,9 +647,18 @@ Before touching code, confirmed via direct DB query that removal was safe: `stri
 
 **Farcaster redeploy also confirmed this session** (§20 item 1, now resolved): fresh Railway logs checked directly — container start at 18:35 today logged `"Post bank: 28 posts (4-week rotation)"` with no `DATABASE_URL` warning, confirming both the post-bank merge and the Postgres-backed rotation state (`7bd4008`) are live and working as deployed, not just committed.
 
+**Railway secrets baked into ARG/ENV — corrected count: 16, not 4, and it's one combined service, not "all 4 services."** There is no dedicated keeper service — the actual Railway start command is `node scripts/api.js & node scripts/keeper.js`, both processes running together in one service sharing one variable set. That's why `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` appear together: not two services each with one key, one service with both. Full list, from the service's Nixpacks build log (`SecretsUsedInArgOrEnv` warnings, ARG and ENV, lines 11-12):
+
+`ADMIN_PASSWORD`, `ADMIN_SECRET`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `KEEPER_PRIVATE_KEY`, `RESEND_API_KEY`, `SESSION_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`, `TWITTER_API_KEY`, `TWITTER_API_SECRET`.
+
+**Highest priority for Seal: `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY`.** These are wallet private keys, not API keys — the actual admin and keeper wallets slated for mainnet roles. A leaked API key is revocable with a bounded blast radius; a leaked deployer or keeper private key is a wallet compromise. Seal these two first, independent of when the remaining 14 get done.
+
+`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are stale in this list — this build predates the Stripe removal (above, commits `2a90abd`/`f9aeee0`), and the Railway env vars themselves have since been confirmed removed separately. Not still exposed, despite appearing in the log.
+
 **Pending items, carried and new:**
 1. Everything still open from §20 (items 2, 4–9 as listed there) — unchanged by this session, except items 1, 3, and 10 above/below.
-2. Railway env vars `STRIPE_SECRET_KEY`, `STRIPE_CONNECT_CLIENT_ID`, `STRIPE_WEBHOOK_SECRET` are now unused by the deployed code — safe to remove from the API service's Railway variables, not yet done (ops cleanup, not code).
-3. Two leftover `grep -r` background shells from double-checking `sendBrandedEmail` were left running against `node_modules` for longer than intended — killed manually, no actual impact, but a reminder to prefer the `Grep` tool over `Bash grep -r` for whole-repo searches to avoid this.
+2. Seal `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` on the combined api.js/keeper.js Railway service — highest priority, not yet done. Remaining 12 secrets (`ADMIN_PASSWORD`, `ADMIN_SECRET`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `RESEND_API_KEY`, `SESSION_SECRET`, `BASESCAN_API_KEY`, `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`) also need sealing but lower urgency. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` no longer relevant — confirmed removed.
+3. Confirm `STRIPE_CONNECT_CLIENT_ID` removal status on Railway — unconfirmed either way. (`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` themselves confirmed already removed, done separately, post-dating the build log above.)
+4. Two leftover `grep -r` background shells from double-checking `sendBrandedEmail` were left running against `node_modules` for longer than intended — killed manually, no actual impact, but a reminder to prefer the `Grep` tool over `Bash grep -r` for whole-repo searches to avoid this.
 
 *Last updated: 2026-07-07*
