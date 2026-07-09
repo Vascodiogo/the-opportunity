@@ -660,7 +660,7 @@ Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3
 **Pending items, carried and new:**
 1. Everything still open from §20 (items 4, 5, 8–9 as listed there) — unchanged by this session. Items 1, 2, 3, 6, 7, and 10 are all resolved (1, 3, 7, 10 this session; 2 and 6 predate it, in commits `a6b6420` and `8092acf`).
 2. ~~Seal `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` on the combined api.js/keeper.js Railway service — highest priority, not yet done.~~ **RESOLVED.** Both sealed on Railway. Remaining 12 secrets (`ADMIN_PASSWORD`, `ADMIN_SECRET`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `RESEND_API_KEY`, `SESSION_SECRET`, `BASESCAN_API_KEY`, `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`) still need sealing but lower urgency. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` no longer relevant — confirmed removed.
-3. Confirm `STRIPE_CONNECT_CLIENT_ID` removal status on Railway — unconfirmed either way. (`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` themselves confirmed already removed, done separately, post-dating the build log above.)
+3. ~~Confirm `STRIPE_CONNECT_CLIENT_ID` removal status on Railway — unconfirmed either way.~~ **RESOLVED.** Confirmed removed from Railway (verified directly). All three Stripe env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_CLIENT_ID`) are now off the service.
 4. Two leftover `grep -r` background shells from double-checking `sendBrandedEmail` were left running against `node_modules` for longer than intended — killed manually, no actual impact, but a reminder to prefer the `Grep` tool over `Bash grep -r` for whole-repo searches to avoid this.
 
 *Last updated: 2026-07-07*
