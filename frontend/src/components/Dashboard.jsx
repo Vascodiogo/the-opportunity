@@ -17,7 +17,7 @@ const NETWORK_TOKENS = TOKEN_ADDRESSES[NETWORK] || TOKEN_ADDRESSES["base-sepolia
 const TOKEN_DECIMALS = Object.fromEntries(
   Object.entries(NETWORK_TOKENS).map(([id, addr]) => [
     addr.toLowerCase(),
-    id === "dai" ? 18 : 6,  // DAI = 18, all others = 6
+    6, // all supported tokens (USDC, USDT, EURC) use 6 decimals
   ])
 );
 const TOKEN_LABELS = Object.fromEntries(

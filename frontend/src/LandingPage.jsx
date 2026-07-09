@@ -239,7 +239,7 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
   const [price, setPrice] = useState(29);
   const [interval, setInterval] = useState("Monthly");
   const [grace, setGrace] = useState(7);
-  const [tokens, setTokens] = useState({ usdc: true, usdt: false, dai: false, eurc: false });
+  const [tokens, setTokens] = useState({ usdc: true, usdt: false, eurc: false });
   const [introPrice, setIntroPrice] = useState(false);
   const [introCycles, setIntroCycles] = useState(3);
   const [introAmt, setIntroAmt] = useState(9);
@@ -296,7 +296,7 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
             </select>
           </div>
         </div>
-        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 USDT = 1 DAI = 1 EURC</p>
+        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 USDT = 1 EURC</p>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Grace period (days, 1–30)" : "Período de graça (dias, 1–30)"}</label>
         <input type="number" value={grace} min={1} max={30} onChange={e => setGrace(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
@@ -810,7 +810,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{ display: "flex", gap: 32, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
           {[
             "🔵 Base Network",
-            "💵 USDC · USDT · DAI · EURC",
+            "💵 USDC · USDT · EURC",
             "🔐 " + (lang === "en" ? "Non-custodial" : "Não custodial"),
             "⏳ " + (lang === "en" ? "Audit Q3 2026" : "Auditoria Q3 2026"),
             "🤖 ERC-1271 · EIP-712",
@@ -1126,7 +1126,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           {[
             { symbol: "USDC", color: "#2775CA", desc: "USD Coin" },
             { symbol: "USDT", color: "#26A17B", desc: "Tether USD" },
-            { symbol: "DAI",  color: "#F5AC37", desc: "Dai Stablecoin" },
             { symbol: "EURC", color: "#2B79D3", desc: "Euro Coin" },
           ].map((token, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>

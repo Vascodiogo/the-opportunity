@@ -20,7 +20,7 @@ const _NETWORK        = import.meta.env.VITE_NETWORK || "base-sepolia";
 const _NETWORK_TOKENS = TOKEN_ADDRESSES[_NETWORK] || TOKEN_ADDRESSES["base-sepolia"];
 const _TOKEN_DECIMALS = Object.fromEntries(
   Object.entries(_NETWORK_TOKENS).map(([id, addr]) => [
-    addr.toLowerCase(), id === "dai" ? 18 : 6,
+    addr.toLowerCase(), 6, // all supported tokens (USDC, USDT, EURC) use 6 decimals
   ])
 );
 const _TOKEN_LABELS = Object.fromEntries(
@@ -73,7 +73,6 @@ function getCurrencySymbol(code) {
 const SUBSCRIPTION_TOKENS = [
   { id: "usdc",  label: "⬡ USDC",  note: "" },
   { id: "usdt",  label: "₮ USDT",  note: "" },
-  { id: "dai",   label: "◈ DAI",   note: "" },
   { id: "eurc",  label: "€ EURC",  note: "" },
 ];
 const VOLATILE_TOKENS = ["weth", "cbbtc", "wbtc"];
@@ -670,7 +669,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [introPulls, setIntroPulls]   = useState("1");
   const [hasYearly, setHasYearly]     = useState(false);
   const [yearlyAmount, setYearlyAmount] = useState("");
-  const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "dai", "eurc"];
+  const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "eurc"];
   const [cryptoTokens, setCryptoTokens]     = useState(["usdc"]);
   const [paymentMethods, setPaymentMethods] = useState([]); // fiat methods, e.g. ["card"]
   const [fiatCurrency, setFiatCurrency]     = useState("eur");
@@ -843,7 +842,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               </div>
             </div>
             <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: -8 }}>
-              $1 = 1 USDC = 1 USDT = 1 DAI = 1 EURC. Same price across crypto and card.
+              $1 = 1 USDC = 1 USDT = 1 EURC. Same price across crypto and card.
             </div>
 
             {/* Grace period */}
@@ -947,7 +946,6 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                 {[
                   { id: "usdc", label: "USDC" },
                   { id: "usdt", label: "USDT" },
-                  { id: "dai",  label: "DAI"  },
                   { id: "eurc", label: "EURC" },
                 ].map(({ id, label }) => {
                   const isEnabled = cryptoTokens.includes(id);
@@ -1022,7 +1020,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   const [hasYearly, setHasYearly]     = useState(!!product.yearly_amount);
   const [yearlyAmount, setYearlyAmount] = useState(product.yearly_amount ? product.yearly_amount.toFixed(2) : "");
   // Separate crypto tokens from fiat payment methods
-  const CRYPTO_TOKENS = ["usdc", "usdt", "dai", "eurc"];
+  const CRYPTO_TOKENS = ["usdc", "usdt", "eurc"];
   const initialMethods = product.payment_methods || ["crypto"];
   const [cryptoTokens, setCryptoTokens]   = useState(
     initialMethods.filter(m => CRYPTO_TOKENS.includes(m)).length > 0
@@ -1042,7 +1040,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   const yearlyDiscount   = amount && yearlyAmount
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100) : 0;
 
-  const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "dai", "eurc"];
+  const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "eurc"];
 
   const toggleMethod = (method) => {
     if (method === "crypto") return;
@@ -1163,7 +1161,6 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
               {[
                 { id: "usdc", label: "⬡ USDC" },
                 { id: "usdt", label: "₮ USDT" },
-                { id: "dai",  label: "◈ DAI" },
                 { id: "eurc", label: "€ EURC" },
               ].map(({ id, label }) => {
                 const isEnabled = cryptoTokens.includes(id);

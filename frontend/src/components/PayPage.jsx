@@ -37,9 +37,8 @@ const USDC_APPROVE_ABI = [
 
 // ─── EIP-2612 permit support ──────────────────────────────────────────────────
 // Only USDC and EURC support permit() on Base (both are Circle FiatToken
-// contracts). DAI uses a non-standard permit interface (bool allowed, not
-// value) — not wired up here, falls back to approve+subscribe. USDT has no
-// permit() at all on any chain — always falls back to approve+subscribe.
+// contracts). USDT has no permit() at all on any chain — always falls
+// back to approve+subscribe.
 // Tokens not listed here automatically use the two-step flow.
 const PERMIT_SUPPORTED_TOKENS = {
   usdc: { name: "USDC", version: "2" },
@@ -83,11 +82,10 @@ const TOKEN_META = {
   usdc: { label: "USDC", icon: "⬡", decimals: 6 },
   eurc: { label: "EURC", icon: "€",  decimals: 6 },
   usdt: { label: "USDT", icon: "₮",  decimals: 6 },
-  dai:  { label: "DAI",  icon: "◈", decimals: 18 },
 };
 
 // Stablecoins available for subscriber token selection — derived from network whitelist.
-// On Sepolia only USDC is whitelisted. On mainnet: USDC, USDT, DAI, EURC.
+// On Sepolia only USDC is whitelisted. On mainnet: USDC, USDT, EURC.
 const SELECTABLE_TOKENS = Object.keys(NETWORK_TOKENS);
 
 function getTrialDays() {
@@ -263,7 +261,7 @@ export default function PayPage() {
   // Crypto tokens this product accepts, in display order.
   // Uses product.payment_methods directly — NOT filtered by SELECTABLE_TOKENS,
   // which is a network contract whitelist, not a UI filter.
-  const CRYPTO_TOKEN_ORDER = ["usdc", "usdt", "dai", "eurc"];
+  const CRYPTO_TOKEN_ORDER = ["usdc", "usdt", "eurc"];
   const productCryptoTokens = product
     ? CRYPTO_TOKEN_ORDER.filter(t => (product.payment_methods || ["usdc"]).includes(t))
     : ["usdc"];
@@ -277,7 +275,7 @@ export default function PayPage() {
   });
 
   // Whether the selected token supports EIP-2612 permit (USDC, EURC only).
-  // Everything else (USDT, DAI) falls back to the existing two-step flow.
+  // USDT falls back to the existing two-step flow.
   const tokenSupportsPermit = !!PERMIT_SUPPORTED_TOKENS[selectedToken];
 
   // Subscriber's current permit nonce on the token contract — required to
@@ -315,7 +313,7 @@ export default function PayPage() {
         setProduct(p);
         // Reset selectedToken to first crypto token the product accepts.
         // Guards against stale state if user navigates between pay links.
-        const CRYPTO_TOKENS = ["usdc", "usdt", "dai", "eurc"];
+        const CRYPTO_TOKENS = ["usdc", "usdt", "eurc"];
         const acceptedCrypto = (p.payment_methods || []).filter(m => CRYPTO_TOKENS.includes(m));
         if (acceptedCrypto.length > 0 && !acceptedCrypto.includes("usdc")) {
           setSelectedToken(acceptedCrypto[0]);
@@ -479,8 +477,8 @@ export default function PayPage() {
       // Standing max allowance, not the per-cycle amount — a plain approve()
       // for exactly amountRaw would be fully consumed by the first
       // executePull(), pausing the subscription on cycle 2 with the same
-      // failure mode SV-13 fixed for the permit path. Applies to USDT/DAI
-      // (their only path) and to USDC/EURC subscribers who land on this
+      // failure mode SV-13 fixed for the permit path. Applies to USDT
+      // (its only path) and to USDC/EURC subscribers who land on this
       // fallback (e.g. permit signature rejected).
       const hash = await writeContractAsync({
         address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "approve",

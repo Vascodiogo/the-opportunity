@@ -10,14 +10,14 @@ import { useMemo } from "react";
  *
  *   "permit"  — fresh allowance, permit-capable token (USDC/EURC).
  *               1 free signature, then 1 on-chain tx.
- *   "legacy"  — fresh allowance, non-permit token (USDT/DAI), or a permit
+ *   "legacy"  — fresh allowance, non-permit token (USDT), or a permit
  *               attempt that failed and fell back.
  *               2 on-chain txs: approve, then subscribe.
  *   "direct"  — allowance already sufficient (e.g. from an earlier test or a
  *               prior approval), any token.
  *               1 on-chain tx, no signing, no separate approve step.
  *
- * @param {string} tokenSymbol - e.g. 'USDC' | 'EURC' | 'USDT' | 'DAI'
+ * @param {string} tokenSymbol - e.g. 'USDC' | 'EURC' | 'USDT'
  * @param {number} activeStep - 0 = idle (pre-click), then increments per step
  *                              in the mode's step list, final value = done.
  * @param {"permit"|"legacy"|"direct"} mode
