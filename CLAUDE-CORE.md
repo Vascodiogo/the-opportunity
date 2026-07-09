@@ -679,3 +679,17 @@ Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3
 - When a real partner appears: the implementation choice depends on their wallet standard. Single-owner ERC-1271 (agent backend signs directly) is the cheapest and most common near-term pattern — build that first. Safe modules or ERC-4337 session-key support only if a specific partner using those standards appears.
 
 **Revisit trigger:** Real AI-agent or smart-wallet integration request.
+
+---
+
+## 23. Subscription IDs #2, #3, #4 — Investigation Correction and Fix
+
+**What actually happened:** subscriptions #2, #3, #4 in Postgres are real historical test data from June 30, 2026 — genuine completed payments from real keeper test runs, confirmed by cross-checking the `payments` table. They are **not** stale references to the dead June 14 test vault (`0xeb068B47...`), which was the initial working theory.
+
+**The investigation mistake:** an earlier pass matched these three IDs to unrelated June 14 stress-test data by coincidence of shape alone — same subscription amount, same interval, same EOA-owner-equals-safeVault pattern — without checking the one field that actually disambiguates two on-chain events with the same ID: the transaction hash. A `tx_hash` comparison would have shown immediately that they didn't match. Lesson: matching shape (amount/interval/structure) is not the same as matching identity — two unrelated batches of test data can easily look identical by construction. The unique identifier (tx hash, block) has to be checked directly, not inferred from pattern resemblance, before concluding two records are the same event.
+
+**Root cause of the actual bug:** these three subscriptions genuinely exist, with real payment history, but on an old, superseded vault deployment — not the current live vault (`0x0C8668dE...`). `keeper.js`'s DB-driven scan (`getSubscriptionIds()`) doesn't filter by vault (the `subscriptions` table has no `vault_address` column at all — single-vault schema), so it was handing IDs 2/3/4 to the keeper every cycle, which then read them against the *live* contract. Since those IDs don't exist there, the live vault returned a zero-value struct — and `status` defaults to `0`, which is `STATUS.Active` in the keeper's enum. The keeper treated a nonexistent subscription as genuinely active, proceeded to call `isDue()`/`nextPullAmount()` etc. against it, and hit `CALL_EXCEPTION` on downstream calls involving the zero-address `token` field. This fired every single cycle.
+
+**Fix applied:** updated `status` to `'cancelled'` for IDs 2, 3, 4 directly in Postgres — **not deleted**, preserving the real payment history that belongs to them. `getSubscriptionIds()` only selects `status IN ('active', 'paused')`, so cancelling them removes them from the keeper's scan without destroying data.
+
+**Confirmed fixed via fresh keeper logs:** DB scan now reports 0 active/paused subscriptions, no more `CALL_EXCEPTION` errors, clean ~435ms cycles.
