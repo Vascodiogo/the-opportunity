@@ -400,7 +400,8 @@ frontend/src/
 - [ ] Demo video — still not recorded (blocks Base grant nomination)
 - [ ] Base grant nomination form — needs demo video
 - [ ] CLAUDE-CORE.md update — this file ✅ done now
-- [ ] Mainnet deployment — blocked by audit
+- [ ] **Disable Google OAuth signup or ship a non-custodial embedded-wallet replacement — hard mainnet blocker.** See §24: `generateSubscriberWallet()` derives a real, backend-signable custodial wallet (`keccak256(seed + email)`, single shared seed) for every Google-authenticated subscriber, used as a genuine `safeVault` on-chain, not just for login/display. Currently only 2 test wallets exist (Vasco's own, testnet-only, zero real funds) — no active exposure today, but this must close before any real subscriber signs up via Google or before mainnet, whichever comes first. Wallet-connect + signature login (§18, built July 4) is already non-custodial and can serve as the sole subscriber login method in the interim.
+- [ ] Mainnet deployment — blocked by audit and by the Google OAuth custody item above
 
 ---
 
@@ -693,3 +694,38 @@ Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3
 **Fix applied:** updated `status` to `'cancelled'` for IDs 2, 3, 4 directly in Postgres — **not deleted**, preserving the real payment history that belongs to them. `getSubscriptionIds()` only selects `status IN ('active', 'paused')`, so cancelling them removes them from the keeper's scan without destroying data.
 
 **Confirmed fixed via fresh keeper logs:** DB scan now reports 0 active/paused subscriptions, no more `CALL_EXCEPTION` errors, clean ~435ms cycles.
+
+---
+
+## 24. Custodial Wallet Derivation (`generateSubscriberWallet`) — Confirmed Still Open, Severity Escalated
+
+**Status:** Open. Independent of Stripe removal — this is not a leftover Stripe artifact, it's a standalone Google OAuth code path with zero relationship to the deleted webhook handler.
+
+**What it does** (`scripts/api.js:1532-1537`, single definition, single call site at line 1553 inside the Google OAuth `passport.use(new GoogleStrategy(...))` callback):
+```js
+function generateSubscriberWallet(email) {
+  const seed = process.env.WALLET_SEED_SECRET || process.env.ENCRYPTION_KEY || "authonce-subscriber-wallet-seed";
+  const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`${seed}:${email}`));
+  const wallet = new ethers.Wallet(privateKey);
+  return { address: wallet.address, privateKey };
+}
+```
+Triggered on every Google OAuth login (`GET /auth/google` → `GET /auth/google/callback`); only actually generates+persists a new wallet the first time a given email signs in (`upsertSubscriber`'s `ON CONFLICT` preserves an existing wallet on repeat logins).
+
+**Severity escalation beyond the original July 4 framing (§18):** the July 4 note described this as "AuthOnce's backend derives and holds a real private key per email... genuine custody, not just permission" — framed as a per-subscriber custody problem. The actual mechanism is worse than that framing suggests. The private key is **deterministically derived as `keccak256(seed + email)`** — there is no per-user random secret, no per-user stored key material that could be individually rotated or scoped. Anyone who obtains the single shared `seed` value can regenerate **every current and future subscriber's private key** from nothing but their email address, with no database access required at all. This is a single-shared-secret-compromises-everyone design, not N independent instances of one user's custody being AuthOnce's problem.
+
+**The seed itself has a three-way fallback chain, and the third link is a hardcoded literal committed to the repo:** `WALLET_SEED_SECRET` → `ENCRYPTION_KEY` → `"authonce-subscriber-wallet-seed"`. If `WALLET_SEED_SECRET` was never explicitly set on Railway, the seed is silently either `ENCRYPTION_KEY` (a secret with a different, already-documented purpose — AES-256-GCM encryption of merchant IBAN/bank data, per `db.js`) or, worse, the literal string checked into version control. Whether `WALLET_SEED_SECRET` is actually set is not yet confirmed — this needs the same direct check as the other Railway secrets in §21/§23, not an assumption.
+
+**Confirmed live in production, not theoretical:** tested directly against `https://the-opportunity-production.up.railway.app/auth/google` — returns `HTTP 302` to a real Google OAuth consent screen with a live `client_id`. Since `api.js` only registers the Google strategy `if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)`, this proves both are set and this custody-creating code path is actively reachable by real users right now, not dormant or disabled.
+
+**Relationship to the three custody options from §18:** option (C) there — "remove the on-chain wallet for fiat subscribers entirely, treat as pure off-chain Stripe billing" — is now moot as originally framed, since Stripe has been fully removed from the codebase (§21). The underlying custody gap this section describes is unaffected either way; it's a property of the Google OAuth signup path itself, not of whatever fiat rail sits behind it.
+
+**Current exposure confirmed via DB query:** only 2 custodial wallets exist, both Vasco's own test emails, testnet-only. Zero real users, zero real funds affected. No active exposure today — this is a design/architecture risk to close before mainnet, not an incident to respond to now.
+
+**Mainnet-blocking decision:** Google OAuth signup must be disabled or replaced with a non-custodial embedded-wallet provider before any real subscriber can use this path, or before mainnet deployment — whichever comes first. Wallet-connect + signature login (built July 4, §18) is already a fully non-custodial alternative and can serve as the sole subscriber login method in the interim, until a proper replacement for the Google/fiat path is built. See §14 pre-mainnet checklist.
+
+**Not yet done:**
+1. Confirm whether `WALLET_SEED_SECRET` is actually set on Railway, or whether the live seed is silently `ENCRYPTION_KEY` or the hardcoded fallback string. Lower urgency now that exposure is confirmed limited to 2 test wallets, but still open.
+2. Real legal opinion before mainnet, per §18 — still not started, now with a materially worse technical picture to bring to it than what was known July 4.
+3. Decide the actual remediation path (A/B/C from §18, with C reframed given the Stripe removal, or a new option) — still not decided.
+4. Disable Google OAuth signup or ship its non-custodial replacement — hard mainnet blocker (see decision above).
