@@ -724,8 +724,19 @@ Triggered on every Google OAuth login (`GET /auth/google` → `GET /auth/google/
 
 **Mainnet-blocking decision:** Google OAuth signup must be disabled or replaced with a non-custodial embedded-wallet provider before any real subscriber can use this path, or before mainnet deployment — whichever comes first. Wallet-connect + signature login (built July 4, §18) is already a fully non-custodial alternative and can serve as the sole subscriber login method in the interim, until a proper replacement for the Google/fiat path is built. See §14 pre-mainnet checklist.
 
+**Further escalation — `ENCRYPTION_KEY` is one secret doing three unrelated jobs, and two of them collapse into each other.** Full audit of every `ENCRYPTION_KEY` read in the repo (`scripts/db.js:60-62`, the sole `process.env.ENCRYPTION_KEY` read, backing `db.js`'s `encrypt()`/`decrypt()`; plus the second, separate read at `api.js:1533` inside `generateSubscriberWallet()`) confirms three distinct purposes on the same value:
+1. Encrypts merchant IBAN (`db.js:618`/`654`, `upsertMerchant`/`getMerchant`) — genuinely protected by this key.
+2. Encrypts/decrypts subscriber `wallet_private_key` at rest (`api.js:1554`, `1637`, `2038`).
+3. **Is the seed** for deriving that same private key in the first place (`api.js:1533`, `keccak256(seed + email)`) when `WALLET_SEED_SECRET` is unset.
+
+**Purposes 2 and 3 are not independent layers.** A leaked `ENCRYPTION_KEY` makes the AES-256-GCM encryption of `wallet_private_key` decorative — an attacker doesn't need the ciphertext at all, since the same leaked secret directly re-derives the plaintext private key from nothing but the subscriber's email via purpose 3. Only the IBAN encryption (purpose 1) gets genuine protection from this key; the "encryption" wrapped around wallet keys is security theater as currently designed, not a real second layer of defense.
+
+**`README.md:188` is incomplete/misleading:** it documents `ENCRYPTION_KEY` only as `"AES-256 encryption key for subscriber wallets"` — omits the IBAN-encryption use entirely, and omits the wallet-seed-derivation role (arguably the most consequential of the three) altogether. Anyone provisioning this secret from the README alone would have no idea it's also the thing that, if leaked, makes every custodial subscriber wallet directly re-derivable.
+
 **Not yet done:**
 1. Confirm whether `WALLET_SEED_SECRET` is actually set on Railway, or whether the live seed is silently `ENCRYPTION_KEY` or the hardcoded fallback string. Lower urgency now that exposure is confirmed limited to 2 test wallets, but still open.
 2. Real legal opinion before mainnet, per §18 — still not started, now with a materially worse technical picture to bring to it than what was known July 4.
 3. Decide the actual remediation path (A/B/C from §18, with C reframed given the Stripe removal, or a new option) — still not decided.
 4. Disable Google OAuth signup or ship its non-custodial replacement — hard mainnet blocker (see decision above).
+5. Update `README.md:188`'s `ENCRYPTION_KEY` description to reflect all three actual purposes, not just one.
+6. Once `WALLET_SEED_SECRET` is confirmed/set, consider whether `ENCRYPTION_KEY`'s remaining scope (IBAN + wallet-key-at-rest encryption) should also be split into two separate secrets — bundling unrelated data types under one key is its own smaller-scale version of the same anti-pattern.
