@@ -1550,6 +1550,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
       if (!email) return done(new Error("No email from Google"));
 
+      // [Custody gap, §24] Google OAuth signup disabled — no new custodial
+      // wallets. Existing subscribers created before this gate can still log
+      // in normally; only first-time emails are blocked.
+      const existingSubscriber = await db.getSubscriberByEmail(email);
+      if (!existingSubscriber) {
+        return done(null, false, { message: "google_signup_disabled" });
+      }
+
       const { address: walletAddress, privateKey: walletPrivateKey } = generateSubscriberWallet(email);
       const encryptedKey = db.encrypt(walletPrivateKey);
 
