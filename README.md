@@ -185,7 +185,7 @@ STRIPE_CONNECT_CLIENT_ID=  # Stripe Connect client ID
 GOOGLE_CLIENT_ID=          # Google OAuth client ID
 GOOGLE_CLIENT_SECRET=      # Google OAuth client secret
 JWT_SECRET=                # Admin JWT secret
-ENCRYPTION_KEY=            # AES-256 encryption key for subscriber wallets
+ENCRYPTION_KEY=            # AES-256 key: encrypts merchant IBAN + subscriber wallet keys at rest; also the wallet-derivation seed fallback if WALLET_SEED_SECRET unset (see CLAUDE-CORE.md §24)
 PROTOCOL_TREASURY_ADDRESS= # Safe multisig treasury address
 ```
 
