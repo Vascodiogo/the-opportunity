@@ -681,6 +681,8 @@ Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3
 
 **Revisit trigger:** Real AI-agent or smart-wallet integration request.
 
+**Future-tech watchlist** (EIP-8141, Base Account Spend Permissions, Tempo) tracked in `CLAUDE-REFERENCE.md` §28.
+
 ---
 
 ## 23. Subscription IDs #2, #3, #4 — Investigation Correction and Fix
