@@ -547,6 +547,7 @@ async function onPaymentExecuted(log, iface) {
     await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantPaymentReceived(merchantReceivedUsdc, tokenSymbol), ...merchantPayTpl });
   }
 
+  // skipEmailFallback: merchantPaymentReceived email already sent above
   await dispatchWebhook(sub.merchant_address, "payment.success", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault,
@@ -560,7 +561,7 @@ async function onPaymentExecuted(log, iface) {
     tx_hash: log.transactionHash,
     block_number: Number(log.blockNumber),
     executed_at: date,
-  });
+  }, { skipEmailFallback: true });
 }
 
 async function onInsufficientFunds(log, iface) {
@@ -607,6 +608,7 @@ async function onInsufficientFunds(log, iface) {
     await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantPaymentFailed(), ...fundsMerchantTpl2 });
   }
 
+  // skipEmailFallback: merchantPaymentFailed email already sent above
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
@@ -616,7 +618,7 @@ async function onInsufficientFunds(log, iface) {
     available_usdc: formatUsdc(available),
     grace_period_ends_at: gracePeriodEndsAt,
     status: "paused",
-  });
+  }, { skipEmailFallback: true });
 }
 
 async function onInsufficientAllowance(log, iface) {
@@ -664,6 +666,7 @@ async function onInsufficientAllowance(log, iface) {
     }); }
   }
 
+  // skipEmailFallback: merchantPaymentFailed email already sent above
   await dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
@@ -672,7 +675,7 @@ async function onInsufficientAllowance(log, iface) {
     required_usdc: formatUsdc(required),
     current_allowance_usdc: formatUsdc(allowance),
     status: "paused",
-  });
+  }, { skipEmailFallback: true });
 }
 
 async function onSubscriptionPaused(log, iface) {
@@ -759,12 +762,13 @@ async function onSubscriptionExpired(log, iface) {
     await sendEmail({ to: merchantEmail, subject: templates.subjects.merchantExpired(), ...expiredMerchantTpl });
   }
 
+  // skipEmailFallback: merchantExpired email already sent above
   await dispatchWebhook(sub.merchant_address, "subscription.expired", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     expired_at: date,
     status: "expired",
-  });
+  }, { skipEmailFallback: true });
 }
 
 async function onSubscriptionResumed(log, iface) {

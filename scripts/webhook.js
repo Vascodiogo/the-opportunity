@@ -93,7 +93,7 @@ async function fireWebhook(url, secret, payload, attempt = 1) {
 // Fire webhook with retry logic
 // -----------------------------------------------------------------------------
 
-async function dispatchWebhook(merchantAddress, event, data) {
+async function dispatchWebhook(merchantAddress, event, data, { skipEmailFallback = false } = {}) {
   const merchant = await getMerchantWebhook(merchantAddress);
 
   const payload = {
@@ -105,7 +105,7 @@ async function dispatchWebhook(merchantAddress, event, data) {
   // No webhook configured — fall back to email
   if (!merchant?.webhook_url) {
     console.log(`[WEBHOOK] No webhook for ${merchantAddress} — falling back to email`);
-    await sendEmailFallback(merchantAddress, event, data);
+    if (!skipEmailFallback) await sendEmailFallback(merchantAddress, event, data);
     return;
   }
 
@@ -125,7 +125,7 @@ async function dispatchWebhook(merchantAddress, event, data) {
 
   console.error(`[WEBHOOK] All 5 attempts failed for ${event} → ${merchantAddress}`);
   // After all retries fail, send email alert to merchant
-  await sendEmailFallback(merchantAddress, event, data);
+  if (!skipEmailFallback) await sendEmailFallback(merchantAddress, event, data);
 }
 
 // -----------------------------------------------------------------------------

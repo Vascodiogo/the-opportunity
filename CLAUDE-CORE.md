@@ -134,7 +134,7 @@
 scripts/
   keeper.js           — 20s poll, 5-parallel batch, executePull, expire grace (June 30)
   notifier.js         — Push Protocol wallet alerts + AI agent webhooks + email (June 28)
-  api.js              — Express REST API + Google OAuth + Stripe + /api/subscriptions/link
+  api.js              — Express REST API + Google OAuth + /api/subscriptions/link
   db.js               — PostgreSQL schema + subscriber_email + subscriber_webhook_url + is_contract_vault
   webhook.js          — HMAC-SHA256 dispatcher, branded fallback emails, 5-attempt backoff
   admin-auth.js       — JWT admin auth (email/password + rate limiting)
@@ -158,13 +158,11 @@ scripts/
 2. Subscriber email (if subscriber_email set)
 3. Push Protocol wallet notification (always, for wallet-native subscribers)
 
-**Stripe Checkout (Phase A):**
-- `POST /api/stripe/checkout` — creates session with live CoinGecko fiat rate
-- `checkout.session.completed` → subscriber wallet auto-created + admin vault funding email
-- `payment_intent.payment_failed` → grace period + subscriber email
-- `charge.dispute.created` → pauses subscription, notifies merchant
-- SEPA mandate options + `setup_future_usage: "off_session"`
-- Phase B (post-audit): automate treasury → vault USDC transfer
+**Stripe Checkout — REMOVED (2026-07-14):** This section described a Stripe
+Checkout flow (`/api/stripe/checkout`, dispute webhooks) that was never
+implemented in code and contradicts the no-Stripe architecture rule in
+CLAUDE.md. Fiat access is onramp-partner-only (Circle/Coinbase Onramp,
+not yet live as of July 2026). No dispute-notification mechanism exists.
 
 ---
 
@@ -742,3 +740,17 @@ Triggered on every Google OAuth login (`GET /auth/google` → `GET /auth/google/
 4. ~~Disable Google OAuth signup or ship its non-custodial replacement — hard mainnet blocker (see decision above).~~ **RESOLVED — commits `8e8d63a`/`f2df549`.** New signups blocked server-side (existing-subscriber check in the GoogleStrategy callback) and the button removed from `MySubscriptions.jsx`. `generateSubscriberWallet()` itself intentionally left in place — this makes the path unreachable, it doesn't remove the underlying mechanism. The 2 existing test accounts are unaffected.
 5. ~~Update `README.md:188`'s `ENCRYPTION_KEY` description to reflect all three actual purposes, not just one.~~ **RESOLVED — commit `52660b7`.**
 6. `WALLET_SEED_SECRET` is confirmed unset — the live wallet-derivation seed is `ENCRYPTION_KEY` itself (item 1 above). Open question: whether to introduce a dedicated `WALLET_SEED_SECRET` on Railway to separate the seed role from `ENCRYPTION_KEY`'s other two purposes (IBAN + wallet-key-at-rest encryption) — bundling unrelated purposes under one key is its own smaller-scale version of the same anti-pattern, even after Google OAuth signup itself is disabled (item 4).
+
+---
+
+## 25. Notification Preference UI — Non-Functional (2026-07-14)
+
+**Status:** Open, not urgent.
+
+The merchant dashboard's "Notification Preference" setting (`MerchantDashboard.jsx`, Settings tab — Email only / Webhook only / Both) is fully non-functional. The selection is held in React state and written to `localStorage`, but the "Save Settings" request body to `POST /api/merchants/register` never includes it, the endpoint's handler doesn't destructure any such field, and the `merchants` table has no `notification_preference` column. Neither `webhook.js` nor `notifier.js` read any preference — `dispatchWebhook()` only branches on whether `merchant.webhook_url` is set.
+
+Discovered as the root-cause check for a duplicate-merchant-email bug (§ dispatchWebhook `skipEmailFallback` fix, 2026-07-14) — confirmed the duplicate was not "Both" working as designed; the preference control does nothing server-side regardless of which option is selected.
+
+**Needs real wiring, in one pass:** DB column (`merchants.notification_preference`), frontend save payload, backend endpoint handling, and branching in `dispatchWebhook`/`notifier.js` dispatch logic to actually honor the choice (e.g. suppress the email fallback entirely under "Webhook only," skip the webhook attempt under "Email only").
+
+**Not urgent** — no real merchants affected today; the non-functional control silently defaults every merchant to today's actual behavior (webhook if configured, email fallback otherwise), which is a reasonable default in practice even though it isn't what the UI claims to offer.
