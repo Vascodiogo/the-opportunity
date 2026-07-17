@@ -259,11 +259,13 @@ export default function PayPage() {
   const fiatSymbol   = FIAT_SYMBOLS[fiatCurrency] || "$";
 
   // Crypto tokens this product accepts, in display order.
-  // Uses product.payment_methods directly — NOT filtered by SELECTABLE_TOKENS,
-  // which is a network contract whitelist, not a UI filter.
+  // Filtered by both what the merchant's product accepts AND what's actually
+  // deployed/whitelisted on the current network (SELECTABLE_TOKENS) — a token
+  // the merchant enabled but that has no configured address here (e.g. EURC
+  // on Sepolia) must not appear as a selectable option.
   const CRYPTO_TOKEN_ORDER = ["usdc", "usdt", "eurc"];
   const productCryptoTokens = product
-    ? CRYPTO_TOKEN_ORDER.filter(t => (product.payment_methods || ["usdc"]).includes(t))
+    ? CRYPTO_TOKEN_ORDER.filter(t => (product.payment_methods || ["usdc"]).includes(t) && SELECTABLE_TOKENS.includes(t))
     : ["usdc"];
   const amountRaw    = activeAmount
     ? parseUnits(activeAmount.toString(), selectedTokenMeta.decimals)
@@ -314,7 +316,7 @@ export default function PayPage() {
         // Reset selectedToken to first crypto token the product accepts.
         // Guards against stale state if user navigates between pay links.
         const CRYPTO_TOKENS = ["usdc", "usdt", "eurc"];
-        const acceptedCrypto = (p.payment_methods || []).filter(m => CRYPTO_TOKENS.includes(m));
+        const acceptedCrypto = (p.payment_methods || []).filter(m => CRYPTO_TOKENS.includes(m) && SELECTABLE_TOKENS.includes(m));
         if (acceptedCrypto.length > 0 && !acceptedCrypto.includes("usdc")) {
           setSelectedToken(acceptedCrypto[0]);
         }
