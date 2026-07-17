@@ -36,11 +36,16 @@ export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; //
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
 
 // ─── Subscription token addresses by network ─────────────────────────────────
-// Sepolia: only USDC is whitelisted on the vault — others not yet deployed
+// Sepolia: USDC is whitelisted on the vault. EURC's official Circle Sepolia
+// contract address is configured below but is NOT YET approved on the vault
+// contract — requires a manual approveToken() call via Basescan's Write
+// Contract tab before EURC subscriptions will actually work on-chain.
+// USDT still has no configured Sepolia address.
 // Mainnet: all three stablecoins whitelisted at deploy time (see deploy.js)
 export const TOKEN_ADDRESSES = {
   "base-sepolia": {
     usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    eurc: "0x808456652fdb597867f38412077A9182bf77359F",
   },
   "base-mainnet": {
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
