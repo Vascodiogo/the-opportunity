@@ -4,16 +4,15 @@ import { Helmet } from "react-helmet-async";
 
 const TIERS = [
   {
-    name:     { en: "Starter",  pt: "Starter"  },
-    price:    { en: "Free",     pt: "Grátis"   },
-    sub:      { en: "Forever",  pt: "Para sempre" },
+    name:     "Starter",
+    price:    "Free",
+    sub:      "Forever",
     fee:      "0.5%",
-    feeLabel: { en: "per transaction", pt: "por transação" },
+    feeLabel: "per transaction",
     accent:   "#64748b",
     highlight: false,
-    cta:      { en: "Apply Today →", pt: "Registar →" },
-    features: {
-      en: [
+    cta:      "Apply Today →",
+    features: [
         "3 active products",
         "Up to 100 active subscribers",
         "USDC direct to your wallet",
@@ -24,30 +23,17 @@ const TIERS = [
         "Basescan transaction verification",
         "CSV export",
       ],
-      pt: [
-        "3 produtos ativos",
-        "Até 100 subscritores ativos",
-        "USDC direto para a sua carteira",
-        "Link de pagamento alojado",
-        "Período de graça de 7 dias",
-        "Notificações básicas por email",
-        "Entrega de webhooks (5 tentativas, HMAC-SHA256)",
-        "Verificação de transações no Basescan",
-        "Exportação CSV",
-      ],
-    },
   },
   {
-    name:     { en: "Growth",  pt: "Growth" },
-    price:    { en: "€49",     pt: "€49"    },
-    sub:      { en: "/ month", pt: "/ mês"  },
+    name:     "Growth",
+    price:    "€49",
+    sub:      "/ month",
     fee:      "0.5%",
-    feeLabel: { en: "per transaction", pt: "por transação" },
+    feeLabel: "per transaction",
     accent:   "#34d399",
     highlight: true,
-    cta:      { en: "Apply Today →", pt: "Registar →" },
-    features: {
-      en: [
+    cta:      "Apply Today →",
+    features: [
         "Everything in Starter",
         "Unlimited products & subscribers",
         "Trial periods & intro pricing",
@@ -58,30 +44,17 @@ const TIERS = [
         "QR code physical access control ✦",
         "Priority support",
       ],
-      pt: [
-        "Tudo do Starter",
-        "Produtos e subscritores ilimitados",
-        "Períodos de trial e preços introdutórios",
-        "Período de graça configurável (1–30 dias)",
-        "Emails com a sua marca",
-        "Alertas 3 dias antes de cada pagamento",
-        "Widget de subscrição incorporável",
-        "Controlo de acesso físico por QR code ✦",
-        "Suporte prioritário",
-      ],
-    },
   },
   {
-    name:     { en: "Business", pt: "Business" },
-    price:    { en: "€199",     pt: "€199"     },
-    sub:      { en: "/ month",  pt: "/ mês"    },
+    name:     "Business",
+    price:    "€199",
+    sub:      "/ month",
     fee:      "0.5%",
-    feeLabel: { en: "per transaction", pt: "por transação" },
+    feeLabel: "per transaction",
     accent:   "#3b82f6",
     highlight: false,
-    cta:      { en: "Apply Today →", pt: "Registar →" },
-    features: {
-      en: [
+    cta:      "Apply Today →",
+    features: [
         "Everything in Growth",
         "Full REST API access",
         "Revenue analytics & MRR dashboard",
@@ -92,33 +65,19 @@ const TIERS = [
         "SLA uptime guarantee",
         "Dedicated onboarding",
       ],
-      pt: [
-        "Tudo do Growth",
-        "Acesso completo à API REST",
-        "Analytics de receita e dashboard MRR",
-        "Liquidação fiat (EUR/USD via Circle) ✦",
-        "Webhooks personalizados",
-        "Portal de subscritor white-label ✦",
-        "Acesso antecipado ao DataOnce ✦",
-        "Garantia de uptime SLA",
-        "Integração dedicada",
-      ],
-    },
   },
 ];
 
-export default function Pricing({ lang = "en", isDark = false, onToggleTheme, onLaunchApp }) {
+export default function Pricing({ isDark = false, onToggleTheme, onLaunchApp }) {
   const bg      = isDark ? "#080c14"                : "#f8fafc";
   const cardBg  = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
   const border  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";
   const text    = isDark ? "#f1f5f9"                : "#0f172a";
   const muted   = isDark ? "#64748b"                : "#94a3b8";
   const accent  = "#34d399";
-  const otherLang  = lang === "en" ? "pt" : "en";
-  const otherLabel = lang === "en" ? "PT" : "EN";
 
   const scrollToApply = () => {
-    window.location.href = `/${lang === "pt" ? "pt" : ""}#apply`;
+    window.location.href = "/#apply";
   };
 
   return (
@@ -144,20 +103,6 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           </span>
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a
-            href="/pricing"
-            onClick={(e) => {
-              e.preventDefault();
-              localStorage.setItem("ao_lang", otherLang);
-              window.location.reload();
-            }}
-            style={{
-              fontSize: 12, fontWeight: 600, color: muted,
-              padding: "4px 10px", borderRadius: 6,
-              border: `0.5px solid ${border}`, textDecoration: "none",
-              background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-              cursor: "pointer",
-            }}>{otherLabel}</a>
           <label style={{
             background: "none", border: `0.5px solid ${border}`,
             borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14,
@@ -171,7 +116,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
             border: "none", borderRadius: 8, padding: "8px 20px",
             color: "#080c14", fontSize: 13, fontWeight: 700, cursor: "pointer",
           }}>
-            {lang === "en" ? "Apply Today →" : "Registar →"}
+            {"Apply Today →"}
           </button>
           <a href="/?launch=true" style={{
             background: "none", border: `0.5px solid ${border}`,
@@ -179,7 +124,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
             color: text, fontSize: 13, fontWeight: 600, cursor: "pointer",
             textDecoration: "none", display: "inline-block",
           }}>
-            {lang === "en" ? "Launch App →" : "Abrir App →"}
+            {"Launch App →"}
           </a>
         </div>
       </nav>
@@ -187,33 +132,22 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
       {/* ── Hero ── */}
       <section style={{ maxWidth: 960, margin: "0 auto", padding: "80px 40px 56px", textAlign: "center" }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 16, textTransform: "uppercase" }}>
-          {lang === "en" ? "Pricing" : "Preços"}
+          {"Pricing"}
         </p>
         <h1 style={{
           fontSize: "clamp(32px, 4.5vw, 52px)", fontWeight: 700,
           color: text, lineHeight: 1.1, letterSpacing: "-0.03em", margin: "0 0 20px",
         }}>
-          {lang === "en" ? (
-            <>Simple pricing.<br/>
+          {<>Simple pricing.<br/>
             <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               No surprises.
-            </span></>
-          ) : (
-            <>Preços simples.<br/>
-            <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              Sem surpresas.
-            </span></>
-          )}
+            </span></>}
         </h1>
         <p style={{ fontSize: 17, color: muted, maxWidth: 520, margin: "0 auto 16px", lineHeight: 1.7, fontWeight: 300 }}>
-          {lang === "en"
-            ? "Start free. Scale as you grow. Subscribers always pay exactly the price you set — we never add fees on top."
-            : "Comece grátis. Cresça sem limites. Os subscritores pagam sempre o preço que definiu — nunca adicionamos taxas extra."}
+          {"Start free. Scale as you grow. Subscribers always pay exactly the price you set — we never add fees on top."}
         </p>
         <p style={{ fontSize: 13, color: muted, margin: "0 auto", fontStyle: "italic", fontWeight: 300 }}>
-          {lang === "en"
-            ? "Full feature availability at mainnet — September 2026."
-            : "Disponibilidade completa de funcionalidades no mainnet — Setembro 2026."}
+          {"Full feature availability at mainnet — September 2026."}
         </p>
       </section>
 
@@ -227,9 +161,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           fontSize: 13, color: "#fbbf24", fontWeight: 500,
         }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fbbf24", display: "inline-block", flexShrink: 0 }}/>
-          {lang === "en"
-            ? "Founding merchant offer · First 10 approved merchants get 0% protocol fees for 3 months on any plan."
-            : "Oferta fundadora · Os primeiros 10 comerciantes aprovados pagam 0% de taxas durante 3 meses em qualquer plano."}
+          {"Founding merchant offer · First 10 approved merchants get 0% protocol fees for 3 months on any plan."}
         </div>
       </div>
 
@@ -255,20 +187,20 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
                   borderRadius: 99, padding: "4px 14px",
                   fontSize: 11, fontWeight: 700, color: "#080c14", whiteSpace: "nowrap",
                 }}>
-                  {lang === "en" ? "Most Popular" : "Mais Popular"}
+                  {"Most Popular"}
                 </div>
               )}
 
               <p style={{ fontSize: 11, fontWeight: 700, color: tier.accent, letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 16px" }}>
-                {tier.name[lang]}
+                {tier.name}
               </p>
 
               <div style={{ marginBottom: 6 }}>
                 <span style={{ fontSize: 40, fontWeight: 700, color: text, letterSpacing: "-0.03em", fontFamily: "'DM Mono', monospace" }}>
-                  {tier.price[lang]}
+                  {tier.price}
                 </span>
                 <span style={{ fontSize: 14, color: muted, marginLeft: 4, fontWeight: 300 }}>
-                  {tier.sub[lang]}
+                  {tier.sub}
                 </span>
               </div>
 
@@ -279,13 +211,13 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
                 marginBottom: 24, alignSelf: "flex-start",
               }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: tier.accent, fontFamily: "'DM Mono', monospace" }}>{tier.fee}</span>
-                <span style={{ fontSize: 12, color: muted }}>{tier.feeLabel[lang]}</span>
+                <span style={{ fontSize: 12, color: muted }}>{tier.feeLabel}</span>
               </div>
 
               <div style={{ height: "0.5px", background: border, marginBottom: 24 }} />
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10, flexGrow: 1, marginBottom: 28 }}>
-                {tier.features[lang].map((f, j) => (
+                {tier.features.map((f, j) => (
                   <div key={j} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                     <span style={{ color: tier.accent, fontSize: 14, flexShrink: 0, marginTop: 1 }}>✓</span>
                     <span style={{ fontSize: 13, color: j === 0 && i > 0 ? text : muted, fontWeight: j === 0 && i > 0 ? 500 : 300, lineHeight: 1.5 }}>{f}</span>
@@ -302,7 +234,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
                 fontSize: 14, fontWeight: 700, cursor: "pointer",
                 letterSpacing: "-0.01em", fontFamily: "'DM Sans', sans-serif",
               }}>
-                {tier.cta[lang]}
+                {tier.cta}
               </button>
             </div>
           ))}
@@ -310,9 +242,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
 
         {/* ✦ footnote */}
         <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 20, fontWeight: 300, fontStyle: "italic" }}>
-          {lang === "en"
-            ? "✦ Launching at mainnet — September 2026."
-            : "✦ Disponível no mainnet — Setembro 2026."}
+          {"✦ Launching at mainnet — September 2026."}
         </p>
 
         {/* Enterprise row */}
@@ -324,12 +254,10 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 6px" }}>Enterprise</p>
             <h3 style={{ fontSize: 17, fontWeight: 700, color: text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>
-              {lang === "en" ? "Custom volume pricing" : "Preços por volume"}
+              {"Custom volume pricing"}
             </h3>
             <p style={{ fontSize: 13, color: muted, margin: 0, fontWeight: 300 }}>
-              {lang === "en"
-                ? "0.5% protocol fee · Volume discounts negotiable · White-label option · Custom integrations · Dedicated account manager"
-                : "0,5% de taxa · Descontos por volume negociáveis · Opção white-label · Integrações personalizadas · Gestor de conta dedicado"}
+              {"0.5% protocol fee · Volume discounts negotiable · White-label option · Custom integrations · Dedicated account manager"}
             </p>
           </div>
           <a href="mailto:vasco@authonce.io" style={{
@@ -339,7 +267,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
             cursor: "pointer", textDecoration: "none", whiteSpace: "nowrap",
             fontFamily: "'DM Sans', sans-serif",
           }}>
-            {lang === "en" ? "Contact us →" : "Contactar →"}
+            {"Contact us →"}
           </a>
         </div>
       </section>
@@ -349,19 +277,19 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "How the math works" : "Como funciona o cálculo"}
+              {"How the math works"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "99.5% of every payment goes to you." : "99,5% de cada pagamento vai para si."}
+              {"99.5% of every payment goes to you."}
             </h2>
           </div>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 16, overflow: "hidden" }}>
             {[
-              { label: lang === "en" ? "Subscriber pays"        : "Subscritor paga",          value: "€100.00", color: text,      mono: true             },
-              { label: lang === "en" ? "AuthOnce protocol fee"  : "Taxa de protocolo",         value: "− €0.50", color: "#f87171", mono: true             },
-              { label: lang === "en" ? "You receive"            : "Recebe",                    value: "€99.50",  color: accent,    mono: true, bold: true  },
-              { label: lang === "en" ? "Monthly platform fee"   : "Taxa mensal da plataforma", value: "− €49",   color: muted,     mono: false            },
-              { label: lang === "en" ? "Break-even (Growth)"    : "Break-even (Growth)",       value: lang === "en" ? "50 subscribers" : "50 subscritores", color: muted, mono: false },
+              { label: "Subscriber pays",          value: "€100.00", color: text,      mono: true             },
+              { label: "AuthOnce protocol fee",         value: "− €0.50", color: "#f87171", mono: true             },
+              { label: "You receive",                    value: "€99.50",  color: accent,    mono: true, bold: true  },
+              { label: "Monthly platform fee", value: "− €49",   color: muted,     mono: false            },
+              { label: "Break-even (Growth)",       value: "50 subscribers", color: muted, mono: false },
             ].map((row, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -379,9 +307,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
             ))}
           </div>
           <p style={{ textAlign: "center", color: muted, fontSize: 12, marginTop: 16, fontStyle: "italic", fontWeight: 300 }}>
-            {lang === "en"
-              ? "Example based on €100/month subscription · Growth plan · Starter plan has no monthly fee."
-              : "Exemplo baseado numa subscrição de €100/mês · Plano Growth · O plano Starter não tem taxa mensal."}
+            {"Example based on €100/month subscription · Growth plan · Starter plan has no monthly fee."}
           </p>
         </div>
       </section>
@@ -392,24 +318,17 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 12, textTransform: "uppercase" }}>FAQ</p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Common questions" : "Perguntas frequentes"}
+              {"Common questions"}
             </h2>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {(lang === "en" ? [
+            {([
               { q: "Do subscribers pay any fees?",         a: "No. Subscribers always pay exactly the price you set. All fees are absorbed by the merchant." },
               { q: "What currency do I receive?",          a: "USDC on Base Network by default. Business merchants can enable automatic fiat settlement (EUR/USD) via Circle — funds arrive in your bank account." },
               { q: "What happens if a payment fails?",     a: "AuthOnce has a built-in grace period (7 days by default, configurable 1–30 days on Growth+). The keeper bot retries daily and notifies the subscriber automatically. Subscriptions only cancel after the grace period expires." },
               { q: "Can I change my plan later?",          a: "Yes. Upgrade or downgrade at any time. Changes take effect at the start of the next billing cycle." },
               { q: "Is there a setup fee or contract?",    a: "No setup fee. No contract. Cancel any time." },
               { q: "What is the protocol fee charged on?", a: "The 0.5% protocol fee is charged on each successful subscription pull — not on the monthly platform fee." },
-            ] : [
-              { q: "Os subscritores pagam taxas?",              a: "Não. Os subscritores pagam sempre exatamente o preço que definiu. Todas as taxas são absorvidas pelo comerciante." },
-              { q: "Em que moeda recebo?",                       a: "USDC na Base Network por padrão. Os planos Business podem ativar liquidação fiat automática (EUR/USD) via Circle." },
-              { q: "O que acontece se um pagamento falhar?",     a: "O AuthOnce tem um período de graça integrado (7 dias por padrão, configurável de 1 a 30 dias no Growth+). O keeper bot tenta diariamente e notifica o subscritor automaticamente." },
-              { q: "Posso mudar de plano?",                      a: "Sim. Upgrade ou downgrade a qualquer momento. As alterações entram em vigor no início do próximo ciclo de faturação." },
-              { q: "Existe taxa de adesão ou contrato?",         a: "Sem taxa de adesão. Sem contrato. Cancele quando quiser." },
-              { q: "Sobre o que é cobrada a taxa de protocolo?", a: "A taxa de 0,5% é cobrada em cada cobrança de subscrição bem-sucedida — não sobre a taxa mensal da plataforma." },
             ]).map((item, i, arr) => (
               <div key={i} style={{
                 borderBottom: i < arr.length - 1 ? `0.5px solid ${border}` : "none",
@@ -430,15 +349,13 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
         textAlign: "center",
       }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: "0.12em", marginBottom: 16, textTransform: "uppercase" }}>
-          {lang === "en" ? "Ready to start?" : "Pronto para começar?"}
+          {"Ready to start?"}
         </p>
         <h2 style={{ fontSize: 32, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
-          {lang === "en" ? "Become a founding merchant." : "Torne-se um parceiro fundador."}
+          {"Become a founding merchant."}
         </h2>
         <p style={{ color: muted, fontSize: 15, margin: "0 auto 36px", maxWidth: 480, fontWeight: 300, lineHeight: 1.7 }}>
-          {lang === "en"
-            ? "First 10 approved merchants get 0% protocol fees for 3 months. We review every application personally."
-            : "Os primeiros 10 aprovados pagam 0% de taxas durante 3 meses. Analisamos cada registo pessoalmente."}
+          {"First 10 approved merchants get 0% protocol fees for 3 months. We review every application personally."}
         </p>
         <button onClick={scrollToApply} style={{
           background: "linear-gradient(135deg, #34d399, #3b82f6)",
@@ -446,7 +363,7 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
           color: "#080c14", fontSize: 16, fontWeight: 700, cursor: "pointer",
           letterSpacing: "-0.01em",
         }}>
-          {lang === "en" ? "Apply Today →" : "Registar Hoje →"}
+          {"Apply Today →"}
         </button>
       </section>
 
@@ -463,15 +380,15 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
               Auth<span style={{ color: accent }}>Once</span>
             </span>
             <span style={{ fontSize: 11, color: muted, marginLeft: 8 }}>
-              {lang === "en" ? "The future of recurring payments." : "O futuro dos pagamentos recorrentes."}
+              {"The future of recurring payments."}
             </span>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <a href="mailto:support@authonce.io" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>support@authonce.io</a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
-            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>{lang === "en" ? "Terms" : "Termos"}</a>
+            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>{"Terms"}</a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
-            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>{lang === "en" ? "Privacy" : "Privacidade"}</a>
+            <a href="/legal.html" style={{ fontSize: 12, color: muted, textDecoration: "none" }}>{"Privacy"}</a>
             <span style={{ fontSize: 12, color: isDark ? "#334155" : "#cbd5e1" }}>·</span>
             <span style={{ fontSize: 12, color: muted }}>BUSL-1.1</span>
           </div>

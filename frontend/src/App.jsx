@@ -12,7 +12,6 @@ import Dashboard from "./components/Dashboard.jsx";
 import MerchantDashboard from "./components/MerchantDashboard.jsx";
 import LandingPage from "./LandingPage.jsx";
 import Status from "./components/Status.jsx";
-import { detectLang, t } from "./i18n.js";
 
 export default function App() {
   const { address, isConnected } = useAccount();
@@ -29,8 +28,6 @@ export default function App() {
   const [view, setView] = useState("subscriber");
   const [showApp, setShowApp] = useState(() => new URLSearchParams(window.location.search).get("launch") === "true");
 
-  const [lang, setLang] = useState(() => detectLang());
-
   // Auto-open wallet connect modal when arriving via "Launch App" from /pricing
   useEffect(() => {
     if (showApp && !isConnected && openConnectModal) {
@@ -39,42 +36,13 @@ export default function App() {
     }
   }, [showApp, isConnected, openConnectModal]);
 
-  useEffect(() => {
-  const isOnPtPath = window.location.pathname.startsWith("/pt");
-
-  // Explicit path always wins — user clicked a language button
-  if (isOnPtPath) {
-    setLang("pt");
-    localStorage.setItem("ao_lang", "pt");
-    return;
-  }
-
-  // "/" path — check if user explicitly chose EN before (lang button click)
-  const savedLang = localStorage.getItem("ao_lang");
-  if (savedLang) {
-    setLang(savedLang);
-    // If they saved "pt" AND we're on the homepage, reflect it in the URL.
-    // Do NOT rewrite the URL on other routes (/pricing, /pay, /admin, etc) —
-    // doing so flips route-detection flags and renders the wrong component.
-    if (savedLang === "pt" && window.location.pathname === "/") {
-      window.history.replaceState({}, "", "/pt");
-    }
-    return;
-  }
-
-  // First visit — auto-detect from browser language
-  const browser = navigator.language || navigator.userLanguage || "en";
-  const isPt = browser.toLowerCase().startsWith("pt");
-  if (isPt) {
-    if (window.location.pathname === "/") {
-      window.history.replaceState({}, "", "/pt");
-    }
-    setLang("pt");
-    localStorage.setItem("ao_lang", "pt");
-  }
-}, []);
-
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark" || saved === "light") return saved;
+    // No explicit user choice saved yet — respect the OS/browser setting.
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+    return prefersDark ? "dark" : "light";
+  });
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("theme-dark", "theme-light");
@@ -133,7 +101,6 @@ export default function App() {
   if (isPricingRoute) {
     return (
       <Pricing
-        lang={lang}
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onLaunchApp={() => {
@@ -153,7 +120,6 @@ export default function App() {
   if (!isConnected && !showApp) {
     return (
       <LandingPage
-        lang={lang}
         isDark={isDark}
         onToggleTheme={toggleTheme}
         onLaunchApp={() => setShowApp(true)}
@@ -165,22 +131,22 @@ export default function App() {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 24, padding: 24, background: isDark ? "#080c14" : "#f8fafc", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
         <div style={{ position: "absolute", top: 20, right: 24, display: "flex", gap: 10 }}>
-          <button onClick={() => setShowApp(false)} style={{ background: "none", border: `0.5px solid ${borderColor}`, borderRadius: 6, padding: "6px 12px", cursor: "pointer", color: textMuted, fontSize: 12 }}>← {lang === "en" ? "Back" : "Voltar"}</button>
+          <button onClick={() => setShowApp(false)} style={{ background: "none", border: `0.5px solid ${borderColor}`, borderRadius: 6, padding: "6px 12px", cursor: "pointer", color: textMuted, fontSize: 12 }}>← Back</button>
           <button onClick={toggleTheme} style={{ background: "none", border: `0.5px solid ${borderColor}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14 }}>{isDark ? "☀️" : "🌙"}</button>
         </div>
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <img src="/logo.svg" alt="AuthOnce" style={{ width: 56, height: 56, marginBottom: 16 }} />
           <h1 style={{ fontSize: 28, fontWeight: 700, color: textPrimary, letterSpacing: "-0.02em", margin: 0 }}>Auth<span style={{ color: "#34d399" }}>Once</span></h1>
-          <p style={{ color: textMuted, marginTop: 8, fontSize: 15, fontWeight: 300 }}>{t(lang, "tagline")}</p>
+          <p style={{ color: textMuted, marginTop: 8, fontSize: 15, fontWeight: 300 }}>Authorize once. Pay forever. Stay in control.</p>
         </div>
         <div style={{ background: cardBg, border: `0.5px solid ${borderColor}`, borderRadius: 16, padding: 32, width: "100%", maxWidth: 380, textAlign: "center" }}>
-          <p style={{ color: textMuted, marginBottom: 24, fontSize: 14, fontWeight: 300 }}>{t(lang, "connect_description")}</p>
+          <p style={{ color: textMuted, marginBottom: 24, fontSize: 14, fontWeight: 300 }}>Connect your wallet to manage your subscriptions on Base Network.</p>
           <ConnectButton />
-          <p style={{ color: isDark ? "#334155" : "#94a3b8", fontSize: 12, marginTop: 16 }}>{t(lang, "network_hint")} <strong style={{ color: textMuted }}>{t(lang, "network_name")}</strong> {t(lang, "network_suffix")}</p>
+          <p style={{ color: isDark ? "#334155" : "#94a3b8", fontSize: 12, marginTop: 16 }}>Make sure you're on the <strong style={{ color: textMuted }}>Base Network</strong> network</p>
         </div>
         <div style={{ display: "flex", gap: 24, fontSize: 12, color: isDark ? "#334155" : "#94a3b8" }}>
-          <span>{t(lang, "vault_verified")} ✅</span>
-          <span>{t(lang, "registry_verified")} ✅</span>
+          <span>SubscriptionVault verified ✅</span>
+          <span>MerchantRegistry verified ✅</span>
           <span>Base Network</span>
         </div>
       </div>
@@ -197,8 +163,8 @@ export default function App() {
           {isAdmin && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(251,191,36,0.15)", color: "#d97706", fontWeight: 600 }}>Admin</span>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, background: switcherBg, borderRadius: 8, padding: 4 }}>
-          <button onClick={() => setView("subscriber")} style={{ background: view === "subscriber" ? switcherActiveBg : "none", border: "none", borderRadius: 6, padding: "5px 14px", color: view === "subscriber" ? textPrimary : textMuted, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>{t(lang, "nav_subscriptions")}</button>
-          <button onClick={() => setView("merchant")} style={{ background: view === "merchant" ? switcherActiveBg : "none", border: "none", borderRadius: 6, padding: "5px 14px", color: view === "merchant" ? textPrimary : textMuted, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>{t(lang, "nav_merchant")}</button>
+          <button onClick={() => setView("subscriber")} style={{ background: view === "subscriber" ? switcherActiveBg : "none", border: "none", borderRadius: 6, padding: "5px 14px", color: view === "subscriber" ? textPrimary : textMuted, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>My Subscriptions</button>
+          <button onClick={() => setView("merchant")} style={{ background: view === "merchant" ? switcherActiveBg : "none", border: "none", borderRadius: 6, padding: "5px 14px", color: view === "merchant" ? textPrimary : textMuted, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>Merchant Portal</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={toggleTheme} style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", border: isDark ? "0.5px solid rgba(255,255,255,0.1)" : "0.5px solid rgba(0,0,0,0.1)", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 15 }}>{isDark ? "☀️" : "🌙"}</button>

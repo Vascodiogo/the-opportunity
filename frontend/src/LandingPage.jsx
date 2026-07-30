@@ -74,7 +74,7 @@ function GradientCanvas({ isDark }) {
 }
 
 // ─── Apply Form ───────────────────────────────────────────────────────────────
-function ApplyForm({ lang, isDark }) {
+function ApplyForm({ isDark }) {
   const [form, setForm] = useState({
     business_name: "", email: "", wallet_address: "", website: "", use_case: "",
   });
@@ -127,12 +127,10 @@ function ApplyForm({ lang, isDark }) {
       }}>
         <div style={{ fontSize: 40, marginBottom: 16 }}>✓</div>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: accent, margin: "0 0 12px" }}>
-          {lang === "en" ? "Application received!" : "Registo recebido!"}
+          {"Application received!"}
         </h3>
         <p style={{ color: muted, fontSize: 14, margin: 0, fontWeight: 300 }}>
-          {lang === "en"
-            ? "We'll review your application and get back to you within 48 hours."
-            : "Vamos analisar o seu registo e responder em 48 horas."}
+          {"We'll review your application and get back to you within 48 hours."}
         </p>
       </div>
     );
@@ -156,14 +154,14 @@ function ApplyForm({ lang, isDark }) {
     <form onSubmit={handleSubmit}>
       <div className="ao-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div>
-          <label style={labelStyle}>{lang === "en" ? "Business name" : "Nome da empresa"}</label>
+          <label style={labelStyle}>{"Business name"}</label>
           <input type="text" required value={form.business_name}
             onChange={e => setForm(p => ({ ...p, business_name: e.target.value }))}
-            placeholder={lang === "en" ? "Acme Inc." : "Exemplo Lda."}
+            placeholder={"Acme Inc."}
             style={inputStyle} />
         </div>
         <div>
-          <label style={labelStyle}>{lang === "en" ? "Business email" : "Email profissional"}</label>
+          <label style={labelStyle}>{"Business email"}</label>
           <input type="email" required value={form.email}
             onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
             placeholder="you@company.com"
@@ -173,14 +171,14 @@ function ApplyForm({ lang, isDark }) {
 
       <div className="ao-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 8 }}>
         <div>
-          <label style={labelStyle}>{lang === "en" ? "Wallet address (optional)" : "Endereço de carteira (opcional)"}</label>
+          <label style={labelStyle}>{"Wallet address (optional)"}</label>
           <input type="text" value={form.wallet_address}
             onChange={e => setForm(p => ({ ...p, wallet_address: e.target.value }))}
             placeholder="0x..."
             style={inputStyle} />
         </div>
         <div>
-          <label style={labelStyle}>{lang === "en" ? "Website (optional)" : "Website (opcional)"}</label>
+          <label style={labelStyle}>{"Website (optional)"}</label>
           <input type="url" value={form.website}
             onChange={e => setForm(p => ({ ...p, website: e.target.value }))}
             placeholder="https://yoursite.com"
@@ -189,18 +187,14 @@ function ApplyForm({ lang, isDark }) {
       </div>
 
       <p style={{ fontSize: 11, color: muted, margin: "0 0 16px", lineHeight: 1.6 }}>
-        {lang === "en"
-          ? <>Use any exchange deposit address — <a href="https://coinbase.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Coinbase</a>, <a href="https://binance.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Binance</a>, <a href="https://kraken.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Kraken</a>, or any other. Stablecoins land directly and you can convert to EUR and withdraw to your bank in two clicks.</>
-          : <>Use o endereço de depósito de qualquer exchange — <a href="https://coinbase.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Coinbase</a>, <a href="https://binance.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Binance</a>, <a href="https://kraken.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Kraken</a>, ou qualquer outra. As stablecoins chegam diretamente.</>}
+        {<>Use any exchange deposit address — <a href="https://coinbase.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Coinbase</a>, <a href="https://binance.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Binance</a>, <a href="https://kraken.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Kraken</a>, or any other. Stablecoins land directly and you can convert to EUR and withdraw to your bank in two clicks.</>}
       </p>
 
       <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>{lang === "en" ? "How will you use AuthOnce?" : "Como vai usar o AuthOnce?"}</label>
+        <label style={labelStyle}>{"How will you use AuthOnce?"}</label>
         <textarea required rows={3} value={form.use_case}
           onChange={e => setForm(p => ({ ...p, use_case: e.target.value }))}
-          placeholder={lang === "en"
-            ? "Tell us about your business and how you plan to use recurring crypto payments..."
-            : "Conte-nos sobre o seu negócio e como planeia usar pagamentos recorrentes em cripto..."}
+          placeholder={"Tell us about your business and how you plan to use recurring crypto payments..."}
           style={{ ...inputStyle, resize: "vertical" }} />
       </div>
 
@@ -209,7 +203,7 @@ function ApplyForm({ lang, isDark }) {
           background: "rgba(248,113,113,0.1)", border: "0.5px solid rgba(248,113,113,0.3)",
           borderRadius: 8, padding: "10px 14px", marginBottom: 16,
           fontSize: 13, color: "#f87171",
-        }}>{message || (lang === "en" ? "Something went wrong. Please try again." : "Algo correu mal. Tente novamente.")}</div>
+        }}>{message || ("Something went wrong. Please try again.")}</div>
       )}
 
       <button type="submit" disabled={status === "loading"} style={{
@@ -221,21 +215,19 @@ function ApplyForm({ lang, isDark }) {
         letterSpacing: "-0.01em", fontFamily: "'DM Sans', sans-serif",
       }}>
         {status === "loading"
-          ? (lang === "en" ? "Submitting…" : "A enviar…")
-          : (lang === "en" ? "Apply for founding merchant access →" : "Registar-me como parceiro fundador →")}
+          ? ("Submitting…")
+          : ("Apply for founding merchant access →")}
       </button>
 
       <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 12, marginBottom: 0 }}>
-        {lang === "en"
-          ? "We review every application personally. You'll hear from us within 48 hours."
-          : "Analisamos cada registo pessoalmente. Responderemos em 48 horas."}
+        {"We review every application personally. You'll hear from us within 48 hours."}
       </p>
     </form>
   );
 }
 
 // ─── Product Creator ─────────────────────────────────────────────────────────
-function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
+function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
   const [name, setName] = useState("Pro Plan");
   const [price, setPrice] = useState(29);
   const [interval, setInterval] = useState("Monthly");
@@ -278,32 +270,32 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 
       {/* Form */}
       <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 16, padding: 24 }}>
-        <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 16px" }}>{lang === "en" ? "New product" : "Novo produto"}</p>
+        <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 16px" }}>{"New product"}</p>
 
-        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Product name" : "Nome do produto"}</label>
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Product name"}</label>
         <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", marginBottom: 14 }} />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 4 }} className="ao-form-row">
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Price ($)" : "Preço ($)"}</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Price ($)"}</label>
             <input type="number" value={price} min={1} onChange={e => setPrice(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Interval" : "Intervalo"}</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Interval"}</label>
             <select value={interval} onChange={e => setInterval(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }}>
-              <option>{lang === "en" ? "Monthly" : "Mensal"}</option>
-              <option>{lang === "en" ? "Weekly" : "Semanal"}</option>
-              <option>{lang === "en" ? "Yearly" : "Anual"}</option>
+              <option>{"Monthly"}</option>
+              <option>{"Weekly"}</option>
+              <option>{"Yearly"}</option>
             </select>
           </div>
         </div>
         <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 USDT = 1 EURC</p>
 
-        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{lang === "en" ? "Grace period (days, 1–30)" : "Período de graça (dias, 1–30)"}</label>
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Grace period (days, 1–30)"}</label>
         <input type="number" value={grace} min={1} max={30} onChange={e => setGrace(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
-        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>{lang === "en" ? "Keeper retries daily. Expires if unpaid after this window." : "Keeper reenvio diário. Expira se não pago dentro do prazo."}</p>
+        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>{"Keeper retries daily. Expires if unpaid after this window."}</p>
 
-        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>{lang === "en" ? "Crypto tokens" : "Tokens cripto"}</label>
+        <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>{"Crypto tokens"}</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
           {Object.keys(tokens).map(k => (
             <label key={k} style={toggleStyle(tokens[k], "crypto")}>
@@ -317,8 +309,8 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
         <div style={{ borderTop: `0.5px solid ${border}`, paddingTop: 4 }}>
           <div style={toggleRowStyle(introPrice)}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{lang === "en" ? "Introductory pricing" : "Preço introdutório"}</p>
-              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{lang === "en" ? "Lower price for first N cycles" : "Preço reduzido para os primeiros N ciclos"}</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{"Introductory pricing"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{"Lower price for first N cycles"}</p>
             </div>
             <button onClick={() => setIntroPrice(v => !v)} style={switchStyle(introPrice)} aria-label="Toggle introductory pricing">
               <span style={{ position: "absolute", top: 2, left: introPrice ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
@@ -327,11 +319,11 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
           {introPrice && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: "10px 0" }}>
               <div>
-                <label style={{ fontSize: 11, color: muted, display: "block", marginBottom: 4 }}>{lang === "en" ? "Intro price ($)" : "Preço intro ($)"}</label>
+                <label style={{ fontSize: 11, color: muted, display: "block", marginBottom: 4 }}>{"Intro price ($)"}</label>
                 <input type="number" value={introAmt} min={1} onChange={e => setIntroAmt(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: muted, display: "block", marginBottom: 4 }}>{lang === "en" ? "For N cycles" : "Para N ciclos"}</label>
+                <label style={{ fontSize: 11, color: muted, display: "block", marginBottom: 4 }}>{"For N cycles"}</label>
                 <input type="number" value={introCycles} min={1} max={12} onChange={e => setIntroCycles(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
               </div>
             </div>
@@ -339,8 +331,8 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 
           <div style={toggleRowStyle(yearlyOption)}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{lang === "en" ? "Yearly billing option" : "Opção anual"}</p>
-              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{lang === "en" ? "Annual plan alongside monthly" : "Plano anual ao lado do mensal"}</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{"Yearly billing option"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{"Annual plan alongside monthly"}</p>
             </div>
             <button onClick={() => setYearlyOption(v => !v)} style={switchStyle(yearlyOption)} aria-label="Toggle yearly billing">
               <span style={{ position: "absolute", top: 2, left: yearlyOption ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
@@ -349,8 +341,8 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 
           <div style={{ ...toggleRowStyle(cryptoDiscount), borderBottom: "none" }}>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{lang === "en" ? "Crypto discount" : "Desconto cripto"}</p>
-              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{lang === "en" ? "Incentivise on-chain payment (0–50%)" : "Incentivar pagamento on-chain (0–50%)"}</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{"Crypto discount"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{"Incentivise on-chain payment (0–50%)"}</p>
             </div>
             <button onClick={() => setCryptoDiscount(v => !v)} style={switchStyle(cryptoDiscount)} aria-label="Toggle crypto discount">
               <span style={{ position: "absolute", top: 2, left: cryptoDiscount ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
@@ -359,7 +351,7 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
           {cryptoDiscount && (
             <div style={{ padding: "10px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <label style={{ fontSize: 11, color: muted }}>{lang === "en" ? "Discount" : "Desconto"}</label>
+                <label style={{ fontSize: 11, color: muted }}>{"Discount"}</label>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "#34d399" }}>{discountPct}%</span>
               </div>
               <input type="range" min={0} max={50} step={5} value={discountPct} onChange={e => setDiscountPct(Number(e.target.value))} style={{ width: "100%" }} />
@@ -373,13 +365,13 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
           border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700,
           textAlign: "center", textDecoration: "none",
         }}>
-          {lang === "en" ? "Apply to create this product →" : "Candidatar-me para criar este produto →"}
+          {"Apply to create this product →"}
         </a>
       </div>
 
       {/* Preview */}
       <div>
-        <p style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 10px" }}>{lang === "en" ? "Live pay page preview" : "Pré-visualização ao vivo"}</p>
+        <p style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 10px" }}>{"Live pay page preview"}</p>
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 16, padding: 20 }}>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, paddingBottom: 12, borderBottom: `0.5px solid ${border}` }}>
@@ -395,26 +387,26 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
             {introPrice && <span style={{ fontSize: 26, fontWeight: 700, color: "#34d399", fontFamily: "'DM Mono', monospace" }}>${introAmt}</span>}
             <span style={{ fontSize: introPrice ? 16 : 26, fontWeight: 700, color: introPrice ? muted : "#34d399", fontFamily: "'DM Mono', monospace", textDecoration: introPrice ? "line-through" : "none" }}>${price}</span>
           </div>
-          {introPrice && <p style={{ fontSize: 11, color: "#34d399", margin: "0 0 2px", fontWeight: 600 }}>{lang === "en" ? `Intro price for ${introCycles} cycles` : `Preço intro por ${introCycles} ciclos`}</p>}
-          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per" : "por"} {intervalWord}</p>
+          {introPrice && <p style={{ fontSize: 11, color: "#34d399", margin: "0 0 2px", fontWeight: 600 }}>{`Intro price for ${introCycles} cycles`}</p>}
+          <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>{"per"} {intervalWord}</p>
 
           {yearlyOption && (
             <div style={{ background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.06)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
-              <span style={{ color: "#34d399", fontWeight: 600 }}>{lang === "en" ? "Save ~17% with annual" : "Poupe ~17% com anual"}</span>
-              <span style={{ color: muted, marginLeft: 8 }}>${Math.round(price * 10)} / {lang === "en" ? "year" : "ano"}</span>
+              <span style={{ color: "#34d399", fontWeight: 600 }}>{"Save ~17% with annual"}</span>
+              <span style={{ color: muted, marginLeft: 8 }}>${Math.round(price * 10)} / {"year"}</span>
             </div>
           )}
 
           <div>
             {cryptoDiscount && (
               <div style={{ background: "rgba(52,211,153,0.08)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
-                <span style={{ color: "#34d399", fontWeight: 600 }}>{discountPct}% {lang === "en" ? "crypto discount applied" : "desconto cripto aplicado"}</span>
+                <span style={{ color: "#34d399", fontWeight: 600 }}>{discountPct}% {"crypto discount applied"}</span>
                 <span style={{ color: muted, marginLeft: 8, textDecoration: "line-through" }}>${price}</span>
                 <span style={{ color: text, fontWeight: 700, marginLeft: 6 }}>${cryptoPrice.toFixed(2)}</span>
               </div>
             )}
             <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
-              <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{lang === "en" ? "Select token" : "Selecionar token"}</p>
+              <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{"Select token"}</p>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {activeTokens.length === 0 && <span style={{ fontSize: 12, color: muted }}>—</span>}
                 {activeTokens.map((t, i) => (
@@ -423,13 +415,13 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
               </div>
             </div>
             <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: muted }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span>{lang === "en" ? "Grace period" : "Período de graça"}</span><span style={{ color: text, fontWeight: 600 }}>{grace} {lang === "en" ? "days" : "dias"}</span></div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}><span>{lang === "en" ? "Protocol fee" : "Taxa protocolo"}</span><span style={{ color: text, fontWeight: 600 }}>0.5%</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span>{"Grace period"}</span><span style={{ color: text, fontWeight: 600 }}>{grace} {"days"}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span>{"Protocol fee"}</span><span style={{ color: text, fontWeight: 600 }}>0.5%</span></div>
             </div>
             <button style={{ width: "100%", padding: 11, background: "#34d399", color: "#080c14", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
-              {lang === "en" ? "Connect wallet to subscribe →" : "Ligar carteira para subscrever →"}
+              {"Connect wallet to subscribe →"}
             </button>
-            <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{lang === "en" ? "Non-custodial · Base Network · Authorise once" : "Não custodial · Base Network · Autorizar uma vez"}</p>
+            <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{"Non-custodial · Base Network · Authorise once"}</p>
           </div>
         </div>
       </div>
@@ -438,7 +430,7 @@ function ProductCreator({ lang, isDark, border, cardBg, text, muted, accent }) {
 }
 
 // ─── ROI Calculator ───────────────────────────────────────────────────────────
-function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
+function ROICalculator({ isDark, accent, border, cardBg, text, muted }) {
   const [mrr, setMrr] = useState(5000);
   const [subs, setSubs] = useState(50);
 
@@ -459,7 +451,7 @@ function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 32 }} className="ao-form-row">
         <div>
           <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>
-            {lang === "en" ? "Monthly recurring revenue" : "Receita mensal recorrente"}
+            {"Monthly recurring revenue"}
           </p>
           <input type="range" min={500} max={50000} step={500} value={mrr}
             onChange={e => setMrr(Number(e.target.value))} style={sliderStyle} />
@@ -471,7 +463,7 @@ function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
         </div>
         <div>
           <p style={{ fontSize: 12, color: muted, margin: "0 0 8px" }}>
-            {lang === "en" ? "Number of subscribers" : "Número de subscritores"}
+            {"Number of subscribers"}
           </p>
           <input type="range" min={5} max={500} step={5} value={subs}
             onChange={e => setSubs(Number(e.target.value))} style={sliderStyle} />
@@ -486,38 +478,36 @@ function ROICalculator({ lang, isDark, accent, border, cardBg, text, muted }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }} className="ao-grid-3">
         <div style={cardStyle}>
           <p style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
-            {lang === "en" ? "Traditional processors" : "Processadores tradicionais"}
+            {"Traditional processors"}
           </p>
           <p style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(traditional)}</p>
-          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per month" : "por mês"}</p>
-          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(traditional * 12)}/{lang === "en" ? "yr" : "ano"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{"per month"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(traditional * 12)}/{"yr"}</p>
         </div>
         <div style={{ ...cardStyle, border: `0.5px solid rgba(52,211,153,0.4)` }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: accent, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>AuthOnce</p>
           <p style={{ fontSize: 28, fontWeight: 700, color: accent, margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(authonce)}</p>
-          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{lang === "en" ? "per month" : "por mês"}</p>
-          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(authonce * 12)}/{lang === "en" ? "yr" : "ano"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{"per month"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: 0 }}>{fmt(authonce * 12)}/{"yr"}</p>
         </div>
         <div style={{ ...cardStyle, background: isDark ? "rgba(52,211,153,0.06)" : "rgba(52,211,153,0.06)", border: `0.5px solid rgba(52,211,153,0.3)` }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
-            {lang === "en" ? "You save" : "Poupa"}
+            {"You save"}
           </p>
           <p style={{ fontSize: 28, fontWeight: 700, color: "#34d399", margin: "0 0 4px", fontFamily: "'DM Mono', monospace" }}>{fmt(saving)}</p>
-          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{pct}% {lang === "en" ? "less in fees" : "menos em taxas"}</p>
-          <p style={{ fontSize: 11, color: "#34d399", fontWeight: 600, margin: 0 }}>{fmt(saving * 12)}/{lang === "en" ? "yr saved" : "ano poupado"}</p>
+          <p style={{ fontSize: 11, color: muted, margin: "0 0 8px" }}>{pct}% {"less in fees"}</p>
+          <p style={{ fontSize: 11, color: "#34d399", fontWeight: 600, margin: 0 }}>{fmt(saving * 12)}/{"yr saved"}</p>
         </div>
       </div>
       <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 16 }}>
-        {lang === "en"
-          ? "Traditional processors: 2.9% + $0.30/txn industry standard. AuthOnce: 0.5% flat. Testnet only — not financial advice."
-          : "Processadores tradicionais: padrão do setor 2,9% + $0,30/txn. AuthOnce: 0,5% fixo. Apenas testnet — não é aconselhamento financeiro."}
+        {"Traditional processors: 2.9% + $0.30/txn industry standard. AuthOnce: 0.5% flat. Testnet only — not financial advice."}
       </p>
     </div>
   );
 }
 
 // ─── Main Landing Page ────────────────────────────────────────────────────────
-export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }) {
+export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
   const bg      = isDark ? "#0a0f1a"                : "#ffffff";
   const heroBg  = isDark ? "#080c14"                : "#f8fafc";
   const cardBg  = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
@@ -533,14 +523,18 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
     document.getElementById("apply")?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
       <Helmet>
-        <link rel="canonical" href={lang === "pt" ? "https://authonce.io/pt" : "https://authonce.io"} />
+        <link rel="canonical" href={"https://authonce.io"} />
       </Helmet>
       <style>{`
         @media (max-width: 768px) {
           .ao-hero-content { padding: 80px 24px 60px !important; }
+          .ao-hero-row { flex-direction: column !important; }
+          .ao-dashboard-grid { grid-template-columns: 1fr !important; }
           .ao-hero-h1 { font-size: clamp(36px, 9vw, 60px) !important; }
           .ao-section { padding: 56px 24px !important; }
           .ao-grid-3 { grid-template-columns: 1fr !important; }
@@ -548,7 +542,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           .ao-founding-grid { grid-template-columns: 1fr !important; }
           .ao-form-row { grid-template-columns: 1fr !important; }
           .ao-footer-inner { flex-direction: column !important; align-items: flex-start !important; }
-          .ao-nav-text { display: none !important; }
           .ao-mgmt-grid { grid-template-columns: 1fr 1fr !important; }
         }
         @media (max-width: 480px) {
@@ -573,140 +566,151 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       {/* ── Nav ── */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 40px", height: 64,
+        padding: "0 40px", height: 56,
         borderBottom: `0.5px solid ${border}`,
         background: isDark ? "rgba(8,12,20,0.96)" : "rgba(255,255,255,0.96)",
         backdropFilter: "blur(20px)",
         position: "sticky", top: 0, zIndex: 100,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/logo.svg" alt="AuthOnce" style={{ width: 32, height: 32 }} />
-          <span style={{ fontSize: 17, fontWeight: 700, color: text, letterSpacing: "-0.02em" }}>
+          <img src="/logo.svg" alt="AuthOnce" style={{ width: 28, height: 28 }} />
+          <span style={{ fontSize: 16, fontWeight: 700, color: text, letterSpacing: "-0.02em" }}>
             Auth<span style={{ color: accent }}>Once</span>
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <a className="ao-nav-text" href="/pricing" style={{ fontSize: 13, fontWeight: 500, color: muted, textDecoration: "none" }}>
-            {lang === "en" ? "Pricing" : "Preços"}
-          </a>
-          <a className="ao-nav-text" href="#how-it-works" style={{ fontSize: 13, fontWeight: 500, color: muted, textDecoration: "none" }}>
-            {lang === "en" ? "How it works" : "Como funciona"}
-          </a>
-          <a className="ao-nav-text" href="https://blog.authonce.io" style={{ fontSize: 13, fontWeight: 500, color: muted, textDecoration: "none" }}>
-            Blog
-          </a>
-          <button onClick={() => {
-            const target = lang === "en" ? "pt" : "en";
-            localStorage.setItem("ao_lang", target);
-            window.location.href = target === "pt" ? "/pt" : "/";
-          }} style={{
-            fontSize: 12, fontWeight: 600, color: muted,
-            padding: "4px 10px", borderRadius: 6,
-            border: `0.5px solid ${border}`, cursor: "pointer",
-            background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-          }}>{lang === "en" ? "PT" : "EN"}</button>
-          <button onClick={onToggleTheme} style={{
-            background: "none", border: `0.5px solid ${border}`,
-            borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14,
-          }}>{isDark ? "☀️" : "🌙"}</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+
+          {/* Menu dropdown — replaces separate Pricing / How it works / Blog links */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 13, fontWeight: 500, color: muted, padding: "6px 4px",
+              }}
+            >
+              {"Menu"}
+              <i className="ti ti-chevron-down" style={{ fontSize: 14, transition: "transform 0.15s", transform: menuOpen ? "rotate(180deg)" : "none" }} aria-hidden="true" />
+            </button>
+            {menuOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 8px)", left: 0,
+                background: isDark ? "#0f1520" : "#ffffff",
+                border: `0.5px solid ${border}`, borderRadius: 10,
+                boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.4)" : "0 8px 24px rgba(0,0,0,0.12)",
+                padding: 6, minWidth: 160, zIndex: 200,
+              }}>
+                {[
+                  { label: "Pricing", href: "/pricing" },
+                  { label: "How it works", href: "#how-it-works" },
+                  { label: "Blog", href: "https://blog.authonce.io" },
+                ].map(item => (
+                  <a key={item.label} href={item.href} style={{
+                    display: "block", padding: "8px 12px", borderRadius: 6,
+                    fontSize: 13, fontWeight: 500, color: text, textDecoration: "none",
+                  }}>
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button onClick={scrollToApply} style={{
             background: "linear-gradient(135deg, #34d399, #3b82f6)",
             border: "none", borderRadius: 8, padding: "9px 20px",
             color: "#080c14", fontSize: 13, fontWeight: 700, cursor: "pointer",
           }}>
-            {lang === "en" ? "Apply Today →" : "Registar →"}
+            {"Apply Today →"}
           </button>
           <button onClick={onLaunchApp} style={{
             background: "none", border: `0.5px solid ${border}`,
             borderRadius: 8, padding: "9px 16px",
             color: text, fontSize: 13, fontWeight: 600, cursor: "pointer",
           }}>
-            {lang === "en" ? "Launch App →" : "Abrir App →"}
+            {"Launch App →"}
           </button>
         </div>
       </nav>
 
-      {/* ── Testnet Banner ── */}
-      <div style={{
-        background: isDark ? "rgba(234,179,8,0.08)" : "rgba(234,179,8,0.10)",
-        borderBottom: `0.5px solid rgba(234,179,8,0.3)`,
-        padding: "10px 40px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        flexWrap: "wrap", gap: 8,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: "50%", background: "#eab308",
-            display: "inline-block", flexShrink: 0,
-          }}/>
-          <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#fde68a" : "#92400e" }}>
-            {lang === "en"
-              ? "Live on Base Sepolia testnet — no real funds at risk. Mainnet targeted September 2026 following security audit."
-              : "Ativo na testnet Base Sepolia — sem fundos reais em risco. Mainnet prevista para setembro 2026 após auditoria de segurança."}
-          </span>
-        </div>
-        <a
-          href={`https://sepolia.basescan.org/address/${VAULT_ADDRESS}`}
-          target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 11, color: isDark ? "#93c5fd" : "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap", fontWeight: 500 }}
-        >
-          {lang === "en" ? "View contracts on Basescan →" : "Ver contratos no Basescan →"}
-        </a>
-      </div>
-
       {/* ── HERO ── */}
       <section style={{
-        background: heroBg, padding: "80px 40px 60px", textAlign: "center",
+        background: heroBg, padding: "44px 40px 60px", textAlign: "center",
       }}>
         <div style={{ maxWidth: 860, margin: "0 auto" }}>
 
-          <div className="ao-fade-in" style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-            border: `0.5px solid rgba(52,211,153,0.4)`,
-            borderRadius: 99, padding: "6px 18px", marginBottom: 28,
-            fontSize: 12, fontWeight: 600, color: isDark ? accent : "#0d9963",
+          <p className="ao-fade-in" style={{
+            fontSize: "clamp(17px, 2.2vw, 21px)", fontWeight: 700, color: text,
+            lineHeight: 1.5, margin: "0 0 28px", maxWidth: 640, marginLeft: "auto", marginRight: "auto",
           }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: accent, display: "inline-block", animation: "pulse-dot 2s infinite" }}/>
-            {lang === "en"
-              ? "First 10 get 0% fees for 3 months · First 5 get lifetime Growth free"
-              : "Primeiros 10: 0% taxas 3 meses · Primeiros 5: Growth vitalício grátis"}
-          </div>
-
-          <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 16px" }}>
-            {lang === "en" ? "Non-custodial subscription protocol · Base Network" : "Protocolo de subscrição não custodial · Base Network"}
+            {<>Built for <span style={{ color: accent }}>SaaS companies, DAOs, and Web3 businesses</span> that already get paid in stablecoins.</>}
           </p>
 
           <h1 className="ao-hero-h1 ao-fade-in-2" style={{
             fontSize: "clamp(36px, 5vw, 62px)", fontWeight: 800,
             color: text, lineHeight: 1.1, letterSpacing: "-0.035em", margin: "0 0 32px",
           }}>
-            {lang === "en" ? (
-              <>{lang === "en" ? "Your subscribers pay on time." : "Os seus subscritores pagam a tempo."}<br/>
+            {<>{"Your subscribers pay on time."}<br/>
               <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                {lang === "en" ? "Every cycle. Automatically." : "Cada ciclo. Automaticamente."}
+                {"Every cycle. Automatically."}
               </span><br/>
               <span style={{ color: muted, fontSize: "clamp(24px, 3.5vw, 40px)" }}>
-                {lang === "en" ? "Without you lifting a finger." : "Sem precisar de fazer nada."}
-              </span></>
-            ) : (
-              <>Os seus subscritores pagam a tempo.<br/>
-              <span style={{ background: "linear-gradient(135deg, #34d399, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                Cada ciclo. Automaticamente.
-              </span><br/>
-              <span style={{ color: muted, fontSize: "clamp(24px, 3.5vw, 40px)" }}>
-                Sem precisar de fazer nada.
-              </span></>
-            )}
+                {"Without you lifting a finger."}
+              </span></>}
           </h1>
+
+        </div>
+
+        {/* Billing cycle diagram — the "who it's for" statement now lives above the headline instead of here */}
+        <div className="ao-fade-in-2" style={{
+          display: "flex", justifyContent: "center", margin: "0 0 32px",
+        }}>
+          <div style={{ position: "relative", width: 200, height: 200, flexShrink: 0 }}>
+            <svg viewBox="-20 -20 240 240" style={{ width: "100%", height: "100%", overflow: "visible" }}>
+              <defs>
+                <linearGradient id="cycleGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#34d399" />
+                  <stop offset="100%" stopColor="#3b82f6" />
+                </linearGradient>
+              </defs>
+              <circle cx="100" cy="100" r="78" fill="none" stroke={border} strokeWidth="1.5" />
+              <path d="M 100 22 A 78 78 0 0 1 163 128" fill="none" stroke="url(#cycleGrad)" strokeWidth="3" strokeLinecap="round" />
+              <circle cx="100" cy="22" r="6" fill="url(#cycleGrad)" />
+              <circle cx="163" cy="128" r="6" fill="none" stroke="url(#cycleGrad)" strokeWidth="2" />
+              <circle cx="37" cy="128" r="6" fill="none" stroke="url(#cycleGrad)" strokeWidth="2" />
+              <text x="100" y="10" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>sign once</text>
+              <text x="163" y="150" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>day 30</text>
+              <text x="37" y="150" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>day 60</text>
+            </svg>
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }}>
+              <div style={{
+                display: "inline-block", background: "rgba(52,211,153,0.12)", color: "#0d9963",
+                fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 99, marginBottom: 6,
+              }}>
+                {"0.5% flat fee"}
+              </div>
+              <div style={{ fontSize: 21, fontWeight: 800, color: text }}>$0.005</div>
+              <div style={{ fontSize: 11, color: muted }}>{"per $1 collected"}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ maxWidth: 860, margin: "0 auto", textAlign: "center" }}>
+
+          {/* Subheadline */}
+          <p className="ao-fade-in-3" style={{ fontSize: 19, color: text, maxWidth: 620, margin: "0 auto 28px", lineHeight: 1.6, fontWeight: 600 }}>
+            {<>Subscribers authorise once. Our keeper bot pulls USDC directly from their wallet every billing cycle — <span style={{ color: accent }}>straight to yours</span>. Full merchant suite included.</>}
+          </p>
 
           {/* Pain point cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28, textAlign: "center" }} className="ao-grid-3">
             {[
-              { icon: "ti-building-store", title: lang === "en" ? "No intermediary" : "Sem intermediário", sub: lang === "en" ? "Funds move wallet to wallet. No platform holds your money." : "Fundos movem-se de carteira para carteira. Sem plataforma a segurar o seu dinheiro." },
-              { icon: "ti-lock", title: lang === "en" ? "No custody risk" : "Sem risco de custódia", sub: lang === "en" ? "Subscribers keep control of their wallet at all times." : "Os subscritores mantêm o controlo da carteira em todo o momento." },
-              { icon: "ti-trending-down", title: lang === "en" ? "No churn from failed payments" : "Sem churn por falha de pagamento", sub: lang === "en" ? "Grace periods and auto-retry recover payments automatically." : "Períodos de graça e reenvio automático recuperam pagamentos." },
-              { icon: "ti-robot", title: lang === "en" ? "Built for AI agents too" : "Também para agentes de IA", sub: lang === "en" ? "ERC-1271 smart wallets authorize pulls natively — no card, no human required." : "Carteiras inteligentes ERC-1271 autorizam pagamentos nativamente — sem cartão, sem humano." },
+              { icon: "ti-building-store", title: "No intermediary", sub: "Funds move wallet to wallet. No platform holds your money." },
+              { icon: "ti-lock", title: "No custody risk", sub: "Subscribers keep control of their wallet at all times." },
+              { icon: "ti-trending-down", title: "No churn from failed payments", sub: "Grace periods and auto-retry recover payments automatically." },
+              { icon: "ti-robot", title: "Built for AI agents too", sub: "ERC-1271 smart wallets can subscribe — no card needed, wallet signs each cycle." },
             ].map(({ icon, title, sub }) => (
               <div key={title} style={{
                 padding: 24, borderRadius: 14,
@@ -720,13 +724,6 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             ))}
           </div>
 
-          {/* Subheadline */}
-          <p className="ao-fade-in-3" style={{ fontSize: 15, color: muted, maxWidth: 520, margin: "0 auto 20px", lineHeight: 1.7, fontWeight: 300 }}>
-            {lang === "en"
-              ? "Subscribers authorise once. Our keeper bot pulls USDC directly from their wallet every billing cycle — straight to yours. Full merchant suite included."
-              : "Os subscritores autorizam uma vez. O nosso keeper bot cobra USDC diretamente da carteira deles a cada ciclo — direto para a sua. Suite completa de comerciante incluída."}
-          </p>
-
           {/* Badges */}
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
@@ -738,15 +735,15 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
                 fontSize: 14, fontWeight: 600, color: isDark ? accent : "#0d9963",
               }}>
                 <i className="ti ti-layout-dashboard" style={{ fontSize: 17 }} aria-hidden="true" />
-                {lang === "en" ? "Full merchant suite" : "Suite completa de comerciante"}
+                {"Full merchant suite"}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
               {[
-                { icon: "ti-lock", label: lang === "en" ? "Subscribers keep custody" : "Subscritores mantêm custódia" },
-                { icon: "ti-refresh", label: lang === "en" ? "Auto-retry + grace period" : "Reenvio + período de graça" },
-                { icon: "ti-coin", label: lang === "en" ? "0.5% flat, nothing else" : "0,5% fixo, mais nada" },
-                { icon: "ti-robot", label: lang === "en" ? "AI agent ready" : "Pronto para agentes IA" },
+                { icon: "ti-lock", label: "Subscribers keep custody" },
+                { icon: "ti-refresh", label: "Auto-retry + grace period" },
+                { icon: "ti-coin", label: "0.5% flat, nothing else" },
+                { icon: "ti-robot", label: "AI agent ready" },
               ].map(({ icon, label }) => (
                 <div key={label} style={{
                   display: "flex", alignItems: "center", gap: 6,
@@ -761,6 +758,51 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             </div>
           </div>
 
+          {/* Real dashboard proof — actual Base Sepolia testnet data, clearly labelled */}
+          <div className="ao-fade-in-3" style={{ marginBottom: 32 }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              border: `0.5px solid ${border}`, borderRadius: 99,
+              padding: "5px 16px", marginBottom: 16, fontSize: 12, fontWeight: 600, color: muted,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, display: "inline-block" }} />
+              {"Real merchant dashboard — Base Sepolia testnet, live data"}
+            </div>
+
+            <div className="ao-dashboard-grid" style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, textAlign: "left",
+            }}>
+              {[
+                { src: "/dashboard-overview.png", label: "Overview — MRR, churn, active subs" },
+                { src: "/dashboard-detail.png", label: "Subscriber breakdown + recent activity" },
+              ].map(({ src, label }) => (
+                <div key={src} style={{
+                  borderRadius: 14, overflow: "hidden",
+                  border: `0.5px solid ${border}`,
+                  boxShadow: isDark ? "0 12px 32px rgba(0,0,0,0.4)" : "0 12px 32px rgba(0,0,0,0.08)",
+                }}>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "9px 12px", background: isDark ? "#12181f" : "#f1f3f5",
+                    borderBottom: `0.5px solid ${border}`,
+                  }}>
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ff5f57" }} />
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#febc2e" }} />
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#28c840" }} />
+                    <span style={{ fontSize: 11, color: muted, marginLeft: 8, fontFamily: "'DM Mono', monospace" }}>
+                      app.authonce.io/dashboard
+                    </span>
+                  </div>
+                  <img src={src} alt={label} style={{ width: "100%", display: "block" }} />
+                  <div style={{ padding: "10px 14px", fontSize: 12, color: muted, background: isDark ? "#0d1117" : "#fafafa" }}>
+                    {label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* CTAs */}
           <div className="ao-hero-btns ao-fade-in-4" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 40 }}>
             <button onClick={scrollToApply} style={{
@@ -768,38 +810,43 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
               border: "none", borderRadius: 12, padding: "15px 34px",
               color: "#080c14", fontSize: 15, fontWeight: 800, cursor: "pointer", letterSpacing: "-0.01em",
             }}>
-              {lang === "en" ? "Apply as founding merchant →" : "Registar como parceiro fundador →"}
+              {"Apply as founding merchant →"}
             </button>
             <a href="#how-it-works" style={{
               background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
               border: `0.5px solid ${border}`, borderRadius: 12, padding: "15px 26px",
               color: text, fontSize: 15, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center",
             }}>
-              {lang === "en" ? "See how it works" : "Como funciona"}
+              {"See how it works"}
             </a>
           </div>
 
-          {/* Metrics */}
+          {/* Status facts — real, verifiable claims only. No traction numbers until real merchants exist. */}
           <div style={{ borderTop: `0.5px solid ${border}`, paddingTop: 24 }}>
             <div style={{ display: "flex", gap: 32, justifyContent: "center", flexWrap: "wrap", marginBottom: 8 }}>
               {[
-                { val: "653",    label: lang === "en" ? "active subscribers" : "subscritores ativos" },
-                { val: "$18,200", label: lang === "en" ? "MRR processed" : "MRR processado" },
-                { val: "0%",     label: lang === "en" ? "churn rate" : "taxa de churn" },
-                { val: "100%",   label: lang === "en" ? "keeper success rate" : "taxa de sucesso do keeper" },
-              ].map(({ val, label }, i, arr) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                { val: "Live", label: "on Base Sepolia testnet" },
+                { val: "Sep 2026", label: "targeted mainnet launch" },
+                { val: "Verified", label: "contracts on Basescan", href: `https://sepolia.basescan.org/address/${VAULT_ADDRESS}` },
+              ].map(({ val, label, href }, i, arr) => {
+                const content = (
                   <div style={{ textAlign: "center" }}>
-                    <p style={{ fontSize: 26, fontWeight: 700, color: text, margin: 0, fontFamily: "'DM Mono', monospace" }}>{val}</p>
-                    <p style={{ fontSize: 11, color: muted, margin: "4px 0 0" }}>{label}</p>
+                    <p style={{ fontSize: 26, fontWeight: 700, color: href ? accent : text, margin: 0, fontFamily: "'DM Mono', monospace" }}>{val}</p>
+                    <p style={{ fontSize: 11, color: muted, margin: "4px 0 0", textDecoration: href ? "underline" : "none" }}>{label}</p>
                   </div>
-                  {i < arr.length - 1 && <div style={{ width: "0.5px", height: 36, background: border }} />}
-                </div>
-              ))}
+                );
+                return (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                    {href ? (
+                      <a href={href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                        {content}
+                      </a>
+                    ) : content}
+                    {i < arr.length - 1 && <div style={{ width: "0.5px", height: 36, background: border }} />}
+                  </div>
+                );
+              })}
             </div>
-            <p style={{ fontSize: 11, color: muted, margin: 0, fontStyle: "italic" }}>
-              {lang === "en" ? "Illustrative figures — testnet simulation only." : "Valores ilustrativos — apenas simulação testnet."}
-            </p>
           </div>
 
         </div>
@@ -815,8 +862,8 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           {[
             "🔵 Base Network",
             "💵 USDC · USDT · EURC",
-            "🔐 " + (lang === "en" ? "Non-custodial" : "Não custodial"),
-            "⏳ " + (lang === "en" ? "Audit Q3 2026" : "Auditoria Q3 2026"),
+            "🔐 " + ("Non-custodial"),
+            "⏳ " + ("Audit Q3 2026"),
             "🤖 ERC-1271 · EIP-712",
             "📄 BUSL-1.1",
           ].map((item, i, arr) => (
@@ -835,12 +882,10 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       }}>
         <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 16, textTransform: "uppercase" }}>
-            {lang === "en" ? "What is AuthOnce" : "O que é o AuthOnce"}
+            {"What is AuthOnce"}
           </p>
           <p style={{ fontSize: 18, color: text, lineHeight: 1.8, margin: 0, fontWeight: 300 }}>
-            {lang === "en"
-              ? "AuthOnce is a non-custodial subscription protocol built on Base Network. Subscribers authorise a one-time payment intent — their tokens stay in their own wallet and are pulled automatically on schedule. Merchants receive funds directly. No intermediary. Everything is on-chain, auditable, and permissionless."
-              : "O AuthOnce é um protocolo de subscrição não custodial construído na Base Network. Os subscritores autorizam uma intenção de pagamento única — os seus tokens ficam na sua própria carteira e são cobrados automaticamente. Os comerciantes recebem os fundos diretamente. Sem intermediários. Tudo é on-chain, auditável e sem permissões."}
+            {"AuthOnce is a non-custodial subscription protocol built on Base Network. Subscribers authorise a one-time payment intent — their tokens stay in their own wallet and are pulled automatically on schedule. Merchants receive funds directly. No intermediary. Everything is on-chain, auditable, and permissionless."}
           </p>
         </div>
       </section>
@@ -850,42 +895,34 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Built for Web3" : "Construído para Web3"}
+              {"Built for Web3"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "The first recurring payment protocol on Base Network." : "O primeiro protocolo de pagamentos recorrentes na Base Network."}
+              {"The first recurring payment protocol on Base Network."}
             </h2>
             <p style={{ fontSize: 16, color: muted, maxWidth: 540, margin: "0 auto", lineHeight: 1.7, fontWeight: 300 }}>
-              {lang === "en"
-                ? "Not a wrapper. Not a bridge. A native on-chain protocol designed for crypto-native merchants and autonomous AI agents."
-                : "Não é um wrapper. Não é uma bridge. Um protocolo on-chain nativo para comerciantes crypto-nativos e agentes IA autónomos."}
+              {"Not a wrapper. Not a bridge. A native on-chain protocol built for crypto-native merchants — subscribers can be people or AI agents."}
             </p>
           </div>
           <div className="ao-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
             {[
               {
                 icon: "🔵", color: blue, tag: "Base Network",
-                title: lang === "en" ? "On-chain by design" : "On-chain por design",
-                desc: lang === "en"
-                  ? "Every subscription lives on Base. Auditable, autonomous, transparent. No database or central server controls your recurring revenue."
-                  : "Cada subscrição existe na Base. Auditável, autónomo, transparente. Nenhum servidor central controla a sua receita recorrente.",
+                title: "On-chain by design",
+                desc: "Every subscription lives on Base. Auditable, autonomous, transparent. No database or central server controls your recurring revenue.",
                 detail: "SubscriptionVault · MerchantRegistry · Audit Q3 2026",
               },
               {
-                icon: "🤖", color: purple, tag: lang === "en" ? "AI Agent Ready" : "Pronto para IA",
-                title: lang === "en" ? "The agentic economy needs recurring payments" : "A economia agêntica precisa de pagamentos recorrentes",
-                desc: lang === "en"
-                  ? "AuthOnce is built for AI agents. ERC-1271 native — autonomous agents can subscribe, authorise, and pay without any human intervention."
-                  : "O AuthOnce é construído para agentes IA. ERC-1271 nativo — agentes autónomos podem subscrever, autorizar e pagar sem intervenção humana.",
-                detail: "ERC-1271 · EIP-712 · Smart wallet native",
+                icon: "🤖", color: purple, tag: "AI Agent Ready",
+                title: "Subscribers can be AI agents too",
+                desc: "Smart wallets subscribe via ERC-1271. Each billing cycle needs a wallet-issued signature — session-key wallets can automate this without a human in the loop.",
+                detail: "ERC-1271 · EIP-712 · Per-cycle signature",
               },
               {
-                icon: "🔐", color: accent, tag: lang === "en" ? "Non-custodial" : "Não custodial",
-                title: lang === "en" ? "Your keys. Your funds. Always." : "As suas chaves. O seu dinheiro. Sempre.",
-                desc: lang === "en"
-                  ? "AuthOnce never holds your funds. Subscribers hold their own tokens — pulled on schedule, never over-funded. The protocol is smart contracts, not a bank."
-                  : "O AuthOnce nunca detém os seus fundos. Os subscritores guardam os próprios tokens. O protocolo é um conjunto de smart contracts, não um banco.",
-                detail: lang === "en" ? "No custody · No FINMA licence · BUSL-1.1" : "Sem custódia · Sem licença FINMA · BUSL-1.1",
+                icon: "🔐", color: accent, tag: "Non-custodial",
+                title: "Your keys. Your funds. Always.",
+                desc: "AuthOnce never holds your funds. Subscribers hold their own tokens — pulled on schedule, never over-funded. The protocol is smart contracts, not a bank.",
+                detail: "No custody · No FINMA licence · BUSL-1.1",
               },
             ].map((card, i) => (
               <div key={i} style={{
@@ -920,162 +957,26 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         </div>
       </section>
 
-      {/* ── AI Agent Payments ── */}
-      <section className="ao-section" style={{ borderBottom: `0.5px solid ${border}`, padding: "80px 40px", background: isDark ? "rgba(59,130,246,0.03)" : "rgba(59,130,246,0.03)" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#3b82f6", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 12px" }}>
-              {lang === "en" ? "AI Agent Payments" : "Pagamentos para Agentes IA"}
-            </p>
-            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
-              {lang === "en"
-                ? "The first recurring billing protocol built for autonomous AI agents."
-                : "O primeiro protocolo de cobrança recorrente construído para agentes IA autónomos."}
-            </h2>
-            <p style={{ fontSize: 16, color: muted, maxWidth: 580, margin: "0 auto", lineHeight: 1.7, fontWeight: 300 }}>
-              {lang === "en"
-                ? "AI agents need to pay for APIs, tools, and services — autonomously, without a human approving every transaction. AuthOnce is built for exactly that."
-                : "Os agentes IA precisam de pagar por APIs, ferramentas e serviços — de forma autónoma, sem um humano a aprovar cada transação. O AuthOnce foi construído precisamente para isso."}
-            </p>
-          </div>
-
-          {/* Flow diagram */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            gap: 0, marginBottom: 48, flexWrap: "wrap",
-          }}>
-            {[
-              { icon: "ti-robot", label: lang === "en" ? "AI Agent" : "Agente IA", sub: lang === "en" ? "Smart wallet" : "Smart wallet", color: "#3b82f6" },
-              { arrow: true },
-              { icon: "ti-writing-sign", label: lang === "en" ? "Authorises once" : "Autoriza uma vez", sub: "ERC-1271 · EIP-712", color: "#34d399" },
-              { arrow: true },
-              { icon: "ti-refresh", label: lang === "en" ? "Keeper pulls" : "Keeper cobra", sub: lang === "en" ? "Every billing cycle" : "Cada ciclo", color: "#34d399" },
-              { arrow: true },
-              { icon: "ti-webhook", label: lang === "en" ? "Webhook fires" : "Webhook dispara", sub: lang === "en" ? "Agent responds" : "Agente responde", color: "#3b82f6" },
-            ].map((item, i) => item.arrow ? (
-              <div key={i} style={{ padding: "0 8px", color: muted, fontSize: 18 }}>→</div>
-            ) : (
-              <div key={i} style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-                padding: "16px 20px", borderRadius: 12,
-                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
-                border: `0.5px solid ${item.color === "#3b82f6" ? "rgba(59,130,246,0.3)" : "rgba(52,211,153,0.3)"}`,
-                minWidth: 120, textAlign: "center",
-              }}>
-                <i className={`ti ${item.icon}`} style={{ fontSize: 24, color: item.color }} aria-hidden="true" />
-                <p style={{ fontSize: 13, fontWeight: 700, color: text, margin: 0 }}>{item.label}</p>
-                <p style={{ fontSize: 10, color: muted, margin: 0, fontFamily: "'DM Mono', monospace" }}>{item.sub}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Feature grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }} className="ao-form-row">
-            {[
-              {
-                icon: "ti-writing-sign",
-                title: lang === "en" ? "ERC-1271 smart wallet support" : "Suporte ERC-1271 para smart wallets",
-                body: lang === "en"
-                  ? "Smart contract wallets sign subscription authorisations natively. The agent signs once — AuthOnce pulls automatically every cycle with no further interaction required."
-                  : "As smart wallets assinam autorizações de subscrição nativamente. O agente assina uma vez — o AuthOnce cobra automaticamente a cada ciclo sem mais interação.",
-                color: "#3b82f6",
-              },
-              {
-                icon: "ti-webhook",
-                title: lang === "en" ? "Programmatic webhook notifications" : "Notificações webhook programáticas",
-                body: lang === "en"
-                  ? "When a payment fails or grace period starts, AuthOnce POSTs to your agent's endpoint. No human required — the agent handles recovery autonomously."
-                  : "Quando um pagamento falha ou o período de graça começa, o AuthOnce faz POST para o endpoint do agente. Sem humanos — o agente gere a recuperação autonomamente.",
-                color: "#3b82f6",
-              },
-              {
-                icon: "ti-lock",
-                title: lang === "en" ? "Non-custodial treasury" : "Tesouraria não custodial",
-                body: lang === "en"
-                  ? "The agent's treasury keeps full custody. AuthOnce only pulls the exact authorised amount on the due date — nothing more, ever."
-                  : "A tesouraria do agente mantém custódia total. O AuthOnce cobra apenas o valor autorizado na data de vencimento — nunca mais.",
-                color: "#34d399",
-              },
-              {
-                icon: "ti-clock",
-                title: lang === "en" ? "Programmable grace period recovery" : "Recuperação programável no período de graça",
-                body: lang === "en"
-                  ? "Agents can be programmed to top up their wallet during the 1–30 day grace period before expiry. Fully autonomous payment recovery — zero churn."
-                  : "Os agentes podem ser programados para carregar a carteira durante o período de graça de 1–30 dias antes do vencimento. Recuperação totalmente autónoma — zero churn.",
-                color: "#34d399",
-              },
-            ].map(({ icon, title, body, color }) => (
-              <div key={title} style={{
-                padding: 24, borderRadius: 14,
-                background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
-                border: `0.5px solid ${color === "#3b82f6" ? "rgba(59,130,246,0.2)" : "rgba(52,211,153,0.2)"}`,
-              }}>
-                <i className={`ti ${icon}`} style={{ fontSize: 26, color, display: "block", marginBottom: 12 }} aria-hidden="true" />
-                <p style={{ fontSize: 15, fontWeight: 700, color: text, margin: "0 0 8px", lineHeight: 1.3 }}>{title}</p>
-                <p style={{ fontSize: 13, color: muted, margin: 0, lineHeight: 1.7 }}>{body}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Use cases */}
-          <div style={{ marginTop: 32, padding: "20px 24px", borderRadius: 12, background: isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.05)", border: "0.5px solid rgba(59,130,246,0.2)" }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 12px" }}>
-              {lang === "en" ? "Built for" : "Construído para"}
-            </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {[
-                lang === "en" ? "AI agents paying for API access" : "Agentes IA a pagar por acesso a APIs",
-                lang === "en" ? "Autonomous trading bots" : "Bots de trading autónomos",
-                lang === "en" ? "DAO-governed agent treasuries" : "Tesourarias de agentes geridas por DAOs",
-                lang === "en" ? "On-chain AI service subscriptions" : "Subscrições de serviços IA on-chain",
-                lang === "en" ? "Smart wallet billing" : "Faturação para smart wallets",
-              ].map(tag => (
-                <span key={tag} style={{
-                  fontSize: 12, padding: "5px 14px", borderRadius: 99,
-                  background: isDark ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.08)",
-                  border: "0.5px solid rgba(59,130,246,0.25)", color: "#3b82f6", fontWeight: 500,
-                }}>{tag}</span>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ textAlign: "center", marginTop: 32 }}>
-            <a href="#apply" style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              padding: "12px 28px", borderRadius: 10,
-              background: "rgba(59,130,246,0.1)", border: "0.5px solid rgba(59,130,246,0.3)",
-              color: "#3b82f6", fontSize: 14, fontWeight: 600, textDecoration: "none",
-            }}>
-              {lang === "en" ? "Build AI agent billing →" : "Construir faturação para agentes IA →"}
-            </a>
-          </div>
-        </div>
-      </section>
-
       {/* ── Full Subscription Management ── */}
       <section className="ao-section" style={{ borderBottom: `0.5px solid ${border}`, padding: "80px 40px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div className="ao-founding-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
             <div>
               <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-                {lang === "en" ? "Subscription Management" : "Gestão de Subscrições"}
+                {"Subscription Management"}
               </p>
               <h2 style={{ fontSize: 32, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-                {lang === "en"
-                  ? "Not just payments. A complete subscription layer."
-                  : "Não são apenas pagamentos. Uma camada completa de subscrições."}
+                {"Not just payments. A complete subscription layer."}
               </h2>
               <p style={{ fontSize: 16, color: muted, lineHeight: 1.7, margin: "0 0 28px", fontWeight: 300 }}>
-                {lang === "en"
-                  ? "AuthOnce gives merchants a full dashboard to manage every aspect of their recurring revenue — from trial periods and grace periods to dunning, webhooks, and tax exports."
-                  : "O AuthOnce dá aos comerciantes um dashboard completo para gerir todos os aspetos da sua receita recorrente — desde períodos de teste e graça até à recuperação de pagamentos, webhooks e exportações fiscais."}
+                {"AuthOnce gives merchants a full dashboard to manage every aspect of their recurring revenue — from trial periods and grace periods to dunning, webhooks, and tax exports."}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {[
-                  { icon: "📊", title: lang === "en" ? "Merchant dashboard" : "Dashboard do comerciante", desc: lang === "en" ? "Full visibility on all subscriptions, revenue, and subscriber status in real time." : "Visibilidade total sobre subscrições, receita e estado dos subscritores em tempo real." },
-                  { icon: "🔔", title: lang === "en" ? "Automated notifications" : "Notificações automáticas", desc: lang === "en" ? "Subscribers notified 3 days before each payment. Payment failed alerts and grace period warnings." : "Subscritores notificados 3 dias antes de cada pagamento. Alertas de falha e avisos de período de graça." },
-                  { icon: "🔄", title: lang === "en" ? "Dunning & grace periods" : "Recuperação de pagamentos", desc: lang === "en" ? "Configurable 1–30 day grace periods with automatic daily retry logic. Recover failed payments before they churn." : "Períodos de graça configuráveis 1–30 dias com lógica de reintento automática diária." },
-                  { icon: "📁", title: lang === "en" ? "Tax exports & webhooks" : "Exportações fiscais e webhooks", desc: lang === "en" ? "XLSX tax reports ready for your accountant. HMAC-signed webhooks for your backend systems." : "Relatórios fiscais XLSX prontos para o seu contabilista. Webhooks assinados HMAC para os seus sistemas." },
+                  { icon: "📊", title: "Merchant dashboard", desc: "Full visibility on all subscriptions, revenue, and subscriber status in real time." },
+                  { icon: "🔔", title: "Automated notifications", desc: "Subscribers notified 3 days before each payment. Payment failed alerts and grace period warnings." },
+                  { icon: "🔄", title: "Dunning & grace periods", desc: "Configurable 1–30 day grace periods with automatic daily retry logic. Recover failed payments before they churn." },
+                  { icon: "📁", title: "Tax exports & webhooks", desc: "XLSX tax reports ready for your accountant. HMAC-signed webhooks for your backend systems." },
                 ].map((item, i) => (
                   <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                     <span style={{
@@ -1095,14 +996,15 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
 
             <div className="ao-mgmt-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               {[
-                { icon: "⏱", label: lang === "en" ? "Trial periods"    : "Períodos de teste",       sub: lang === "en" ? "Up to 90 days"   : "Até 90 dias",       color: blue   },
-                { icon: "💰", label: lang === "en" ? "Intro pricing"    : "Preço introdutório",      sub: lang === "en" ? "Up to 12 pulls"  : "Até 12 cobranças",  color: accent },
-                { icon: "⚙️", label: lang === "en" ? "Grace periods"    : "Períodos de graça",       sub: "1–30 " + (lang === "en" ? "days" : "dias"),             color: purple },
-                { icon: "🌍", label: lang === "en" ? "15 currencies"    : "15 moedas",               sub: "EUR · USD · GBP · CHF…",                                color: amber  },
-                { icon: "🔗", label: "Webhooks",                                                      sub: lang === "en" ? "HMAC signed"    : "Assinados HMAC",    color: blue   },
-                { icon: "📧", label: lang === "en" ? "Branded emails"   : "Emails com marca",        sub: lang === "en" ? "Growth+ tier"   : "Plano Growth+",     color: accent },
-                { icon: "🏷",  label: lang === "en" ? "Custom sender"    : "Remetente próprio",       sub: lang === "en" ? "Business+ tier" : "Plano Business+",   color: purple },
-                { icon: "📤", label: lang === "en" ? "Price changes"    : "Alterações de preço",     sub: lang === "en" ? "30-day notice"  : "30 dias de aviso",  color: amber  },
+                { icon: "⏱", label: "Trial periods",       sub: "Up to 90 days",       color: blue   },
+                { icon: "💰", label: "Intro pricing",      sub: "Up to 12 pulls",  color: accent },
+                { icon: "⚙️", label: "Grace periods",       sub: "1–30 " + ("days"),             color: purple },
+                { icon: "🌍", label: "15 currencies",               sub: "EUR · USD · GBP · CHF…",                                color: amber  },
+                { icon: "🔗", label: "Webhooks",                                                      sub: "HMAC signed",    color: blue   },
+                { icon: "📧", label: "Branded emails",        sub: "Growth+ tier",     color: accent },
+                { icon: "🏷",  label: "Custom sender",       sub: "Business+ tier",   color: purple },
+                { icon: "📤", label: "Price changes",     sub: "30-day notice",  color: amber  },
+                { icon: "🤖", label: "AI agent ready",          sub: "ERC-1271, per-cycle sig",                               color: purple },
               ].map((item, i) => (
                 <div key={i} style={{
                   background: cardBg, border: `0.5px solid ${border}`,
@@ -1125,7 +1027,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       }}>
         <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 40, flexWrap: "wrap", justifyContent: "center" }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0, whiteSpace: "nowrap" }}>
-            {lang === "en" ? "Accepted tokens" : "Tokens aceites"}
+            {"Accepted tokens"}
           </p>
           {[
             { symbol: "USDC", color: "#2775CA", desc: "USD Coin" },
@@ -1147,7 +1049,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
             </div>
           ))}
           <p style={{ fontSize: 11, color: muted, fontStyle: "italic", marginLeft: "auto" }}>
-            {lang === "en" ? "All on Base Network · More tokens coming" : "Todos na Base Network · Mais tokens em breve"}
+            {"All on Base Network · More tokens coming"}
           </p>
         </div>
       </section>
@@ -1156,19 +1058,19 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
       <section id="how-it-works" className="ao-section" style={{ maxWidth: 960, margin: "0 auto", padding: "80px 40px" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-            {lang === "en" ? "How it works" : "Como funciona"}
+            {"How it works"}
           </p>
           <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
-            {lang === "en" ? "Four steps to your first payment" : "Quatro passos até ao primeiro pagamento"}
+            {"Four steps to your first payment"}
           </h2>
         </div>
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, overflow: "hidden" }}>
           <div className="ao-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
             {[
-              { n: "01", title: lang === "en" ? "Apply"          : "Registar",       sub: lang === "en" ? "Submit your business details" : "Envie os seus dados",     note: lang === "en" ? "Wallet optional"  : "Carteira opcional", c: "#1D9E75" },
-              { n: "02", title: lang === "en" ? "Get approved"   : "Ser aprovado",   sub: lang === "en" ? "We review and whitelist you"  : "Analisamos e aprovamos",  note: lang === "en" ? "Within 48 hours" : "Em 48 horas",        c: "#1D9E75" },
-              { n: "03", title: lang === "en" ? "Share your link": "Partilhar",      sub: lang === "en" ? "authonce.io/pay/yourname"     : "authonce.io/pay/seunome", note: lang === "en" ? "No website needed": "Sem website",        c: "#1D9E75" },
-              { n: "04", title: lang === "en" ? "Get paid"       : "Receber",        sub: lang === "en" ? "Settled in stablecoins"       : "Receba em stablecoins",   note: lang === "en" ? "Every billing cycle": "Cada ciclo",      c: "#BA7517" },
+              { n: "01", title: "Apply",       sub: "Submit your business details",     note: "Wallet optional", c: "#1D9E75" },
+              { n: "02", title: "Get approved",   sub: "We review and whitelist you",  note: "Within 48 hours",        c: "#1D9E75" },
+              { n: "03", title: "Share your link",      sub: "authonce.io/pay/yourname", note: "No website needed",        c: "#1D9E75" },
+              { n: "04", title: "Get paid",        sub: "Settled in stablecoins",   note: "Every billing cycle",      c: "#BA7517" },
             ].map((s, i) => (
               <div key={i} style={{
                 padding: "32px 20px", textAlign: "center",
@@ -1183,9 +1085,7 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </div>
         </div>
         <p style={{ textAlign: "center", color: muted, fontSize: 13, marginTop: 20, fontStyle: "italic", fontWeight: 300 }}>
-          {lang === "en"
-            ? "Founding merchants are approved personally by the AuthOnce team within 48 hours. Subscribers can pay with crypto wallet or credit card — no wallet required for card payments."
-            : "Os parceiros fundadores são aprovados pessoalmente pela equipa AuthOnce em 48 horas. Os subscritores podem pagar com carteira cripto ou cartão de crédito."}
+          {"Founding merchants are approved personally by the AuthOnce team within 48 hours. Subscribers can pay with crypto wallet or credit card — no wallet required for card payments."}
         </p>
       </section>
 
@@ -1199,23 +1099,19 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         }}>
           <div>
             <p style={{ fontSize: 14, fontWeight: 700, color: amber, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Founding merchant offer" : "Oferta fundadora"}
+              {"Founding merchant offer"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              {lang === "en"
-                ? "First 10 merchants pay zero fees for 3 months. First 5 get lifetime Growth tier free."
-                : "Os primeiros 10 comerciantes pagam zero taxas durante 3 meses. Os primeiros 5 recebem o plano Growth gratuito para sempre."}
+              {"First 10 merchants pay zero fees for 3 months. First 5 get lifetime Growth tier free."}
             </h2>
             <p style={{ color: muted, fontSize: 15, lineHeight: 1.7, margin: "0 0 28px", fontWeight: 300 }}>
-              {lang === "en"
-                ? "Standard protocol fee is 0.5% per transaction. No monthly fee. No setup fee. No contract. Founding merchants get 0% for their first 3 months plus lifetime Growth tier free."
-                : "A taxa padrão do protocolo é 0,5% por transação. Sem taxa mensal. Sem adesão. Sem contrato. Os parceiros fundadores pagam 0% nos primeiros 3 meses mais plano Growth gratuito para sempre."}
+              {"Standard protocol fee is 0.5% per transaction. No monthly fee. No setup fee. No contract. Founding merchants get 0% for their first 3 months plus lifetime Growth tier free."}
             </p>
             <div style={{ display: "flex", gap: 32 }}>
               {[
-                { v: "0%",  l: lang === "en" ? "Fees · 3 months" : "Taxas · 3 meses" },
-                { v: "10",  l: lang === "en" ? "Spots total"     : "Vagas totais" },
-                { v: "48h", l: lang === "en" ? "Review time"     : "Tempo de resposta" },
+                { v: "0%",  l: "Fees · 3 months" },
+                { v: "10",  l: "Spots total" },
+                { v: "48h", l: "Review time" },
               ].map((s, i) => (
                 <div key={i}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: amber, fontFamily: "'DM Mono', monospace" }}>{s.v}</div>
@@ -1226,12 +1122,12 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
           </div>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 14, padding: 28 }}>
             {[
-              { label: lang === "en" ? "Months 1–3"      : "Meses 1–3",        value: "0%",                               color: amber  },
-              { label: lang === "en" ? "Month 4+"        : "Mês 4+",           value: "0.5%",                             color: muted  },
-              { label: lang === "en" ? "Monthly fee"     : "Taxa mensal",      value: lang === "en" ? "None" : "Nenhuma", color: accent },
-              { label: lang === "en" ? "Setup fee"       : "Adesão",           value: lang === "en" ? "None" : "Nenhuma", color: accent },
-              { label: lang === "en" ? "Contract"        : "Contrato",         value: lang === "en" ? "None" : "Nenhum",  color: accent },
-              { label: lang === "en" ? "Lifetime Growth" : "Growth vitalício", value: lang === "en" ? "Free" : "Grátis",  color: amber  },
+              { label: "Months 1–3",        value: "0%",                               color: amber  },
+              { label: "Month 4+",           value: "0.5%",                             color: muted  },
+              { label: "Monthly fee",      value: "None", color: accent },
+              { label: "Setup fee",           value: "None", color: accent },
+              { label: "Contract",         value: "None",  color: accent },
+              { label: "Lifetime Growth", value: "Free",  color: amber  },
             ].map((row, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1250,16 +1146,16 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Try it now" : "Experimente agora"}
+              {"Try it now"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Build your first product in 30 seconds." : "Crie o seu primeiro produto em 30 segundos."}
+              {"Build your first product in 30 seconds."}
             </h2>
             <p style={{ fontSize: 15, color: muted, margin: 0, fontWeight: 300 }}>
-              {lang === "en" ? "See exactly what your subscribers will see before you apply." : "Veja exatamente o que os seus subscritores verão antes de se candidatar."}
+              {"See exactly what your subscribers will see before you apply."}
             </p>
           </div>
-          <ProductCreator lang={lang} isDark={isDark} border={border} cardBg={cardBg} text={text} muted={muted} accent={accent} />
+          <ProductCreator isDark={isDark} border={border} cardBg={cardBg} text={text} muted={muted} accent={accent} />
         </div>
       </section>
 
@@ -1268,39 +1164,33 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Integration" : "Integração"}
+              {"Integration"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: 0, letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Three ways to get started" : "Três formas de começar"}
+              {"Three ways to get started"}
             </h2>
           </div>
           <div className="ao-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
             {[
               {
-                tag: lang === "en" ? "No code" : "Sem código", tagColor: accent,
-                title: lang === "en" ? "Hosted Pay Link" : "Link de Pagamento",
-                desc: lang === "en"
-                  ? "Get a unique URL to share anywhere. No website, no code, no setup. Start accepting subscriptions in minutes."
-                  : "Obtenha um URL único para partilhar. Sem website, sem código. Comece a aceitar subscrições em minutos.",
-                time: lang === "en" ? "Ready in 5 minutes" : "Pronto em 5 minutos",
+                tag: "No code", tagColor: accent,
+                title: "Hosted Pay Link",
+                desc: "Get a unique URL to share anywhere. No website, no code, no setup. Start accepting subscriptions in minutes.",
+                time: "Ready in 5 minutes",
                 example: "authonce.io/pay/yourname",
               },
               {
-                tag: lang === "en" ? "Coming Soon" : "Em Breve", tagColor: blue,
-                title: lang === "en" ? "Embeddable Widget" : "Widget Incorporável",
-                desc: lang === "en"
-                  ? "One line of code adds a Subscribe button to your existing site. Works on any platform."
-                  : "Uma linha de código adiciona um botão de subscrição ao seu site. Funciona em qualquer plataforma.",
-                time: lang === "en" ? "Ready in 30 minutes" : "Pronto em 30 minutos",
+                tag: "Coming Soon", tagColor: blue,
+                title: "Embeddable Widget",
+                desc: "One line of code adds a Subscribe button to your existing site. Works on any platform.",
+                time: "Ready in 30 minutes",
                 example: '<SubscribeButton merchantId="0x..." />',
               },
               {
                 tag: "API", tagColor: purple,
-                title: lang === "en" ? "Developer API + Webhooks" : "API para Programadores + Webhooks",
-                desc: lang === "en"
-                  ? "Full REST API, webhooks, and AI agent support. ERC-1271 native — autonomous agents can subscribe and pay without human intervention."
-                  : "API REST completa, webhooks e suporte para agentes IA. ERC-1271 nativo — agentes autónomos podem subscrever e pagar sem intervenção humana.",
-                time: lang === "en" ? "Live on Base Sepolia" : "Ativo na Base Sepolia",
+                title: "Developer API + Webhooks",
+                desc: "Full REST API, webhooks, and AI agent support. ERC-1271 native — smart wallets subscribe and sign each cycle's payment.",
+                time: "Live on Base Sepolia",
                 example: "POST /api/subscriptions/link",
               },
             ].map((card, i) => (
@@ -1360,19 +1250,64 @@ const res = await fetch(
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Fee calculator" : "Calculadora de taxas"}
+              {"Fee calculator"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "How much are you leaving on the table?" : "Quanto está a perder em taxas?"}
+              {"How much are you leaving on the table?"}
             </h2>
             <p style={{ fontSize: 15, color: muted, margin: 0, fontWeight: 300 }}>
-              {lang === "en"
-                ? "Traditional payment processors charge 2.9% + $0.30 per transaction. AuthOnce charges 0.5% flat."
-                : "Os processadores tradicionais cobram 2,9% + $0,30 por transação. O AuthOnce cobra apenas 0,5% fixo."}
+              {"Traditional payment processors charge 2.9% + $0.30 per transaction. AuthOnce charges 0.5% flat."}
             </p>
           </div>
 
-          <ROICalculator lang={lang} isDark={isDark} accent={accent} border={border} cardBg={cardBg} text={text} muted={muted} />
+          <ROICalculator isDark={isDark} accent={accent} border={border} cardBg={cardBg} text={text} muted={muted} />
+        </div>
+      </section>
+
+      {/* ── Objection handling — real questions a skeptical merchant has before trusting a new billing rail ── */}
+      <section className="ao-section" style={{ borderTop: `0.5px solid ${border}`, padding: "80px 40px" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+              {"Before you switch"}
+            </p>
+            <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
+              {"The questions you're actually asking"}
+            </h2>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {[
+              {
+                q: "What happens if a customer's payment fails?",
+                a: "Their subscription enters a grace period (1–30 days, you choose) with automatic daily retries. Nothing is cancelled immediately — most failures are temporary (low balance, momentary issue) and resolve on their own before the grace period ends.",
+              },
+              {
+                q: "Can I change my pricing later?",
+                a: "Yes. Price changes require 30 days' notice, enforced on-chain — existing subscribers can't be surprised by a sudden increase. New pricing applies from their next billing cycle after the notice period.",
+              },
+              {
+                q: "Can I get my money out whenever I want?",
+                a: "Yes — funds are paid directly to your own wallet on every billing cycle. AuthOnce never holds your revenue at any point, so there's nothing to withdraw or wait on. It's already yours the moment the pull completes.",
+              },
+              {
+                q: "What if AuthOnce disappears or gets hacked?",
+                a: "Because the protocol never custodies funds, there's no pool of money to lose — each pull moves directly from subscriber to merchant. The contracts are open and verified on Basescan; a full third-party audit is underway ahead of mainnet.",
+              },
+              {
+                q: "Is this actually live, or still just an idea?",
+                a: "Live and running on Base Sepolia testnet today — the dashboard screenshots above are real, not mocked up. Mainnet is targeted for September 2026, pending the security audit.",
+              },
+            ].map(({ q, a }, i) => (
+              <div key={i} style={{
+                padding: "20px 24px", borderRadius: 12,
+                background: cardBg, border: `0.5px solid ${border}`,
+              }}>
+                <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 8px" }}>{q}</p>
+                <p style={{ fontSize: 14, color: muted, margin: 0, lineHeight: 1.7, fontWeight: 300 }}>{a}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -1386,16 +1321,24 @@ const res = await fetch(
 
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              border: `0.5px solid rgba(52,211,153,0.4)`,
+              borderRadius: 99, padding: "6px 18px", marginBottom: 16,
+              fontSize: 12, fontWeight: 600, color: isDark ? accent : "#0d9963",
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: accent, display: "inline-block", animation: "pulse-dot 2s infinite" }}/>
+              {"First 10 get 0% fees for 3 months · First 5 get lifetime Growth free"}
+            </div>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Founding Merchants" : "Comerciantes Fundadores"}
+              {"Founding Merchants"}
             </p>
             <h2 style={{ fontSize: 36, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 14, lineHeight: 1.2 }}>
-              {lang === "en" ? "Be one of the first 10 merchants on AuthOnce." : "Seja um dos primeiros 10 comerciantes no AuthOnce."}
+              {"Be one of the first 10 merchants on AuthOnce."}
             </h2>
             <p style={{ fontSize: 15, color: muted, lineHeight: 1.7, margin: 0, fontWeight: 300 }}>
-              {lang === "en"
-                ? "Founding merchants get lifetime Growth tier free (€49/month value), direct access to the founder, and input on the product roadmap."
-                : "Os comerciantes fundadores recebem o plano Growth gratuito para sempre (valor €49/mês), acesso direto ao fundador e participação no roadmap do produto."}
+              {"Founding merchants get lifetime Growth tier free (€49/month value), direct access to the founder, and input on the product roadmap."}
             </p>
           </div>
 
@@ -1411,18 +1354,18 @@ const res = await fetch(
                 background: "rgba(52,211,153,0.15)", border: "0.5px solid rgba(52,211,153,0.4)",
                 borderRadius: 99, padding: "3px 10px", letterSpacing: "0.08em", textTransform: "uppercase",
               }}>
-                {lang === "en" ? "First 5 merchants only" : "Apenas os primeiros 5"}
+                {"First 5 merchants only"}
               </span>
               <span style={{ fontSize: 12, color: isDark ? "#34d399" : "#0f6e56", fontWeight: 600 }}>
-                {lang === "en" ? "Most exclusive tier" : "Nível mais exclusivo"}
+                {"Most exclusive tier"}
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[
-                { icon: "🎁", title: lang === "en" ? "Lifetime Growth tier free" : "Growth vitalício grátis", sub: lang === "en" ? "€49/month value, forever" : "Valor €49/mês, para sempre" },
-                { icon: "✉️", title: lang === "en" ? "Direct founder access" : "Acesso direto ao fundador", sub: lang === "en" ? "WhatsApp / email line" : "Linha WhatsApp / email" },
-                { icon: "🗺️", title: lang === "en" ? "Roadmap input" : "Participação no roadmap", sub: lang === "en" ? "Shape the product" : "Moldar o produto" },
-                { icon: "🏅", title: lang === "en" ? "Founding merchant badge" : "Distintivo de fundador", sub: lang === "en" ? "Permanent recognition" : "Reconhecimento permanente" },
+                { icon: "🎁", title: "Lifetime Growth tier free", sub: "€49/month value, forever" },
+                { icon: "✉️", title: "Direct founder access", sub: "WhatsApp / email line" },
+                { icon: "🗺️", title: "Roadmap input", sub: "Shape the product" },
+                { icon: "🏅", title: "Founding merchant badge", sub: "Permanent recognition" },
               ].map(({ icon, title, sub }) => (
                 <div key={title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
@@ -1448,14 +1391,14 @@ const res = await fetch(
                 background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
                 borderRadius: 99, padding: "3px 10px", letterSpacing: "0.08em", textTransform: "uppercase",
               }}>
-                {lang === "en" ? "Merchants 6–10" : "Comerciantes 6–10"}
+                {"Merchants 6–10"}
               </span>
             </div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
               {[
-                { icon: "💸", text: lang === "en" ? "0% fees for 3 months" : "0% taxas por 3 meses" },
-                { icon: "✉️", text: lang === "en" ? "Direct founder access" : "Acesso ao fundador" },
-                { icon: "🏅", text: lang === "en" ? "Founding badge" : "Distintivo fundador" },
+                { icon: "💸", text: "0% fees for 3 months" },
+                { icon: "✉️", text: "Direct founder access" },
+                { icon: "🏅", text: "Founding badge" },
               ].map(({ icon, text: t }) => (
                 <span key={t} style={{ fontSize: 12, color: muted, display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ fontSize: 13 }}>{icon}</span> {t}
@@ -1466,11 +1409,11 @@ const res = await fetch(
 
           {/* Form */}
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, padding: 36 }}>
-            <ApplyForm lang={lang} isDark={isDark} />
+            <ApplyForm isDark={isDark} />
           </div>
 
           <p style={{ fontSize: 12, color: isDark ? "#64748b" : "#6b7280", textAlign: "center", marginTop: 20 }}>
-            {lang === "en" ? "10 spots available · Mainnet launch September 2026" : "10 vagas disponíveis · Lançamento mainnet setembro 2026"}
+            {"10 spots available · Mainnet launch September 2026"}
           </p>
         </div>
       </section>
@@ -1480,42 +1423,42 @@ const res = await fetch(
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {lang === "en" ? "Roadmap" : "Roteiro"}
+              {"Roadmap"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {lang === "en" ? "Built in the open. Launching Q3 2026." : "Construído de forma transparente. Lançamento Q3 2026."}
+              {"Built in the open. Launching Q3 2026."}
             </h2>
           </div>
 
           {[
             {
-              phase: lang === "en" ? "Foundation — completed" : "Fundação — concluído",
+              phase: "Foundation — completed",
               color: "#34d399",
               items: [
-                { done: true,  label: lang === "en" ? "Smart contracts on Base Sepolia" : "Smart contracts na Base Sepolia", detail: "SubscriptionVault · MerchantRegistry · EIP-2612 · ERC-1271" },
-                { done: true,  label: lang === "en" ? "Keeper bot — automated pulls" : "Keeper bot — cobranças automáticas", detail: lang === "en" ? "47 successful pulls · 100% success rate" : "47 cobranças · 100% de sucesso" },
-                { done: true,  label: lang === "en" ? "Merchant dashboard" : "Painel do comerciante", detail: lang === "en" ? "Vanity slugs · CSV import · Grace period controls" : "Slugs personalizados · Importação CSV · Controlo do período de graça" },
-                { done: true,  label: lang === "en" ? "Single on-chain fee" : "Taxa única on-chain", detail: lang === "en" ? "0.5% protocol fee, hardcoded in executePull() — no off-chain processor" : "Taxa de protocolo de 0.5%, fixa no executePull() — sem processador off-chain" },
-                { done: true,  label: lang === "en" ? "Marketing site + SEO blog" : "Site + blog SEO", detail: "authonce.io · blog.authonce.io · 11 articles" },
+                { done: true,  label: "Smart contracts on Base Sepolia", detail: "SubscriptionVault · MerchantRegistry · EIP-2612 · ERC-1271" },
+                { done: true,  label: "Keeper bot — automated pulls", detail: "47 successful pulls · 100% success rate" },
+                { done: true,  label: "Merchant dashboard", detail: "Vanity slugs · CSV import · Grace period controls" },
+                { done: true,  label: "Single on-chain fee", detail: "0.5% protocol fee, hardcoded in executePull() — no off-chain processor" },
+                { done: true,  label: "Marketing site + SEO blog", detail: "authonce.io · blog.authonce.io · 11 articles" },
               ],
             },
             {
-              phase: lang === "en" ? "Q3 2026 — in progress" : "Q3 2026 — em curso",
+              phase: "Q3 2026 — in progress",
               color: "#3b82f6",
               items: [
-                { done: false, active: true,  label: lang === "en" ? "Security audit" : "Auditoria de segurança", detail: lang === "en" ? "5 proposals received · Seeking audit grant funding" : "5 propostas recebidas · A candidatar a financiamento de auditoria" },
-                { done: false, active: true,  label: lang === "en" ? "Partnership outreach" : "Parcerias", detail: lang === "en" ? "Web3 SaaS platforms · DAO tooling · Analytics providers" : "Plataformas Web3 SaaS · Ferramentas DAO · Fornecedores de análise" },
-                { done: false, active: false, label: lang === "en" ? "WooCommerce + PrestaShop plugins" : "Plugins WooCommerce + PrestaShop", detail: lang === "en" ? "$200 pre-audit safety cap" : "Limite de segurança de $200 pré-auditoria" },
-                { done: false, active: false, label: lang === "en" ? "Keeper bot v2 — parallel scaling" : "Keeper bot v2 — escalonamento paralelo", detail: lang === "en" ? "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" : "25 EOAs paralelos · Gelato/Chainlink acima de 50 comerciantes" },
-                { done: false, active: false, label: lang === "en" ? "Base Mainnet launch — September 2026" : "Lançamento Base Mainnet — setembro 2026", detail: lang === "en" ? "Audit-gated · $200 cap lifted · 10 founding spots" : "Condicionado à auditoria · Limite $200 removido · 10 vagas fundadoras" },
+                { done: false, active: true,  label: "Security audit", detail: "5 proposals received · Seeking audit grant funding" },
+                { done: false, active: true,  label: "Partnership outreach", detail: "Web3 SaaS platforms · DAO tooling · Analytics providers" },
+                { done: false, active: false, label: "WooCommerce + PrestaShop plugins", detail: "Planned post-audit" },
+                { done: false, active: false, label: "Keeper bot v2 — parallel scaling", detail: "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" },
+                { done: false, active: false, label: "Base Mainnet launch — September 2026", detail: "Audit-gated · 10 founding spots" },
               ],
             },
             {
-              phase: lang === "en" ? "Phase 2 — post-mainnet" : "Fase 2 — pós-mainnet",
+              phase: "Phase 2 — post-mainnet",
               color: "#a78bfa",
               items: [
-                { done: false, active: false, label: lang === "en" ? "Embeddable widget + full API" : "Widget incorporável + API completa", detail: lang === "en" ? "Self-serve · No-code checkout · Webhooks" : "Self-serve · Checkout sem código · Webhooks" },
-                { done: false, active: false, label: lang === "en" ? "DAO treasury integrations" : "Integrações com tesouraria DAO", detail: "Snapshot · Tally · Boardroom · Recurring contributor payments" },
+                { done: false, active: false, label: "Embeddable widget + full API", detail: "Self-serve · No-code checkout · Webhooks" },
+                { done: false, active: false, label: "DAO treasury integrations", detail: "Snapshot · Tally · Boardroom · Recurring contributor payments" },
 
               ],
             },
@@ -1559,16 +1502,16 @@ const res = await fetch(
               Auth<span style={{ color: accent }}>Once</span>
             </span>
             <span style={{ fontSize: 11, color: muted, marginLeft: 8 }}>
-              {lang === "en" ? "Recurring payments for Web3." : "Pagamentos recorrentes para Web3."}
+              {"Recurring payments for Web3."}
             </span>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             {[
               { label: "support[at]authonce.io", href: "/contact" },
-              { label: lang === "en" ? "Pricing"  : "Preços",             href: "/pricing" },
-              { label: lang === "en" ? "Terms"    : "Termos",             href: "/terms" },
-              { label: lang === "en" ? "Privacy"  : "Privacidade",        href: "/privacy" },
-              { label: lang === "en" ? "Refunds"  : "Reembolsos",         href: "/legal" },
+              { label: "Pricing",             href: "/pricing" },
+              { label: "Terms",             href: "/terms" },
+              { label: "Privacy",        href: "/privacy" },
+              { label: "Refunds",         href: "/legal" },
             ].map((link, i, arr) => (
               <span key={i} style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <a href={link.href} style={{ fontSize: 12, color: muted, textDecoration: "none" }}>{link.label}</a>
@@ -1583,9 +1526,7 @@ const res = await fetch(
         </div>
         <div style={{ maxWidth: 960, margin: "12px auto 0", borderTop: `0.5px solid ${border}`, paddingTop: 12 }}>
           <p style={{ fontSize: 11, color: muted, margin: 0, textAlign: "center" }}>
-            {lang === "en"
-              ? "Testnet only. Smart contracts unaudited. Not financial advice. No uptime guarantees pre-mainnet."
-              : "Apenas testnet. Smart contracts não auditados. Não é aconselhamento financeiro. Sem garantias de disponibilidade pré-mainnet."}
+            {"Testnet only. Smart contracts unaudited. Not financial advice. No uptime guarantees pre-mainnet."}
           </p>
         </div>
       </footer>
