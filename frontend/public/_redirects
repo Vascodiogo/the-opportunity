@@ -1,2 +1,5 @@
-﻿/blog/* /blog/:splat 200
+﻿/docs              /docs/docs-saas.html       200
+/docs/web3         /docs/docs-web3.html       200
+/docs/ai-agents    /docs/docs-ai-agents.html  200
+/blog/* /blog/:splat 200
 /* /index.html 200
