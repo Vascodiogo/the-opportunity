@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, getDefaultConfig, darkTheme } from "@rainbow-me/rainbowkit";
 import { baseSepolia } from "wagmi/chains";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import App from "./App.jsx";
 import "@fontsource-variable/dm-sans";
 import PayPage from "./components/PayPage.jsx";
@@ -23,25 +24,27 @@ const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        {/* Standalone routes — no wallet provider needed */}
-        <Route path="/pricing" element={<Pricing />} />
+    <HelmetProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Standalone routes — no wallet provider needed */}
+          <Route path="/pricing" element={<Pricing />} />
 
-        {/* Wallet-enabled routes */}
-        <Route path="*" element={
-          <WagmiProvider config={config}>
-            <QueryClientProvider client={queryClient}>
-              <RainbowKitProvider theme={darkTheme()}>
-                <Routes>
-                  <Route path="/pay/:merchantAddress/:productSlug" element={<PayPage />} />
-                  <Route path="*" element={<App />} />
-                </Routes>
-              </RainbowKitProvider>
-            </QueryClientProvider>
-          </WagmiProvider>
-        } />
-      </Routes>
-    </BrowserRouter>
+          {/* Wallet-enabled routes */}
+          <Route path="*" element={
+            <WagmiProvider config={config}>
+              <QueryClientProvider client={queryClient}>
+                <RainbowKitProvider theme={darkTheme()}>
+                  <Routes>
+                    <Route path="/pay/:merchantAddress/:productSlug" element={<PayPage />} />
+                    <Route path="*" element={<App />} />
+                  </Routes>
+                </RainbowKitProvider>
+              </QueryClientProvider>
+            </WagmiProvider>
+          } />
+        </Routes>
+      </BrowserRouter>
+    </HelmetProvider>
   </StrictMode>
 );

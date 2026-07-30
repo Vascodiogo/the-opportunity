@@ -3,6 +3,7 @@
 // Polls /api/status every 30 seconds. No auth required.
 
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
 
@@ -120,6 +121,9 @@ export default function Status() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
+      <Helmet>
+        <link rel="canonical" href="https://authonce.io/status" />
+      </Helmet>
 
       {/* Nav */}
       <nav style={{

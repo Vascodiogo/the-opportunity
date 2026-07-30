@@ -1,5 +1,6 @@
 // src/components/Pricing.jsx — AuthOnce Pricing Page
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 
 const TIERS = [
   {
@@ -122,6 +123,9 @@ export default function Pricing({ lang = "en", isDark = false, onToggleTheme, on
 
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+      <Helmet>
+        <link rel="canonical" href="https://authonce.io/pricing" />
+      </Helmet>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 
       {/* ── Nav ── */}
