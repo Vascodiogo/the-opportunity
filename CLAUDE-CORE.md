@@ -45,7 +45,7 @@
 
 **Base Sepolia testnet — CURRENT (vault-only redeploy July 5 2026, adds agent pull cap):**
 - SubscriptionVault: `0x0C8668dE16BDaF4FC6aAddc5Ac24954e5EFBb95d` — ✅ **verified on Basescan July 5** via Standard-JSON-Input, `input` object extracted from build-info wrapper (same method as July 4). Adds `maxAgentPullAmount` / `setAgentPullCap()` — see §Agent Pull Cap below. Confirmed via keeper set correctly (`check-keeper.js` ✅ MATCH) and on-chain test: subscription id 0 (50 USDC) and id 1 (199 USDC, exact cap) both succeeded; two attempts at 250 USDC never reached the chain (consistent with cap rejection, though the exact revert string was never directly captured — MetaMask smart-account wrapper transactions blocked inspection of the failed calls specifically).
-- MerchantRegistry:  `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` — ⬜ **still not verified** — unchanged since July 4, reused as-is by the vault-only redeploy (not redeployed itself)
+- MerchantRegistry:  `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` — ✅ **verified on Basescan July 22 2026, Exact Match** — unchanged since July 4, reused as-is by the vault-only redeploy (not redeployed itself). See §24
 - USDC Sepolia:      `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
 - Keeper wallet:     `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151`
 
@@ -134,7 +134,7 @@
 scripts/
   keeper.js           — 20s poll, 5-parallel batch, executePull, expire grace (June 30)
   notifier.js         — Push Protocol wallet alerts + AI agent webhooks + email (June 28)
-  api.js              — Express REST API + Google OAuth + /api/subscriptions/link
+  api.js              — Express REST API + Google OAuth + Stripe + /api/subscriptions/link
   db.js               — PostgreSQL schema + subscriber_email + subscriber_webhook_url + is_contract_vault
   webhook.js          — HMAC-SHA256 dispatcher, branded fallback emails, 5-attempt backoff
   admin-auth.js       — JWT admin auth (email/password + rate limiting)
@@ -158,11 +158,13 @@ scripts/
 2. Subscriber email (if subscriber_email set)
 3. Push Protocol wallet notification (always, for wallet-native subscribers)
 
-**Stripe Checkout — REMOVED (2026-07-14):** This section described a Stripe
-Checkout flow (`/api/stripe/checkout`, dispute webhooks) that was never
-implemented in code and contradicts the no-Stripe architecture rule in
-CLAUDE.md. Fiat access is onramp-partner-only (Circle/Coinbase Onramp,
-not yet live as of July 2026). No dispute-notification mechanism exists.
+**Stripe Checkout (Phase A):**
+- `POST /api/stripe/checkout` — creates session with live CoinGecko fiat rate
+- `checkout.session.completed` → subscriber wallet auto-created + admin vault funding email
+- `payment_intent.payment_failed` → grace period + subscriber email
+- `charge.dispute.created` → pauses subscription, notifies merchant
+- SEPA mandate options + `setup_future_usage: "off_session"`
+- Phase B (post-audit): automate treasury → vault USDC transfer
 
 ---
 
@@ -392,14 +394,13 @@ frontend/src/
 - [ ] Smart contract audit — Softstack $4,600 pending acceptance
 - [ ] Stripe Checkout Phase B — automate USDC transfer (post-audit)
 - [ ] Subscriber import UI — CSV upload
-- [ ] **MerchantRegistry verification on Basescan** — Vault done, Registry still pending
+- [x] **MerchantRegistry verification on Basescan** ✅ **July 22 2026** — Exact Match, not just partial. See §24
 - [ ] **Backfill subscription id 2 into Postgres** — succeeded on-chain, never inserted due to notifier restart gap (fixed going forward, not retroactively)
-- [ ] **Seal Railway secrets on the combined api.js/keeper.js service** (`node scripts/api.js & node scripts/keeper.js`, one service, one variable set) — 16 secrets baked into `ARG`/`ENV` per Nixpacks build log, full list in §21. **Highest priority: `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY`** — wallet private keys slated for mainnet admin/keeper roles, not API keys. Remaining 12 (incl. `ENCRYPTION_KEY`, `RESEND_API_KEY`, `BASESCAN_API_KEY`) lower urgency. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` also appear in the log but are stale — confirmed removed from Railway separately, post-dating this capture.
+- [x] **Seal Railway secrets across all 6 real services** ✅ **July 23 2026** — all 16 secrets sealed and verified via fresh post-redeploy logs. §21's "one combined service" description was wrong — see §25 for the corrected 6-service architecture and full seal confirmation.
 - [ ] Demo video — still not recorded (blocks Base grant nomination)
 - [ ] Base grant nomination form — needs demo video
 - [ ] CLAUDE-CORE.md update — this file ✅ done now
-- [x] **Google OAuth signup disabled — no new custodial wallets.** ✅ Commits `8e8d63a` (backend gate) + `f2df549` (frontend button removed). See §24: `generateSubscriberWallet()` derives a real, backend-signable custodial wallet (`keccak256(seed + email)`, single shared seed) for every Google-authenticated subscriber, used as a genuine `safeVault` on-chain, not just for login/display. The 2 existing test wallets (Vasco's own, testnet-only, zero real funds) still work unchanged; no new one can be created. Wallet-connect + signature login (§18, built July 4) is now the sole subscriber login path shown in the UI. `generateSubscriberWallet()` and the rest of the Google OAuth code are deliberately still in place, not deleted — this closes the mainnet-blocking exposure without yet resolving the underlying custody-model decision (§24 items 2-3, 6 remain open).
-- [ ] Mainnet deployment — blocked by audit. (Google OAuth custody item above is now resolved and no longer a blocker; §24's underlying custody-model decision and legal opinion are still open but are not gating this checklist item — see §24 directly.)
+- [ ] Mainnet deployment — blocked by audit
 
 ---
 
@@ -618,11 +619,11 @@ frontend/src/
 1. ~~Farcaster Railway service has **not** been redeployed/verified with the new code via fresh logs yet — last log checked predates this fix.~~ **RESOLVED — see §21.** Confirmed via fresh Railway logs: container start at 18:35 today logged "Post bank: 28 posts (4-week rotation)", no `DATABASE_URL` warning.
 2. ~~`set-keeper.js` contains a hardcoded vault address (`0xAd7B4b66F5C0145cbC52c56918F7D6C2871d8c5d`) matching no known deployment. Never verified on-chain whether it even has contract code. Also violates the established Basescan-Write-Contract-only admin pattern — recommend deleting the script rather than fixing the address.~~ **RESOLVED — commit `a6b6420`:** file deleted.
 3. ~~`package.json`/`package-lock.json` diff from an earlier accidental `git add -A` sweep was never actually reviewed. The `stripe` dependency is still listed despite the full-stablecoin custody pivot (§19) — unconfirmed whether it's dead weight or still imported in `api.js`/`webhook.js`.~~ **RESOLVED — see §21.** Diff reviewed: just `dotenv`/`ethers` version bumps plus the legitimate `@coinbase/cdp-sdk` addition, unrelated to Stripe. `stripe` itself was confirmed actively used (not dead weight), then removed entirely.
-4. ~~A `stripe_check...` Postgres table and a separate `bot_state` table (distinct from the new `farcaster_bot_state`) exist in the database — purpose and ownership not investigated.~~ **RESOLVED.** Confirmed via direct query: only these two tables exist, no unexplained third table. `stripe_checkout_sessions` is leftover schema from the removed Stripe integration — harmless, inert. `bot_state` is the old pre-`farcaster_bot_state` key store, superseded but not cleaned up.
+4. A `stripe_check...` Postgres table and a separate `bot_state` table (distinct from the new `farcaster_bot_state`) exist in the database — purpose and ownership not investigated.
 5. ~~DAI references found across 21 files (grepped and listed, not yet removed) — confirmed decision to drop DAI support entirely; removal itself not started.~~ **RESOLVED — see §21.** Removed across docs, config, backend, and frontend. `contracts/SubscriptionVault.sol` deliberately untouched — its `decimals() == 6` check in `approveToken()` already permanently blocks DAI (18 decimals) on-chain; no contract change needed.
 6. ~~**Blocking dependency:** `PayPage.jsx`'s EIP-2612 permit signing still signs `amount` as the permit value, not `type(uint256).max` — must be fixed before SV-13 (above) reaches subscribers in practice, or every permit-based subscription will revert with a signature mismatch on the second pull.~~ **RESOLVED — commit `8092acf`:** permit `value` now signs `maxUint256`, matching the vault's on-chain call. Same commit also fixed the two-step `approve()` fallback (identical bug class, found separately) to request a standing allowance instead of the per-cycle amount.
 7. ~~`keeper.js` has no backoff logic for repeated `MerchantNotApproved` (SV-16) or `MerchantTransferFailed` (SV-15) events — will retry every 20s indefinitely against a merchant that stays unapproved/failing.~~ **RESOLVED — see §21.** Commit `6686fc7`.
-8. ~~Railway's Variables tab for the live farcaster-bot service had `ANTHROPIC_API_KEY`, `APPROVAL_EMAIL`, and `APPROVAL_SECRET` set, unused by any code in this repo — near-certainly leftover from the separate `C:\farcaster-bot` repo's design.~~ **RESOLVED.** All three deleted directly from Railway. Redeployed — fresh logs confirm clean startup (`Running`, 28-post bank, no errors), container started 19:10:42 today.
+8. Farcaster-bot service's Dockerfile declares `ANTHROPIC_API_KEY`, `APPROVAL_SECRET`, `NEYNAR_API_KEY` — the first two don't match `farcaster/farcaster-bot.js`'s actual functionality (static post bank, no AI generation, no approval flow). Unexplained — possibly a leftover from the separate `C:\farcaster-bot` repo's design, never cleaned up.
 9. Three local directories confirmed distinct: `C:\The-Opportunity` (this repo), `C:\farcaster-bot` (separate `authonce-farcaster-bot.git` repo, not connected to any live Railway service, likely dead), `C:\AuthOnce-Deploy` (not a git repo at all — stale static Netlify mirror, safe to delete given Netlify is fully decommissioned).
 10. ~~Stripe removal — decided but not executed. `api.js` still has six live call sites (Checkout session creation, Connect OAuth onboarding, account retrieval, disconnect, webhook signature verification) despite the July 5 crypto-only decision (§19). Needs a deliberate removal pass, not a quick strip — check what currently depends on these endpoints (frontend checkout flow, merchant onboarding UI) before removing.~~ **RESOLVED — see §21.** Commits `2a90abd` (api.js) and `f9aeee0` (frontend).
 
@@ -644,7 +645,7 @@ Before touching code, confirmed via direct DB query that removal was safe: `stri
 
 **Farcaster redeploy also confirmed this session** (§20 item 1, now resolved): fresh Railway logs checked directly — container start at 18:35 today logged `"Post bank: 28 posts (4-week rotation)"` with no `DATABASE_URL` warning, confirming both the post-bank merge and the Postgres-backed rotation state (`7bd4008`) are live and working as deployed, not just committed.
 
-**Railway secrets baked into ARG/ENV — corrected count: 16, not 4, and it's one combined service, not "all 4 services."** There is no dedicated keeper service — the actual Railway start command is `node scripts/api.js & node scripts/keeper.js`, both processes running together in one service sharing one variable set. That's why `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` appear together: not two services each with one key, one service with both. Full list, from the service's Nixpacks build log (`SecretsUsedInArgOrEnv` warnings, ARG and ENV, lines 11-12):
+**Railway secrets baked into ARG/ENV — corrected count: 16, not 4, and it's one combined service, not "all 4 services."** ⚠️ **CORRECTION (July 23 2026, see §25): this "one combined service" description was itself wrong.** There is actually no dedicated keeper service — the actual Railway start command is `node scripts/api.js & node scripts/keeper.js`, both processes running together in one service sharing one variable set. That's why `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` appear together: not two services each with one key, one service with both. Full list, from the service's Nixpacks build log (`SecretsUsedInArgOrEnv` warnings, ARG and ENV, lines 11-12):
 
 `ADMIN_PASSWORD`, `ADMIN_SECRET`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `KEEPER_PRIVATE_KEY`, `RESEND_API_KEY`, `SESSION_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`, `TWITTER_API_KEY`, `TWITTER_API_SECRET`.
 
@@ -657,7 +658,7 @@ Before touching code, confirmed via direct DB query that removal was safe: `stri
 Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3 consecutive occurrences per subscription, skip attempting it for 10 minutes instead of retrying every 20s. Not persisted to DB, resets on keeper restart — harmless, since the contract's SV-16 re-check already guarantees correctness regardless of keeper behavior. `SV-15` (`MerchantTransferFailed`) was deliberately left without keeper-side backoff, since the contract's own circuit breaker (auto-pause after 3 failures) already bounds it — a second backoff layer on top would be redundant.
 
 **Pending items, carried and new:**
-1. ~~Only §20 item 8 remains genuinely open (Railway env var cleanup, low priority).~~ **All of §20's action items are now resolved.** Item 9 remains, but is informational, not an action item.
+1. Everything still open from §20 (items 4, 5, 8–9 as listed there) — unchanged by this session. Items 1, 2, 3, 6, 7, and 10 are all resolved (1, 3, 7, 10 this session; 2 and 6 predate it, in commits `a6b6420` and `8092acf`).
 2. ~~Seal `DEPLOYER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` on the combined api.js/keeper.js Railway service — highest priority, not yet done.~~ **RESOLVED.** Both sealed on Railway. Remaining 12 secrets (`ADMIN_PASSWORD`, `ADMIN_SECRET`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `RESEND_API_KEY`, `SESSION_SECRET`, `BASESCAN_API_KEY`, `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`) still need sealing but lower urgency. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` no longer relevant — confirmed removed.
 3. ~~Confirm `STRIPE_CONNECT_CLIENT_ID` removal status on Railway — unconfirmed either way.~~ **RESOLVED.** Confirmed removed from Railway (verified directly). All three Stripe env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_CLIENT_ID`) are now off the service.
 4. Two leftover `grep -r` background shells from double-checking `sendBrandedEmail` were left running against `node_modules` for longer than intended — killed manually, no actual impact, but a reminder to prefer the `Grep` tool over `Bash grep -r` for whole-repo searches to avoid this.
@@ -679,8 +680,6 @@ Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3
 
 **Revisit trigger:** Real AI-agent or smart-wallet integration request.
 
-**Future-tech watchlist** (EIP-8141, Base Account Spend Permissions, Tempo) tracked in `CLAUDE-REFERENCE.md` §28.
-
 ---
 
 ## 23. Subscription IDs #2, #3, #4 — Investigation Correction and Fix
@@ -697,60 +696,316 @@ Also added: in-memory backoff specifically for `MerchantNotApproved` — after 3
 
 ---
 
-## 24. Custodial Wallet Derivation (`generateSubscriberWallet`) — Confirmed Still Open, Severity Escalated
+## 24. Session Summary — July 22 2026
 
-**Status:** Open. Independent of Stripe removal — this is not a leftover Stripe artifact, it's a standalone Google OAuth code path with zero relationship to the deleted webhook handler.
+**MerchantRegistry verified on Basescan — Exact Match.**
 
-**What it does** (`scripts/api.js:1532-1537`, single definition, single call site at line 1553 inside the Google OAuth `passport.use(new GoogleStrategy(...))` callback):
-```js
-function generateSubscriberWallet(email) {
-  const seed = process.env.WALLET_SEED_SECRET || process.env.ENCRYPTION_KEY || "authonce-subscriber-wallet-seed";
-  const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`${seed}:${email}`));
-  const wallet = new ethers.Wallet(privateKey);
-  return { address: wallet.address, privateKey };
-}
-```
-Triggered on every Google OAuth login (`GET /auth/google` → `GET /auth/google/callback`); only actually generates+persists a new wallet the first time a given email signs in (`upsertSubscriber`'s `ON CONFLICT` preserves an existing wallet on repeat logins).
+- Address: `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299`
+- Two `artifacts/build-info/*.json` files existed locally (`059cbe54be65cfd9b988e43864942272.json`, `d20fd3071734fde8a0a537158cd66bd9.json`). Both contained MerchantRegistry source (Hardhat build-info bundles all compiled sources per run, whether or not they changed), so file inspection alone couldn't identify the right one.
+- Disambiguated by comparing each build-info's compiled `deployedBytecode` (via a small Node script, since PowerShell's `ConvertFrom-Json` failed on the large nested AST content in these files) against the actual on-chain runtime bytecode fetched directly from Base Sepolia RPC (`eth_getCode`). `059cbe54be65cfd9b988e43864942272.json` matched (ignoring the trailing CBOR metadata hash); `d20fd3071734fde8a0a537158cd66bd9.json` didn't contain a MerchantRegistry entry in its output at all.
+- Compiler settings confirmed directly from the matching build-info before submitting, rather than assumed: `v0.8.24+commit.e11b9ed9`, optimizer enabled at 200 runs, `evmVersion: paris`.
+- Extracted the `input` object from that build-info (same method as the July 4/5 SubscriptionVault verifications — Basescan needs only `{language, sources, settings}`, not Hardhat's full `{id, input, output, ...}` wrapper) and submitted via Basescan's Standard-JSON-Input verification form.
+- Result: **Exact Match** (not partial) — bytecode and metadata hash both matched, confirmed on the contract's Code tab.
+- License field shows as BSL 1.1 on Basescan (displayed license options don't include BUSL-1.1 by that exact name; this is a display-only distinction, not a licensing change).
 
-**Severity escalation beyond the original July 4 framing (§18):** the July 4 note described this as "AuthOnce's backend derives and holds a real private key per email... genuine custody, not just permission" — framed as a per-subscriber custody problem. The actual mechanism is worse than that framing suggests. The private key is **deterministically derived as `keccak256(seed + email)`** — there is no per-user random secret, no per-user stored key material that could be individually rotated or scoped. Anyone who obtains the single shared `seed` value can regenerate **every current and future subscriber's private key** from nothing but their email address, with no database access required at all. This is a single-shared-secret-compromises-everyone design, not N independent instances of one user's custody being AuthOnce's problem.
+**Both Base Sepolia contracts are now verified:** SubscriptionVault (July 4/5) and MerchantRegistry (July 22).
 
-**The seed itself has a three-way fallback chain, and the third link is a hardcoded literal committed to the repo:** `WALLET_SEED_SECRET` → `ENCRYPTION_KEY` → `"authonce-subscriber-wallet-seed"`. If `WALLET_SEED_SECRET` was never explicitly set on Railway, the seed is silently either `ENCRYPTION_KEY` (a secret with a different, already-documented purpose — AES-256-GCM encryption of merchant IBAN/bank data, per `db.js`) or, worse, the literal string checked into version control. Whether `WALLET_SEED_SECRET` is actually set is not yet confirmed — this needs the same direct check as the other Railway secrets in §21/§23, not an assumption.
+**Pending items, unchanged by this session** — carried from §21/§23: Railway secrets (12 of 16 still unsealed — see §21 for full list), Farcaster-bot Dockerfile's unexplained `ANTHROPIC_API_KEY`/`APPROVAL_SECRET`, `stripe_check...`/`bot_state` Postgres table ownership, demo video, audit funding, WooCommerce/PrestaShop plugin status (unconfirmed against codebase).
 
-**Confirmed live in production, not theoretical:** tested directly against `https://the-opportunity-production.up.railway.app/auth/google` — returns `HTTP 302` to a real Google OAuth consent screen with a live `client_id`. Since `api.js` only registers the Google strategy `if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)`, this proves both are set and this custody-creating code path is actively reachable by real users right now, not dormant or disabled.
-
-**Relationship to the three custody options from §18:** option (C) there — "remove the on-chain wallet for fiat subscribers entirely, treat as pure off-chain Stripe billing" — is now moot as originally framed, since Stripe has been fully removed from the codebase (§21). The underlying custody gap this section describes is unaffected either way; it's a property of the Google OAuth signup path itself, not of whatever fiat rail sits behind it.
-
-**Current exposure confirmed via DB query:** only 2 custodial wallets exist, both Vasco's own test emails, testnet-only. Zero real users, zero real funds affected. No active exposure today — this is a design/architecture risk to close before mainnet, not an incident to respond to now.
-
-**Mainnet-blocking decision:** Google OAuth signup must be disabled or replaced with a non-custodial embedded-wallet provider before any real subscriber can use this path, or before mainnet deployment — whichever comes first. Wallet-connect + signature login (built July 4, §18) is already a fully non-custodial alternative and can serve as the sole subscriber login method in the interim, until a proper replacement for the Google/fiat path is built. See §14 pre-mainnet checklist.
-
-**Further escalation — `ENCRYPTION_KEY` is one secret doing three unrelated jobs, and two of them collapse into each other.** Full audit of every `ENCRYPTION_KEY` read in the repo (`scripts/db.js:60-62`, the sole `process.env.ENCRYPTION_KEY` read, backing `db.js`'s `encrypt()`/`decrypt()`; plus the second, separate read at `api.js:1533` inside `generateSubscriberWallet()`) confirms three distinct purposes on the same value:
-1. Encrypts merchant IBAN (`db.js:618`/`654`, `upsertMerchant`/`getMerchant`) — genuinely protected by this key.
-2. Encrypts/decrypts subscriber `wallet_private_key` at rest (`api.js:1554`, `1637`, `2038`).
-3. **Is the seed** for deriving that same private key in the first place (`api.js:1533`, `keccak256(seed + email)`) when `WALLET_SEED_SECRET` is unset.
-
-**Purposes 2 and 3 are not independent layers.** A leaked `ENCRYPTION_KEY` makes the AES-256-GCM encryption of `wallet_private_key` decorative — an attacker doesn't need the ciphertext at all, since the same leaked secret directly re-derives the plaintext private key from nothing but the subscriber's email via purpose 3. Only the IBAN encryption (purpose 1) gets genuine protection from this key; the "encryption" wrapped around wallet keys is security theater as currently designed, not a real second layer of defense.
-
-~~**`README.md:188` is incomplete/misleading:** it documents `ENCRYPTION_KEY` only as `"AES-256 encryption key for subscriber wallets"` — omits the IBAN-encryption use entirely, and omits the wallet-seed-derivation role (arguably the most consequential of the three) altogether.~~ **RESOLVED — commit `52660b7`.** `README.md` (now line 185, after the stale Stripe env var lines above it were also removed in `b2802fe`) documents all three purposes: merchant IBAN encryption, subscriber wallet-key encryption at rest, and the wallet-derivation seed fallback, with a pointer to this section. `.env.example` checked separately — never had any Stripe references to begin with, nothing to clean up there.
-
-**Not yet done:**
-1. ~~Confirm whether `WALLET_SEED_SECRET` is actually set on Railway, or whether the live seed is silently `ENCRYPTION_KEY` or the hardcoded fallback string.~~ **RESOLVED.** Full Railway Variables list checked directly — `WALLET_SEED_SECRET` (or any variant name) is absent; only `ENCRYPTION_KEY` is present. The live seed is confirmed to be `ENCRYPTION_KEY`, not the hardcoded fallback string. Doesn't change the escalation above — `ENCRYPTION_KEY` still serves three unrelated purposes — this just closes out which fallback tier is actually active.
-2. Real legal opinion before mainnet, per §18 — still not started, now with a materially worse technical picture to bring to it than what was known July 4.
-3. Decide the actual remediation path (A/B/C from §18, with C reframed given the Stripe removal, or a new option) — still not decided.
-4. ~~Disable Google OAuth signup or ship its non-custodial replacement — hard mainnet blocker (see decision above).~~ **RESOLVED — commits `8e8d63a`/`f2df549`.** New signups blocked server-side (existing-subscriber check in the GoogleStrategy callback) and the button removed from `MySubscriptions.jsx`. `generateSubscriberWallet()` itself intentionally left in place — this makes the path unreachable, it doesn't remove the underlying mechanism. The 2 existing test accounts are unaffected.
-5. ~~Update `README.md:188`'s `ENCRYPTION_KEY` description to reflect all three actual purposes, not just one.~~ **RESOLVED — commit `52660b7`.**
-6. `WALLET_SEED_SECRET` is confirmed unset — the live wallet-derivation seed is `ENCRYPTION_KEY` itself (item 1 above). Open question: whether to introduce a dedicated `WALLET_SEED_SECRET` on Railway to separate the seed role from `ENCRYPTION_KEY`'s other two purposes (IBAN + wallet-key-at-rest encryption) — bundling unrelated purposes under one key is its own smaller-scale version of the same anti-pattern, even after Google OAuth signup itself is disabled (item 4).
+*Last updated: 2026-07-22*
 
 ---
 
-## 25. Notification Preference UI — Non-Functional (2026-07-14)
+## 25. Session Summary — July 23 2026
 
-**Status:** Open, not urgent.
+**§21's "one combined service" architecture description was wrong — corrected here.**
 
-The merchant dashboard's "Notification Preference" setting (`MerchantDashboard.jsx`, Settings tab — Email only / Webhook only / Both) is fully non-functional. The selection is held in React state and written to `localStorage`, but the "Save Settings" request body to `POST /api/merchants/register` never includes it, the endpoint's handler doesn't destructure any such field, and the `merchants` table has no `notification_preference` column. Neither `webhook.js` nor `notifier.js` read any preference — `dispatchWebhook()` only branches on whether `merchant.webhook_url` is set.
+Actual Railway topology: **6 independent services**, not one combined service, sharing one Postgres:
+- **`AuthOnce`** (main) — the live API server (`node scripts/api.js`, after this session's fix — see below). Holds `ADMIN_PASSWORD`, `ADMIN_SECRET`, `API_URL`, `BASE_MAINNET_RPC_URL`, `BASE_SEPOLIA_RPC_URL`, `BASESCAN_API_KEY`, `DATABASE_URL`, `DEPLOYER_PRIVATE_KEY`, `ENCRYPTION_KEY`, `FRONTEND_URL`, `GELATO_KEEPER_ADDRESS`, `GOOGLE_CALLBACK_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `KEEPER_PRIVATE_KEY`, `NOTIFY_EMAIL`, `PROTOCOL_TREASURY_ADDRESS`, `REPORT_GAS`, `RESEND_API_KEY`, `SESSION_SECRET`, plus 4 Twitter keys — its own independent copies, not shared with other services.
+- **`authonce-keeper`** — dedicated keeper bot (`node scripts/keeper.js`). Own copies of `BASESCAN_API_KEY`, `ENCRYPTION_KEY`, `KEEPER_PRIVATE_KEY`, `RESEND_API_KEY` via Railway's shared-variable pool, plus `ADMIN_EMAIL`, `NETWORK`, `PROTOCOL_TREASURY_ADDRESS`, `VAULT_ADDRESS`.
+- **`authonce-notifier`** — notification backend. Own `PUSH_CHANNEL_PRIVATE_KEY`/`PUSH_CHANNEL_ADDRESS`, plus shared-pool `ENCRYPTION_KEY`, `BASESCAN_API_KEY`, `RESEND_API_KEY`, `ADMIN_EMAIL`, `NETWORK`, `PROTOCOL_TREASURY_ADDRESS`, `VAULT_ADDRESS`.
+- **`authonce-x-bot`** — X bot. `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`, `DATABASE_URL`.
+- **`farcaster-bot`** — Farcaster bot. `NEYNAR_API_KEY`, `NEYNAR_SIGNER_UUID`, `FARCASTER_FID`, `BOT_BASE_URL`, `DATABASE_URL`.
+- **`monitor`** — deployment monitor watching both Sepolia and Mainnet for contract deployments. `AUTHORIZED_DEPLOYER`, `ALERT_EMAIL`, `BASE_SEPOLIA_RPC_URL`, `BASE_MAINNET_RPC_URL`, `RESEND_API_KEY`.
 
-Discovered as the root-cause check for a duplicate-merchant-email bug (§ dispatchWebhook `skipEmailFallback` fix, 2026-07-14) — confirmed the duplicate was not "Both" working as designed; the preference control does nothing server-side regardless of which option is selected.
+**Critically: variables with the same name on different services are independent values, not shared state**, except where Railway's shared-variable pool is explicitly used (visible as "N of 10 shared variables in use" per service). Sealing a variable on one service does not seal or affect the same-named variable on another. This was confirmed the hard way this session — sealing `ENCRYPTION_KEY`/`BASESCAN_API_KEY` on `authonce-keeper` early in the session had no effect on `AuthOnce` main's independent copies, which were sealed separately later.
 
-**Needs real wiring, in one pass:** DB column (`merchants.notification_preference`), frontend save payload, backend endpoint handling, and branching in `dispatchWebhook`/`notifier.js` dispatch logic to actually honor the choice (e.g. suppress the email fallback entirely under "Webhook only," skip the webhook attempt under "Email only").
+**All 16 Railway secrets now sealed, across the correct 6 services** (previously miscounted as "1 combined service" in §21):
+- `AuthOnce` main: `ADMIN_PASSWORD`, `ADMIN_SECRET`, `BASESCAN_API_KEY`, `DEPLOYER_PRIVATE_KEY`, `ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `KEEPER_PRIVATE_KEY`, `RESEND_API_KEY`, `SESSION_SECRET`, `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET` — all sealed.
+- `authonce-keeper`: `BASESCAN_API_KEY`, `ENCRYPTION_KEY`, `KEEPER_PRIVATE_KEY`, `RESEND_API_KEY` — all sealed.
+- `authonce-notifier`: `PUSH_CHANNEL_PRIVATE_KEY`, `ENCRYPTION_KEY`, `BASESCAN_API_KEY`, `RESEND_API_KEY` — all sealed.
+- `authonce-x-bot`: `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET` — all sealed.
+- `farcaster-bot`: `NEYNAR_API_KEY`, `NEYNAR_SIGNER_UUID` — all sealed.
+- `monitor`: `RESEND_API_KEY` — sealed.
 
-**Not urgent** — no real merchants affected today; the non-functional control silently defaults every merchant to today's actual behavior (webhook if configured, email fallback otherwise), which is a reasonable default in practice even though it isn't what the UI claims to offer.
+Every seal was verified via a fresh post-redeploy log confirming clean boot (DB connect, correct checkpoint resume where applicable, no auth/env crash) — not just assumed from the Railway UI showing a lock icon.
+
+**Security fix — duplicate keeper process removed.** `AuthOnce` main's Custom Start Command was `node scripts/api.js & node scripts/keeper.js` — running a second, redundant keeper loop using the same keeper wallet (`0xdCEa737e...C151`) as the dedicated `authonce-keeper` service, polling the same vault independently. This is a genuine nonce-collision risk (two processes holding the same private key can race on the next nonce for `executePull()` transactions), not just wasted resources. Root cause: `AuthOnce` main almost certainly predates the later split into dedicated single-purpose services (`authonce-keeper`, `authonce-notifier`, etc.) and never had the redundant keeper half removed. Fixed by changing the Custom Start Command to `node scripts/api.js` only. Confirmed via fresh log: `AuthOnce` main now shows only "AuthOnce — Merchant & Admin API," no "Keeper Bot v6" banner, clean boot. `authonce-keeper` remains the sole keeper process for the vault. **Note:** `KEEPER_PRIVATE_KEY` is now dead weight on `AuthOnce` main (still sealed there, no longer needed) — not removed this session, flagged for later cleanup since fewer live copies of a wallet key is strictly better.
+
+**Bug found and fixed — stale `DATABASE_URL` on `authonce-x-bot`.** Sealing the four Twitter keys surfaced `[x-bot] DB init failed: password authentication failed for user "postgres"` on the very next redeploy. This predates this session entirely — traced to the Postgres password rotation described in §20 (rotated after being pasted in plaintext into a chat session). §20 claimed "all 5 dependent services... reconnected cleanly, verified via each service's own post-redeploy logs" — **that verification did not actually cover `authonce-x-bot`,** which had been silently running on a broken DB connection since that rotation, undetected until this session's redeploy exposed it. Fixed by copying the exact working `DATABASE_URL` value from `authonce-notifier` (a service confirmed working) directly onto `authonce-x-bot`, rather than trying to diagnose a byte-level difference in two masked/truncated password strings. Confirmed fixed via fresh log: `[x-bot] Running — posts Mon/Wed/Fri 12:00 UTC` with no DB error following.
+
+**Farcaster-bot rotation-state survival confirmed directly**, not just trusted from the boot log (which shows an ambiguous "Post bank: 28 posts" message whether or not state actually persisted). Checked the `farcaster_bot_state` table in Postgres directly before and after the redeploy: `index = 16`, `updated_at = 2026-07-22 13:00:33` — unchanged after redeploy, confirming the July 5 fix (§20, Postgres-backed rotation state replacing the old `/tmp`-based approach) is genuinely holding under a real redeploy, not just assumed from a generic log line.
+
+**Bug found and fixed — `monitor`'s `AUTHORIZED_DEPLOYER` was a completely unrelated address.** Configured value was `0xDcbFdDD5d849271D984867f682204B43B5eBBD40` — not a typo or case variant of the real deployer, a structurally different address entirely. Real deployer, confirmed directly against the "AuthOnce Deployer" account in MetaMask: `0xbb6d960b8671713bb92be92d03BE8d8165EE7782`. This means the deployment monitor had likely never fired a meaningful alert tied to any real deployment activity since it was set up — it was filtering on the wrong address the entire time. Origin of the wrong address not established (possibly a stray/placeholder value from initial setup, never caught). Fixed by updating the variable to the correct deployer address. Confirmed via fresh log: `[MONITOR] Authorized deployer: 0xbb6d960b8671713bb92be92d03be8d8165ee7782`, watching both Sepolia and Mainnet correctly.
+
+**Postgres findings, noted but not acted on this session:**
+- `keeper_pull_attempts` table has 325,800+ rows, 0 sequential scans, 0 index scans recorded — written to constantly, apparently never read by anything. Candidate for investigation (dead logging vs. an external consumer not visible in this stats view) and possible archiving/pruning strategy, given its size (177.8 MB data + 19 MB indexes).
+- `notifier_state`, `system_health`, and `farcaster_bot_state` all show very high dead-row percentages (checkpoint-pattern tables with frequent single-row updates); `farcaster_bot_state` has never been vacuumed. Likely contributing to the recurring "slow query" warnings on `notifier_state` inserts seen across multiple sessions. Worth an autovacuum tuning pass, not urgent.
+
+**Pending items, carried and new:**
+1. Everything still open from §20/§21/§24 not addressed this session: Farcaster-bot Dockerfile's unexplained `ANTHROPIC_API_KEY`/`APPROVAL_SECRET`, `stripe_check...`/`bot_state` Postgres table ownership, demo video, audit funding, WooCommerce/PrestaShop plugin status.
+2. Remove now-dead `KEEPER_PRIVATE_KEY` from `AuthOnce` main (no longer used since the duplicate keeper process was removed).
+3. Investigate `keeper_pull_attempts` table usage — is anything actually reading it, and does it need pruning/archiving.
+4. Consider autovacuum tuning for high-churn single-row checkpoint tables (`notifier_state`, `system_health`, `farcaster_bot_state`).
+5. Origin of the incorrect `AUTHORIZED_DEPLOYER` address on `monitor` was never established — not urgent, but worth understanding if it points to a broader copy-paste risk in initial service setup.
+
+*Last updated: 2026-07-23*
+
+---
+
+## 26. Session Summary — July 24 2026
+
+**Landing page overhaul — LandingPage.jsx substantially rewritten.** All changes verified via a compiled/rendered preview (real Babel+React build, not guessed):
+
+- **Fabricated metrics removed.** Hero previously showed "653 active subscribers," "$18,200 MRR processed," "0% churn," "100% keeper success" under a tiny "illustrative — testnet simulation" disclaimer. Replaced with three true, verifiable facts: "Live on Base Sepolia testnet," "Sep 2026 targeted mainnet," "Verified contracts on Basescan." Flagged as a real credibility/legal risk — could easily be mistaken for genuine traction.
+- **False "$200 pre-audit cap" claim removed** from the Roadmap section (2 places, EN+PT) — same claim already found false and removed from `compliance.html` back on July 4/5; had resurfaced here.
+- **Testnet banner removed** per request. This also removed the only visible Basescan verification link — restored it on the "Verified" stat further down the page instead (now clickable, points to the real deployed vault address).
+- **Nav collapsed:** "Pricing / How it works / Blog" merged into a single "Menu ▾" dropdown. PT/EN language toggle removed. Manual dark/light toggle (moon/sun button) removed — theme should now follow system `prefers-color-scheme` in `App.jsx` (not yet confirmed).
+- **Eyebrow tagline simplified:** "Non-custodial subscription protocol · Base Network" → "Subscription billing for crypto-native businesses" — removes jargon that indieappcircle testers and Vasco's own family couldn't parse in the 10-second test.
+- **New "who this is for" callout** added directly under the H1 — explicit, boxed, states the audience plainly rather than only implying it through feature bullets.
+- **New signature visual:** circular "billing cycle" diagram (sign once → day 30 → day 60, "$0.005 / 0.5% flat fee" centered) sits beside the who-it's-for callout, right after the headline. Colored to the real brand gradient (`#34d399` → `#3b82f6`, from `logo.svg`) rather than an invented palette.
+- **Subheadline restyled** from small quiet gray text to bold, high-contrast copy with "straight to yours" highlighted in the brand accent.
+- **New real-dashboard proof section**, right after the merchant-suite pills: two actual (confirmed real) merchant-portal screenshots — Overview and Subscriber Breakdown — framed in a browser-chrome window, explicitly labeled "Real merchant dashboard — Base Sepolia testnet, live data." Screenshots need saving into the real project's `public/` folder as `dashboard-overview.png` and `dashboard-detail.png`.
+- **New favicon designed.** The actual deployed `favicon.svg` was a generic unrelated placeholder (purple abstract blob, likely leftover from a starter template) — confirmed exactly what an indieappcircle tester flagged. New favicon derived from the real `logo.svg` shield-lock gradient icon, checked for legibility at true 16px/32px sizes.
+
+**Open/unconfirmed items from the landing page work:**
+1. Whether `App.jsx` auto-detects system dark/light preference — not yet verified.
+2. Dashboard screenshots need saving into `public/` with exact filenames referenced in code.
+3. Demo video still needs a slot on the page once ready.
+4. Vasco needs to merge the edited `LandingPage.jsx` into the real repo and test a real local build — everything so far verified via a standalone compiled preview, not the actual Vite project.
+
+**AI Agent Payments — major direction decision this session.**
+
+The live landing page had a full, equal-weight dedicated section pitching AI-agent billing, directly contradicting the previously-documented strategy (§19: "deliberately NOT promoted... stays Phase 3"). **Vasco's decision: proceed with a real AI-agent billing launch, not defer it** — reverses the Phase 3 deferral.
+
+**Critical finding from reading the actual `SubscriptionVault.sol` (v7) — marketing/reality mismatch:**
+
+The AI-agent section's "Authorises once" claim does **not** match how the contract works for contract-wallet (ERC-1271) subscribers:
+- Signature is bound to `(id, token, pullAmount, pullCount, deadline)` — a **fresh signature is required every billing cycle**, not a single upfront authorization.
+- `deadline` must be `> block.timestamp` and `<= block.timestamp + PULL_DEADLINE_TOLERANCE` (`PULL_DEADLINE_TOLERANCE = 24 hours`).
+- EIP-712 domain confirmed from the constructor: `{name: "AuthOnce", version: "7", chainId, verifyingContract}` — one header comment still says version "6," which is stale documentation, not the real constant.
+- `isContractVault` is set once via `extcodesize` at `createSubscription` time and never rechecked live — the agent wallet must already have code deployed on-chain before subscribing.
+
+**"No human intervention" is only true if something automated produces a fresh signature every cycle** — a session key, Safe module, or delegated signer bot. None of that exists yet. Marketing copy currently overstates what's built; needs correcting regardless of implementation path chosen.
+
+**Confirmed:** the deployer wallet (`0xbb6d960b...EE7782`) is a genuine smart contract wallet (MetaMask's smart account feature) — explains why subscriptions #0/#1 showed `isContractVault = true`.
+
+**Decision: build on-chain session keys / wallet-native spend permissions (ERC-4337, Safe modules, or Coinbase Smart Wallet), not an off-chain delegated signer service.**
+- An off-chain signer service just relocates a hot key that must stay online and uncompromised — recreates the same custody/key-leak risk already identified for the fiat/Google subscriber wallet path.
+- On-chain session keys let the wallet itself enforce the spending policy — a leaked session key's blast radius is capped by wallet-enforced rules, not by trusting AuthOnce's own signer code.
+- Session keys are a maintained, audited, industry-wide standard — better long-term bet than bespoke signer infrastructure.
+- An off-chain signer is acceptable only as an internal test harness to validate the ERC-1271 path quickly — never customer-facing.
+
+**Pending items, carried and new:**
+1. Keeper still does not implement the ERC-1271 pull path at all — real engineering work, not yet started.
+2. Need to design and deploy a real test smart wallet on Sepolia with session-key support to validate end-to-end.
+3. AI-agent section copy needs correcting to reflect per-cycle signing reality once the implementation approach is finalized.
+4. Everything from §25 not yet addressed (dead `KEEPER_PRIVATE_KEY` cleanup, `keeper_pull_attempts` table investigation, autovacuum tuning, unexplained origin of the old wrong `AUTHORIZED_DEPLOYER` address).
+5. Demo video, audit funding, WooCommerce/PrestaShop plugin status — unchanged, still open.
+
+*Last updated: 2026-07-24*
+
+---
+
+## 27. Security & Anti-Fraud Recommendations — July 25 2026
+
+Discussion prompted by Vasco asking how to detect/prevent an attack or hack attempt against the protocol. Not yet actioned — recorded for a future session.
+
+**Already in place, working in the project's favor:**
+- Circuit breaker (SV-15) — auto-pauses a subscription after 3 consecutive merchant-transfer failures
+- Merchant blacklist/revoke with live re-check on every pull (SV-16) — a revoked merchant is cut off immediately, including subscriptions already running
+- Two-step admin transfer (propose/accept) — no single transaction can hijack admin control
+- Fee one-way ratchet — can only be lowered, never raised
+- `monitor` service already watches for contract deployments on both Sepolia and Mainnet with email alerts
+- All 16 Railway secrets sealed, duplicate keeper process removed (§25)
+
+**Gaps identified, not yet built:**
+1. **On-chain anomaly monitoring is logged but never read.** `keeper_pull_attempts` has 325,000+ rows and zero reads (flagged since §23). Should feed simple threshold alerts: repeated failed ERC-1271 signature attempts against one subscription, unusual pull volume/value spikes, sudden bursts of new subscriptions from one address.
+2. **No real-time contract-activity monitoring beyond deployments.** `monitor` only watches for new deployments, not ongoing suspicious contract activity (unexpected admin calls, abnormal transfers, repeated reverts). Consider OpenZeppelin Defender or Forta.
+3. **API rate-limiting coverage unconfirmed.** `checkLoginRateLimit` exists in the codebase (survived the Stripe removal) but it's unconfirmed whether it's actually applied to every sensitive endpoint (admin login, wallet-signature login on `/my-subscriptions`), not just wherever it happened to be wired in originally.
+4. **Safe multisig is 2/2, no redundancy.** If either signer key is lost or compromised, the Safe is stuck — no backup signer. Already flagged in project notes as "upgrade to 2/3 when sister added"; worth prioritizing before mainnet.
+5. **No documented incident response runbook.** No written "who does what, in what order" plan for a drained vault, compromised key, or contract exploit scenario.
+6. **No bug bounty yet.** Recommended post-paid-audit (e.g., via Immunefi) to give researchers an incentive to report privately rather than exploit or disclose publicly.
+
+*Last updated: 2026-07-25*
+
+---
+
+## 28. Session Summary — July 26 2026
+
+**Landing page — hero restructured per direct feedback.**
+
+- **"Built for SaaS companies, DAOs, and Web3 businesses..." promoted to the very first thing under the nav** — above the H1, not buried after it. Removes the "who is this for" ambiguity at the actual top of the page, not just further down.
+- **Founding-offer badge ("First 10 get 0% fees...") removed from the top of the hero**, relocated to sit directly above the existing "Founding Merchants" section further down the page, where the full offer is explained — avoids competing with the headline for first-impression space.
+- **Redundant "who it's for" boxed callout removed** from lower in the hero (was repeating the same message now stated at the top) — the billing-cycle diagram now stands alone in that spot.
+- Real JSX structural bug caught and fixed during this edit: a wrapper `<div>` had its opening tag stripped but its closing tag left in place, breaking the whole file's parse. Caught via a real Babel parse check before shipping, not just visual inspection.
+
+**AI-agent section — corrected and demoted, not just reworded.**
+
+Per last session's decision (proceed with a real AI-agent launch, but the marketing was overstating what's built): the entire standalone "AI Agent Payments" section was removed — its own H2 ("The first recurring billing protocol built for autonomous AI agents"), flow diagram, 4-item feature grid, tag list, and dedicated CTA are gone (file dropped from 1673 to 1542 lines, confirming real removal). Replaced with:
+- A single feature pill ("AI agent ready · ERC-1271, per-cycle sig") inside the existing "Not just payments" feature grid — same visual weight as "Webhooks" or "15 currencies," not a competing pitch.
+- The false "authorises once / without human intervention" claim was found and corrected in **four separate places** across the page (hero pain-point card, the 3-card "Built for Web3" grid, the Developer API card, and the "Built for Web3" subheadline) — all now accurately describe per-cycle wallet signing, with session-key wallets as the path to automation, not a built-in guarantee.
+- Verified at the text level post-rebuild: zero occurrences of "autonomous AI agents" as a standalone claim, zero occurrences of "without human intervention" anywhere on the page.
+
+**Dark-mode bug — found, root-caused, and fixed.**
+
+Landing page was loading in dark mode despite Vasco's OS being set to Light (confirmed via Windows Personalisation settings screenshot). Investigation of the actual `App.jsx` found:
+- There was **no system-preference detection code at all** — contrary to the assumption made two sessions ago when the manual toggle was removed from the landing page. The real logic was just `useState(() => localStorage.getItem("theme") || "light")`.
+- Root cause: a stale `"dark"` value already saved in Vasco's browser `localStorage` from earlier testing (back when the landing page still had its own toggle button), silently overriding the correct `"light"` default on every load.
+- Confirmed via `localStorage.removeItem("theme")` + refresh — loaded light correctly once the stale value was cleared.
+- **Real fix applied to `App.jsx`**: `theme` now initializes from `localStorage` only if an explicit choice was previously saved; otherwise falls back to `window.matchMedia("(prefers-color-scheme: dark)")`. This is what actually delivers the "browser/OS controls it" behavior that was intended when the manual toggle was removed — the previous code never implemented it, it just accidentally defaulted to light for anyone with empty `localStorage`.
+- Vasco confirmed: file replaced at `C:\The-Opportunity\frontend\src\App.jsx`, loads light correctly now.
+
+**New objection-handling FAQ section added**, placed right before the founding-merchant CTA — answers the real questions a skeptical merchant has before switching billing providers, all grounded in things actually built (not aspirational claims):
+1. What happens if a customer's payment fails? → grace period + auto-retry
+2. Can pricing change later? → 30-day on-chain-enforced notice
+3. Can funds be withdrawn anytime? → non-custodial, nothing to withdraw
+4. What if AuthOnce disappears/gets hacked? → no custodied fund pool, verified contracts, audit underway
+5. Is this actually live? → real testnet, ties back to the real dashboard screenshots already on the page
+
+**Files delivered this session:** updated `LandingPage.jsx`, updated `App.jsx` — both confirmed merged into the real repo and tested locally by Vasco.
+
+**Pending items, carried and new:**
+1. Everything from §26/§27 not addressed this session: keeper ERC-1271 support, test smart wallet on Sepolia, `keeper_pull_attempts` investigation, Safe 2/3 upgrade (see below — blocked on finding a third signer), demo video, audit funding, WooCommerce/PrestaShop status.
+2. **Safe multisig 2/3 upgrade blocked** — sister (originally planned third signer) has declined. Needs a new candidate; discussed this session, no decision made yet (see below).
+
+*Last updated: 2026-07-26*
+
+---
+
+## 29. Session Summary — July 28 2026 (AI-agent test wallet setup — completed July 29, see §30)
+
+**Goal this session:** deploy a real ERC-1271 smart wallet on Base Sepolia to test AuthOnce's AI-agent billing path, per the July 24 decision (build the universal ERC-1271 signature-per-cycle path first, before any Coinbase Spend Permissions work).
+
+**Coinbase Smart Wallet attempt — abandoned, not our bug.** Created a real Coinbase Smart Wallet (`0x591f35C39f4A461C0f78dF1CCc0b84d312F01C37`), successfully funded it with 0.015 test ETH, but **every attempt to send a transaction from it failed identically** ("Something went wrong") in both the browser (`keys.coinbase.com`) and the Base mobile app — same error, different amount, different device. This points to a genuine problem with Coinbase's sponsored-gas service for Base Sepolia specifically, not anything wrong with the wallet or Vasco's actions. **Do not retry this path** — pivoted to Safe instead, which doesn't depend on any sponsorship service (pays gas directly from a funded EOA).
+
+**⚠️ Wallet inventory reconciled this session — first time these are documented:**
+
+MetaMask accounts (all checked on Base Sepolia unless noted), from a full account-list review:
+- **AuthOnce Deployer** — `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` — the known deployer, 0.0456 ETH
+- **AuthOnce Push Channel** — `0xd3350...2fd0e` — 0.0200 ETH — matches documented Push Channel wallet
+- **Fresh 1** — `0x93e5a...57e18` — 0.0206 ETH, 30 USDC, 0 USDT — **undocumented until now**, purpose unclear, likely an ad hoc test wallet from a past session
+- **Subscriber** — `0xBE6a5...E9e35` — 0.0100 ETH — **undocumented until now**, name suggests a subscriber-role test wallet
+- **Merchant** — `0x4503E...2088F` — 0.0601 ETH, 20 USDC — **undocumented until now**, name suggests a merchant-role test wallet
+- **PK Signer 2 Multi-Sig** — `0x00df2Dbb2455C372204EdD901894E27281fA02C0` — confirmed this IS Signer 2 of the real Treasury Safe (2/2, `0x737D4...A2DEB1`) per existing docs. Also holds ~0.0062 ETH on Base Sepolia, used as the signer for today's test Safe work.
+- 3 hidden/unlabeled accounts (Account 3, 7, 8) — all $0 — not investigated, likely unused.
+
+**Note:** `Fresh 1`, `Subscriber`, and `Merchant` were not in any prior session's memory — they appear to be test wallets Vasco created at some point outside a recorded Claude session. Worth clarifying their intended purpose next time, so they don't get treated as unknowns again.
+
+**Ledger:** confirmed only used for Signer 1 of the real Treasury Safe — not otherwise involved in today's testing.
+
+**Safe #1 — dead end, do not use.** Created a Safe named "AuthOnce Test Vault" (`0xB3d493F6bFF750719c10Cef10214B9d619891fCd`), funded it with 20 USDC via Circle's faucet, but discovered — after ~2 hours of failed transaction attempts and repeated "wrong signer" errors — that its actual on-chain registered owner is `0x44444d60136cf62804963fa14d62a55c34a96f8f`, an address that **matches none of Vasco's known wallets**. Confirmed via direct `getOwners()` call, not just UI. This address has real history (27 transactions, near-zero balance left) — genuinely someone's active wallet, not a placeholder — but its origin is unknown. Likely explanation: some other wallet/extension was actively connected in the browser at the exact moment this Safe was created, silently overriding the intended MetaMask account. **This Safe holds 20 USDC that is now effectively stuck** (no known key controls it) — low priority to recover given it's testnet play-money, but worth remembering it exists and why it's unusable.
+
+**Safe #2 — the real one, in progress now.** Created **"AuthOnce Test Vault 2"** at `0x4159E9C4c9525acE25A6fA3303dD466E4A7a5ebC`, this time verifying the owner on-chain *before* funding it or attempting any transaction:
+- Confirmed via `getOwners()`: owner is `0x00df2dbb2455c372204edd901894e27281fa02c0` (`PK Signer 2 Multi-Sig`) — correct.
+- Confirmed via `eth_getCode`: real deployed Safe proxy bytecode — correct.
+- Threshold: 1/1.
+- Funded: **0.005 ETH** (for gas) + **20 USDC** + **20 EURC** (from Circle's faucet), all confirmed on-chain.
+
+**Where we are right now, exactly:** a Transaction Builder batch has just been successfully created (not yet signed/executed) on Safe #2, calling:
+```
+approve(spender: 0x0C8668dE16BDaF4FC6aAddc5Ac24954e5EFBb95d, value: 1000000)
+```
+on the USDC contract (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`), at nonce 0. The Safe UI showed "Batch Created! Success!" and is ready for the next step: **click "Send Batch" (or return to it and continue), sign with MetaMask (`PK Signer 2 Multi-Sig`), and execute.**
+
+**Exact next steps to resume:** — **all 6 steps completed July 29 2026, see §30.**
+1. ~~Sign and execute the pending `approve` batch on Safe #2.~~ **DONE.**
+2. ~~Verify on-chain that the USDC allowance from Safe #2 to the vault is `1000000`.~~ **DONE.**
+3. ~~Call `createSubscription()` on the vault directly from Safe #2.~~ **DONE — subscription ID 5.**
+4. ~~Verify the subscription was created with `isContractVault: true`.~~ **DONE — confirmed via direct `subscriptions(5)` on-chain read.**
+5. ~~Write and run a Node.js/ethers.js script to construct the digest, get it Safe-signed, call `executePull()`.~~ **DONE — `scripts/test-erc1271-pull.js`.**
+6. ~~Once a real pull succeeds, this proves the universal ERC-1271 path works end-to-end.~~ **DONE — see §30. Keeper still needs the equivalent logic added (`keeper.js` has no ERC-1271 pull support) — carried forward as the next task.**
+
+**Key contract facts confirmed this session** (from the uploaded `SubscriptionVault.sol` v7):
+- `enum Interval { Weekly, Monthly, Yearly }` — Weekly = 0.
+- `MIN_GRACE_DAYS = 1`, `MAX_GRACE_DAYS = 30`.
+- `createSubscription()` full parameter order confirmed directly from source (see above).
+
+*Last updated: 2026-07-28*
+
+---
+
+## 30. Session Summary — July 29 2026 (First real ERC-1271 pull — end-to-end success)
+
+**Goal this session:** finish steps 1–6 carried from §29 and get a real ERC-1271 pull executed against Safe #2.
+
+**Env setup confirmed:** `SAFE_OWNER_PRIVATE_KEY` and `KEEPER_PRIVATE_KEY` added to the root `.env`. Verified by deriving public addresses (never printing the keys) — `SAFE_OWNER_PRIVATE_KEY` → `0x00df2Dbb2455C372204EdD901894E27281fA02C0` (Safe #2's confirmed 1/1 owner), `KEEPER_PRIVATE_KEY` → `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151` (the correct keeper address, post-July 4 `NotKeeper` fix). Both matched expected values exactly.
+
+**Subscription 5 confirmed on-chain** (direct `subscriptions(5)` read via public RPC, not assumed from prior session notes): `safeVault` = Safe #2 (`0x4159E9C4...a5ebC`), `token` = Sepolia USDC, `amount` = `1000000`, `interval` = Weekly, `pullCount` = `0`, `status` = `0` (Active), **`isContractVault` = `true`**.
+
+**`scripts/test-erc1271-pull.js` written and run.** One fix needed: the script had no fallback RPC URL, and `BASE_SEPOLIA_RPC_URL` isn't set in `.env`, so `ethers.JsonRpcProvider(undefined)` tried `localhost:8545` and failed. Added the same fallback `hardhat.config.js` already uses: `process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org"`.
+
+**Result: pull succeeded.**
+- Tx: `0x9f8e14f94f8726d9780d84921fb7f95c42faba6852760947281874d1540492c6`, block `44793439`.
+- `pullCount`: `0 → 1`. `lastPulledAt`: `0 → 1785355166`.
+- Confirms the full chain: vault's `pullAuthorisationDigest()` → SafeMessage EIP-712 wrapping (domain = `{chainId, verifyingContract: safe}`, no name/version) → signed by Safe owner key → `executePull()` submitted by keeper wallet → Safe's `isValidSignature()` accepted it → funds moved.
+
+**This is the first confirmed end-to-end proof that the universal ERC-1271 path works** — not just deployed code, an actual successful pull through a real Gnosis Safe on Base Sepolia.
+
+**Carried forward:**
+1. **`keeper.js` still has no ERC-1271 pull support** — this was a manual one-off script (`test-erc1271-pull.js`), not the production keeper loop. Real engineering work, not yet started.
+2. Everything else open from §26–§28 not touched this session: `keeper_pull_attempts` table investigation, Safe 2/3 upgrade (blocked on finding a third signer), demo video, audit funding, WooCommerce/PrestaShop status verification, dead `KEEPER_PRIVATE_KEY` cleanup on the main service (note: a working `KEEPER_PRIVATE_KEY` is now back in the *local* `.env` for this test — confirm whether that's also meant to exist on Railway or stay local-only).
+
+*Last updated: 2026-07-29*
+
+---
+
+## 31. Session Summary — July 30 2026 (Remove Portuguese language support — English-only)
+
+**Goal:** Remove all Portuguese (`/pt`) language support from the site; English-only going forward.
+
+**Investigation before touching anything:** mapped every dependency on `/pt` across the codebase — `main.jsx` (no dedicated route, falls through the catch-all), `App.jsx` (`isOnPtPath` detection + `lang` state + `localStorage["ao_lang"]` + `replaceState` toggling between `/` and `/pt`), `i18n.js` (small translations object + `detectLang`/`t` helpers, used only by `App.jsx`), `LandingPage.jsx` and `Pricing.jsx` (both had extensive `lang === "pt"` ternaries plus their own separate PT/EN toggle buttons), `sitemap.xml` (main + blog, hreflang pairs + a dedicated `/pt` URL entry), `legal.html` (a full parallel Portuguese translation of all 4 legal documents — Terms, Privacy, Refund, Subscriber Terms — not just a stray mention), and two long-orphaned `index-pt.html` files (repo root + `frontend/`), confirmed unreferenced by any build config.
+
+**Correctly scoped out during investigation:**
+- `MerchantDashboard.jsx`/`AdminDashboard.jsx` "PT" matches were the ISO country code for Portugal (merchant billing address/VAT), not language — untouched.
+- `legal.html`'s "Portuguese law"/"DL 24/2014" references are governing-law/jurisdiction facts, not translation artifacts — explicitly preserved.
+- Blog and docs pages already had zero PT content — nothing to do there.
+
+**Mechanical execution:** given the scale (`LandingPage.jsx` alone had ~250 `lang === "en" ? EN : PT` ternaries interleaved with Vasco's own in-progress mobile-nav redesign, still uncommitted), wrote a pair of AST-based Node scripts (`@babel/parser` + `@babel/traverse`, already present as transitive deps) to collapse ternaries to their English branch and flatten `Pricing.jsx`'s `{en, pt}`-shaped `TIERS` object — exact-text splicing off original source offsets, not codegen, so untouched code stayed byte-identical. `legal.html`'s bilingual `<div lang-content="pt">`/`<span lang-inline="pt">` structure needed a separate hand-rolled HTML tag-depth tracker (no HTML parser available in `node_modules`) since regex alone can't safely match nested divs.
+
+**Verification before shipping:**
+- Confirmed English text unchanged byte-for-byte (not just structurally) — checked via paragraph/heading counts and div/span tag balance, and the full diffs were reviewed directly by Vasco (pasted in full, not summarized) before anything was applied.
+- Production build succeeded; ESLint run against pre/post versions confirmed all 8 unused-var warnings were pre-existing (from Vasco's own uncommitted nav redesign + unrelated `Pricing.jsx` items), none introduced by this work.
+- Verified live in a local dev server (homepage + pricing) before anything was pushed.
+
+**A real mistake caught before pushing:** the approved `legal.html` diff was built and reviewed entirely in a scratch copy but never actually copied over the real file during the "apply all files" step — a genuine oversight. Caught when investigating a live-site bug report ("`/pt` showing up on terms/privacy") — traced to the still-deployed, pre-fix `/legal` page's PT toggle button, which also revealed the local file itself hadn't been updated yet. Fixed before committing.
+
+**Shipped (commit `218c69c`):** `App.jsx`, `LandingPage.jsx`, `Pricing.jsx`, `i18n.js` (deleted), `sitemap.xml` (main + blog), `legal.html`, both orphaned `index-pt.html` files (deleted). Verified live: `/legal` no longer shows the PT toggle; `/pt` now serves the normal English homepage instead of erroring or showing Portuguese.
+
+**Deliberately kept separate, still uncommitted:** Vasco's in-progress mobile nav/content redesign in `LandingPage.jsx` (menuOpen dropdown, hero restructure, new dashboard-screenshot section, removed AI-agent section, new FAQ section, fabricated-metrics cleanup) — isolated from this PT-removal work via a snapshot/restore staging technique so the two changes could ship independently. Resume review of that separately when ready.
+
+*Last updated: 2026-07-30*
+
+---
+
+## 32. Session Summary — July 30 2026 (SEO/technical fixes: canonical tags, dead links, /docs routing)
+
+**Goal this session:** three SEO/technical fixes flagged by an external audit — canonical tag bugs on 4 blog URLs + /docs + /pricing, one broken internal link, one robots.txt conflict.
+
+**1. Dead "Related reading" links in `ai-agent-trading-bot-payments.html`.** The 4 "canonical bug" blog URLs from the original report weren't real articles at all — `blog.authonce.io` has a catch-all that serves the homepage's exact HTML (same canonical, same title) for any unmatched path. 3 of the 4 slugs never existed in git history; the 4th (`why-onchain-recurring-payments-are-broken`) was a real page deleted in commit `4bc98ed`. The only place any of them were still linked was this file's "Related reading" block. Fixed: 3 repointed to real articles (`eip2612-explained`, `ai-agent-payments`, `base-network-subscriptions`); the 4th rewritten with honest anchor text pointing to `what-is-noncustodial-billing` rather than force a misleading blurb onto an unrelated destination. Commit `f6a3283`.
+
+**2. `/docs`, `/docs/web3`, `/docs/ai-agents` were completely unreachable in production.** Every request silently fell through to the SPA homepage shell instead of the real static files (`docs-saas.html`, `docs-web3.html`, `docs-ai-agents.html`) — a bigger problem than the canonical tag symptom suggested, since it meant the docs section was invisible to users and crawlers alike, not just mis-canonicalized. Fixed via `_redirects` rewrites, no file renames. Took two iterations: the first attempt pointed rewrite targets at the `.html` files, which Cloudflare Pages' own clean-URL redirect turned into a visible 308 instead of a silent 200 rewrite; fixed by pointing directly at the clean URLs. Verified live: all three return 200 with correct titles ("AuthOnce Docs — SaaS Merchant Integration Guide", etc.). Commits `f6a3283`, `14b5511`.
+
+**3. Per-route canonical tags on `/pricing` and `/status` via `react-helmet-async`.** Root cause: this is a client-rendered SPA served from one static `index.html` with a hardcoded `<link rel="canonical" href="https://authonce.io">` — every route inherited the homepage's canonical since nothing updated it per route. Installed `react-helmet-async`, wrapped the app in `HelmetProvider`, added per-page `<Helmet>` blocks in `Pricing.jsx` and `Status.jsx` (component-level, not route-level in `App.jsx`, since `/pricing` is actually rendered via its own top-level `react-router-dom` route in `main.jsx`, bypassing `App.jsx` entirely). Also removed the now-duplicate static canonical from `index.html` — Google respects the first canonical tag it finds, so leaving the static one in place would have kept the bug live even with Helmet working correctly. Verified via real browser DevTools inspection, not curl — `react-helmet-async` only injects the tag client-side after JS executes, which is invisible to curl, non-JS crawlers, and bundle-hash comparisons alike. Several verification attempts this session (curl, direct deployment URL, cache-busted query string, bundle-hash diffing) were misleading dead ends for this specific fix, until browser inspection settled it directly. Commits `12d94a6`, `f7a4c4a`.
+
+Later the same day, the `/` and `/pt` canonical (lang-aware `<Helmet>` in `LandingPage.jsx`) was extracted and shipped separately (commit `89b4bf8`) — see §31, since `/pt` itself was subsequently removed entirely.
+
+**4. Two deploy-pipeline points of confusion, no actual regressions found:**
+- Two separate Cloudflare Pages projects exist — `authonce-blog` (root dir `blog-site`, static, no build step) and `authonce` (root dir `frontend`, real Vite build). Initial deploy-verification confusion came from checking the wrong project's build log against the wrong deployment.
+- Adding the `/docs` rewrites above the SPA catch-all (`/* /index.html 200`) caused Cloudflare to flag and ignore that catch-all line as an "infinite loop" rule. Confirmed via direct testing (`/pricing`, `/status`, and a nonexistent route all still return 200) that Cloudflare's default asset-fallback behavior covers for the ignored rule — no broken routes resulted.
+
+**Deliberately deferred:**
+1. **Internal 4xx from the original Screaming Frog crawl — dropped.** No specific URL was ever identified; the report only had summary counts, not per-URL detail, and guessing further wasn't worth the risk of fixing the wrong thing.
+2. `blog-site/sitemap.xml`'s matching hreflang pair on the main site's homepage entry was flagged mid-session as a related finding — resolved same day as part of §31's PT-removal work, not left open.
+
+*Last updated: 2026-07-30*
