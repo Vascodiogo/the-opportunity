@@ -2,6 +2,7 @@
 // Light mode default · Dark mode toggle · Full screen hero · Web3 native
 
 import { useState, useEffect, useRef } from "react";
+import { Helmet } from "react-helmet-async";
 import { VAULT_ADDRESS } from "./config.js";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
@@ -534,6 +535,9 @@ export default function LandingPage({ lang, onLaunchApp, isDark, onToggleTheme }
 
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
+      <Helmet>
+        <link rel="canonical" href={lang === "pt" ? "https://authonce.io/pt" : "https://authonce.io"} />
+      </Helmet>
       <style>{`
         @media (max-width: 768px) {
           .ao-hero-content { padding: 80px 24px 60px !important; }
