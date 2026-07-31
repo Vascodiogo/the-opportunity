@@ -107,8 +107,36 @@ function resolveTokenSymbol(tokenAddress) {
   return map[tokenAddress?.toLowerCase()] || "USDC";
 }
 
-function formatUsdc(raw) {
-  return (BigInt(raw.toString()) / BigInt(10 ** Number(USDC_DECIMALS))).toString();
+const ERC20_DECIMALS_ABI = ["function decimals() view returns (uint8)"];
+const _decimalsCache = new Map();
+
+// Reads the real decimals() from the token contract, cached per address —
+// USDC/USDT/EURC all happen to be 6 today, but WETH/cbBTC (already in
+// resolveTokenSymbol's map, on the roadmap per the locked business rules)
+// are not, and hardcoding 6 would silently mis-format them.
+async function getTokenDecimals(tokenAddress, provider) {
+  const key = tokenAddress.toLowerCase();
+  if (_decimalsCache.has(key)) return _decimalsCache.get(key);
+  try {
+    const token = new ethers.Contract(tokenAddress, ERC20_DECIMALS_ABI, provider);
+    const decimals = Number(await token.decimals());
+    _decimalsCache.set(key, decimals);
+    return decimals;
+  } catch (err) {
+    console.warn(`[NOTIFIER] Could not read decimals() for ${tokenAddress}, falling back to ${Number(USDC_DECIMALS)}:`, err.message);
+    return Number(USDC_DECIMALS);
+  }
+}
+
+async function formatUsdc(raw, tokenAddress, provider) {
+  const decimals = await getTokenDecimals(tokenAddress, provider);
+  const divisor  = BigInt(10 ** decimals);
+  const value    = BigInt(raw.toString());
+  const whole    = value / divisor;
+  const fraction = value % divisor;
+  if (fraction === 0n) return whole.toString();
+  const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole}.${fractionStr}`;
 }
 
 async function sendEmail({ to, subject, html, text }) {
@@ -403,15 +431,15 @@ async function checkPriceChangeNotices(vault) {
 
 // ─── Event Handlers ───────────────────────────────────────────────────────────
 
-async function onSubscriptionCreated(log, iface) {
+async function onSubscriptionCreated(log, iface, provider) {
   const parsed = iface.parseLog(log);
-  const { id, owner, merchant, safeVault, amount, introAmount, introPulls, interval, guardian } = parsed.args;
+  const { id, owner, merchant, safeVault, token, amount, introAmount, introPulls, interval, guardian } = parsed.args;
 
   console.log(`\n[EVENT] SubscriptionCreated #${id}`);
   console.log(`  Owner:    ${owner}`);
   console.log(`  Merchant: ${merchant}`);
-  console.log(`  Amount:   ${formatUsdc(amount)} USDC / ${INTERVAL_NAME[interval]}`);
-  if (introAmount > 0n) console.log(`  Intro:    ${formatUsdc(introAmount)} USDC × ${introPulls}`);
+  console.log(`  Amount:   ${await formatUsdc(amount, token, provider)} USDC / ${INTERVAL_NAME[interval]}`);
+  if (introAmount > 0n) console.log(`  Intro:    ${await formatUsdc(introAmount, token, provider)} USDC × ${introPulls}`);
 
   // product_slug is linked via POST /api/subscriptions/link from PayPage after confirmation
   // notifier preserves existing product_slug if already set (COALESCE in upsertSubscription)
@@ -442,8 +470,8 @@ async function onSubscriptionCreated(log, iface) {
     vault_address: safeVault,
     owner_address: owner,
     merchant_address: merchant,
-    amount_usdc: formatUsdc(amount),
-    intro_amount_usdc: introAmount > 0n ? formatUsdc(introAmount) : null,
+    amount_usdc: await formatUsdc(amount, token, provider),
+    intro_amount_usdc: introAmount > 0n ? await formatUsdc(introAmount, token, provider) : null,
     intro_pulls: Number(introPulls),
     interval: INTERVAL_NAME[interval],
     guardian: guardian === ethers.ZeroAddress ? null : guardian,
@@ -452,15 +480,15 @@ async function onSubscriptionCreated(log, iface) {
   });
 }
 
-async function onPaymentExecuted(log, iface) {
+async function onPaymentExecuted(log, iface, provider) {
   const parsed = iface.parseLog(log);
-  const { id, amount, merchantReceived, fee, pullCount, timestamp } = parsed.args;
+  const { id, token, amount, merchantReceived, fee, pullCount, timestamp } = parsed.args;
   const date = new Date(Number(timestamp) * 1000).toISOString();
 
   console.log(`\n[EVENT] PaymentExecuted #${id} (pull #${pullCount})`);
-  console.log(`  Amount:   ${formatUsdc(amount)} USDC`);
-  console.log(`  Merchant: ${formatUsdc(merchantReceived)} USDC`);
-  console.log(`  Fee:      ${formatUsdc(fee)} USDC`);
+  console.log(`  Amount:   ${await formatUsdc(amount, token, provider)} USDC`);
+  console.log(`  Merchant: ${await formatUsdc(merchantReceived, token, provider)} USDC`);
+  console.log(`  Fee:      ${await formatUsdc(fee, token, provider)} USDC`);
 
   const sub = await db.getSubscription(id.toString());
   if (!sub) { console.warn(`[NOTIFIER] No subscription found for id ${id} — skipping`); return; }
@@ -469,9 +497,9 @@ async function onPaymentExecuted(log, iface) {
   const fiatRates            = await fetchFiatRates();
   const eurRate              = fiatRates?.eur || null;
   const chfRate              = fiatRates?.chf || null;
-  const merchantReceivedUsdc = parseFloat(formatUsdc(merchantReceived));
-  const amountUsdc           = parseFloat(formatUsdc(amount));
-  const feeUsdc              = parseFloat(formatUsdc(fee));
+  const merchantReceivedUsdc = parseFloat(await formatUsdc(merchantReceived, token, provider));
+  const amountUsdc           = parseFloat(await formatUsdc(amount, token, provider));
+  const feeUsdc              = parseFloat(await formatUsdc(fee, token, provider));
   const merchantReceivedEur  = eurRate ? (merchantReceivedUsdc * eurRate).toFixed(2) : null;
   const merchantReceivedChf  = chfRate ? (merchantReceivedUsdc * chfRate).toFixed(2) : null;
   const protocolFeeEur       = eurRate ? (feeUsdc * eurRate).toFixed(2) : null;
@@ -552,11 +580,11 @@ async function onPaymentExecuted(log, iface) {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault,
     merchant_address: sub.merchant_address,
-    amount_usdc: formatUsdc(amount),
-    merchant_received_usdc: formatUsdc(merchantReceived),
+    amount_usdc: await formatUsdc(amount, token, provider),
+    merchant_received_usdc: await formatUsdc(merchantReceived, token, provider),
     merchant_received_eur: merchantReceivedEur,
     eur_rate: eurRate,
-    protocol_fee_usdc: formatUsdc(fee),
+    protocol_fee_usdc: await formatUsdc(fee, token, provider),
     pull_count: Number(pullCount),
     tx_hash: log.transactionHash,
     block_number: Number(log.blockNumber),
@@ -564,7 +592,7 @@ async function onPaymentExecuted(log, iface) {
   }, { skipEmailFallback: true });
 }
 
-async function onInsufficientFunds(log, iface) {
+async function onInsufficientFunds(log, iface, provider) {
   // FIX: removed copy-paste block from onPaymentExecuted that referenced
   // out-of-scope variables (amount, timestamp, merchantReceivedEur),
   // causing a runtime crash that silenced all payment.failed notifications.
@@ -572,12 +600,12 @@ async function onInsufficientFunds(log, iface) {
   // belong in the InsufficientFunds handler.
 
   const parsed = iface.parseLog(log);
-  const { id, required, available, pausedUntil } = parsed.args;
+  const { id, token, required, available, pausedUntil } = parsed.args;
   const gracePeriodEndsAt = new Date(Number(pausedUntil) * 1000).toISOString();
 
   console.log(`\n[EVENT] InsufficientFunds #${id}`);
-  console.log(`  Required:  ${formatUsdc(required)} USDC`);
-  console.log(`  Available: ${formatUsdc(available)} USDC`);
+  console.log(`  Required:  ${await formatUsdc(required, token, provider)} USDC`);
+  console.log(`  Available: ${await formatUsdc(available, token, provider)} USDC`);
 
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
@@ -614,20 +642,20 @@ async function onInsufficientFunds(log, iface) {
     vault_address: sub.safe_vault || sub.owner_address,
     merchant_address: sub.merchant_address,
     reason: "insufficient_funds",
-    required_usdc: formatUsdc(required),
-    available_usdc: formatUsdc(available),
+    required_usdc: await formatUsdc(required, token, provider),
+    available_usdc: await formatUsdc(available, token, provider),
     grace_period_ends_at: gracePeriodEndsAt,
     status: "paused",
   }, { skipEmailFallback: true });
 }
 
-async function onInsufficientAllowance(log, iface) {
+async function onInsufficientAllowance(log, iface, provider) {
   const parsed = iface.parseLog(log);
-  const { id, required, allowance } = parsed.args;
+  const { id, token, required, allowance } = parsed.args;
 
   console.log(`\n[EVENT] InsufficientAllowance #${id}`);
-  console.log(`  Required:  ${formatUsdc(required)} USDC`);
-  console.log(`  Allowance: ${formatUsdc(allowance)} USDC`);
+  console.log(`  Required:  ${await formatUsdc(required, token, provider)} USDC`);
+  console.log(`  Allowance: ${await formatUsdc(allowance, token, provider)} USDC`);
 
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
@@ -672,8 +700,8 @@ async function onInsufficientAllowance(log, iface) {
     vault_address: sub.safe_vault || sub.owner_address,
     merchant_address: sub.merchant_address,
     reason: "insufficient_allowance",
-    required_usdc: formatUsdc(required),
-    current_allowance_usdc: formatUsdc(allowance),
+    required_usdc: await formatUsdc(required, token, provider),
+    current_allowance_usdc: await formatUsdc(allowance, token, provider),
     status: "paused",
   }, { skipEmailFallback: true });
 }
@@ -832,7 +860,7 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
         if (!eventName) continue;
         const handler = EVENT_HANDLERS[eventName];
         if (!handler) continue;
-        try { await handler(log, iface); }
+        try { await handler(log, iface, provider); }
         catch (err) { console.error(`[NOTIFIER] Error processing ${eventName}:`, err.message); }
       }
 
@@ -974,7 +1002,23 @@ async function main() {
   });
 }
 
-main().catch(err => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+// Guarded so requiring this file for tests doesn't also kick off the real
+// polling loop (which needs a live DATABASE_URL/RESEND_API_KEY and would
+// contend with an already-running production instance's block checkpoint).
+if (require.main === module) {
+  main().catch(err => {
+    console.error("Fatal:", err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  formatUsdc,
+  getTokenDecimals,
+  onPaymentExecuted,
+  onSubscriptionCreated,
+  onInsufficientFunds,
+  onInsufficientAllowance,
+  VAULT_ABI,
+  VAULT_ADDRESS,
+};
