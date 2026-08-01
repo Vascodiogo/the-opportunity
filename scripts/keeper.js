@@ -521,14 +521,15 @@ async function run() {
       const warn       = balance < threshold;
 
       if (warn) {
-        console.error(`⚠️  ${label} LOW ON ETH — Balance: ${ethBalance.toFixed(6)} ETH`);
-
-        // Cooldown — only email once per 24 hours per wallet
+        // Cooldown — only log/email once per 24 hours per wallet, not every
+        // ~20s poll cycle. The balance check itself (warn, returned below)
+        // still runs every cycle regardless — only the noisy log line is gated.
         const lastAlerted = alertCooldowns[address] || 0;
         const hoursSince  = (Date.now() - lastAlerted) / (1000 * 60 * 60);
 
         if (hoursSince >= 24) {
           alertCooldowns[address] = Date.now();
+          console.error(`⚠️  ${label} LOW ON ETH — Balance: ${ethBalance.toFixed(6)} ETH`);
           const RESEND_API_KEY = process.env.RESEND_API_KEY;
           const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || "vasco@authonce.io";
           if (RESEND_API_KEY) {
@@ -553,8 +554,6 @@ async function run() {
             }).catch(e => console.error(`  ETH alert email failed: ${e.message}`));
             console.log(`  ETH low-balance alert sent for ${label} (next alert in 24h)`);
           }
-        } else {
-          console.warn(`  ${label} still low on ETH — alert cooldown active (${(24 - hoursSince).toFixed(1)}h remaining)`);
         }
       }
       return { ethBalance, warn };
