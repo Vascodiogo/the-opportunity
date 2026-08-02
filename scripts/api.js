@@ -1200,7 +1200,6 @@ app.get("/api/products/:merchantAddress/:productSlug", geofenceMiddleware, async
       yearly_amount:    product.yearly_amount ? parseFloat(product.yearly_amount) : null,
       payment_methods:  product.payment_methods || ["crypto"],
       fiat_currency:    product.fiat_currency || "eur",
-      crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
     });
   } catch (err) {
     console.error("[API] Get product error:", err.message);
@@ -1224,7 +1223,6 @@ app.get("/api/products/:merchantAddress", async (req, res) => {
         yearly_amount:       p.yearly_amount ? parseFloat(p.yearly_amount) : null,
         payment_methods:     p.payment_methods    || ['crypto'],
         fiat_currency:       p.fiat_currency      || 'eur',
-        crypto_discount_pct: p.crypto_discount_pct ? parseFloat(p.crypto_discount_pct) : 0,
         created_at:          p.created_at,
       })),
     });
@@ -1246,7 +1244,7 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       name, amount, interval, trial_days = 0,
       intro_amount = 0, intro_pulls = 0,
       yearly_amount = null, payment_methods = ["crypto"],
-      fiat_currency = "eur", crypto_discount_pct = 0,
+      fiat_currency = "eur",
     } = req.body;
 
     // Validate — reject volatile tokens (WETH, cbBTC require v6 oracle pricing)
@@ -1270,21 +1268,20 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
     }
     const finalAmount = parseFloat(amount);
-    const discountPct = Math.min(Math.max(parseFloat(crypto_discount_pct) || 0, 0), 50);
 
     const trialDays      = Math.min(Math.max(parseInt(trial_days)    || 0, 0), 90);
     const introAmount    = Math.min(Math.max(parseFloat(intro_amount) || 0, 0), finalAmount);
     const introPulls     = Math.min(Math.max(parseInt(intro_pulls)    || 0, 0), 12);
     const yearlyAmount   = yearly_amount && parseFloat(yearly_amount) > 0 ? parseFloat(yearly_amount) : null;
     const paymentMethods = Array.isArray(payment_methods) && payment_methods.length > 0
-      ? payment_methods.filter(m => ["crypto","card","sepa","ideal","bancontact","eps","klarna","blik","mbway","multibanco","usdc","usdt","dai","eurc"].includes(m))
+      ? payment_methods.filter(m => ["crypto","usdc","usdt","eurc"].includes(m))
       : ["crypto"];
     // Ensure crypto is always in payment methods for crypto-wallet subscriptions
     const finalPaymentMethods = paymentMethods.includes("crypto") ? paymentMethods : ["crypto", ...paymentMethods];
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     const product = await db.upsertProduct(address, {
       slug, name, amount: finalAmount, interval, trialDays, introAmount, introPulls, yearlyAmount,
-      payment_methods: finalPaymentMethods, fiat_currency, crypto_discount_pct: discountPct,
+      payment_methods: finalPaymentMethods, fiat_currency,
     });
 
     console.log(`[PRODUCTS] Upserted: ${address} / ${slug} (methods: ${paymentMethods.join(",")})`);
@@ -1298,7 +1295,6 @@ app.post("/api/products/:merchantAddress", requireMerchantAuth, async (req, res)
       yearly_amount:    product.yearly_amount ? parseFloat(product.yearly_amount) : null,
       payment_methods:  product.payment_methods || ["crypto"],
       fiat_currency:    product.fiat_currency    || "eur",
-      crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
     });
   } catch (err) {
     console.error("[API] Create product error:", err.message);
@@ -1315,7 +1311,7 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
     name, amount, interval, trial_days = 0,
     intro_amount = 0, intro_pulls = 0,
     yearly_amount = null, payment_methods = ["crypto"],
-    fiat_currency = "eur", crypto_discount_pct = 0,
+    fiat_currency = "eur",
   } = req.body;
 
   if (!name || !amount || !interval) {
@@ -1327,9 +1323,8 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
     if (invalid.length > 0) return res.status(400).json({ error: "volatile_token", invalid_tokens: invalid });
   }
 
-  const discountPct = Math.min(Math.max(parseFloat(crypto_discount_pct) || 0, 0), 50);
   // Apply same whitelist filter and crypto guarantee as POST route
-  const ALLOWED_METHODS = ['crypto','card','sepa','ideal','bancontact','eps','klarna','blik','mbway','multibanco','usdc','usdt','dai','eurc'];
+  const ALLOWED_METHODS = ['crypto','usdc','usdt','eurc'];
   const filteredMethods = Array.isArray(payment_methods) && payment_methods.length > 0
     ? payment_methods.filter(m => ALLOWED_METHODS.includes(m))
     : ['crypto'];
@@ -1345,7 +1340,6 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
       yearlyAmount:      yearly_amount ? parseFloat(yearly_amount) : null,
       payment_methods:   finalPaymentMethods,
       fiat_currency,
-      crypto_discount_pct: discountPct,
     });
     res.json({
       success: true,
@@ -1357,7 +1351,6 @@ app.put("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, asyn
         yearly_amount:       product.yearly_amount ? parseFloat(product.yearly_amount) : null,
         payment_methods:     product.payment_methods    || ['crypto'],
         fiat_currency:       product.fiat_currency      || 'eur',
-        crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
       },
     });
   } catch (err) {
@@ -1377,97 +1370,6 @@ app.delete("/api/products/:merchantAddress/:productSlug", requireMerchantAuth, a
   } catch (err) {
     console.error("[API] Delete product error:", err.message);
     res.status(500).json({ error: "server_error" });
-  }
-});
-
-// =============================================================================
-// Payment Methods — country-aware
-// =============================================================================
-
-// Country → available local payment methods
-const COUNTRY_METHODS = {
-  PT: ["crypto", "card", "mbway", "multibanco", "sepa"],
-  CH: ["crypto", "card", "sepa"],
-  DE: ["crypto", "card", "sepa", "klarna"],
-  AT: ["crypto", "card", "eps", "sepa"],
-  NL: ["crypto", "card", "ideal", "sepa"],
-  BE: ["crypto", "card", "bancontact", "sepa"],
-  PL: ["crypto", "card", "blik", "sepa"],
-  SE: ["crypto", "card", "klarna", "sepa"],
-  NO: ["crypto", "card", "klarna"],
-  FI: ["crypto", "card", "klarna", "sepa"],
-  FR: ["crypto", "card", "sepa", "klarna"],
-  ES: ["crypto", "card", "sepa"],
-  IT: ["crypto", "card", "sepa"],
-  // Default EU
-  DEFAULT_EU: ["crypto", "card", "sepa"],
-  // Default global
-  DEFAULT: ["crypto", "card"],
-};
-
-// EU countries for SEPA
-const EU_COUNTRIES = new Set(["AT","BE","BG","CY","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK"]);
-
-function getMethodsForCountry(countryCode) {
-  if (!countryCode) return COUNTRY_METHODS.DEFAULT;
-  const upper = countryCode.toUpperCase();
-  if (COUNTRY_METHODS[upper]) return COUNTRY_METHODS[upper];
-  if (EU_COUNTRIES.has(upper)) return COUNTRY_METHODS.DEFAULT_EU;
-  return COUNTRY_METHODS.DEFAULT;
-}
-
-// GET /api/products/:merchantAddress/:productSlug/payment-methods
-// Returns available payment methods for subscriber's country (IP-based)
-// Intersects merchant-enabled methods with country-available methods
-app.get("/api/products/:merchantAddress/:productSlug/payment-methods", async (req, res) => {
-  try {
-    const address = req.params.merchantAddress.toLowerCase();
-    const slug    = req.params.productSlug;
-    const product = await db.getProduct(address, slug);
-    if (!product) return res.status(404).json({ error: "not_found" });
-
-    // Get subscriber country from IP
-    const forwarded = req.headers["x-forwarded-for"];
-    const ip        = forwarded ? forwarded.split(",")[0].trim() : req.socket.remoteAddress;
-    let country     = null;
-
-    // Reuse geofencing country lookup (it's cached)
-    try {
-      country = await lookupCountry(ip);
-    } catch { /* fail open */ }
-
-    // Get country-available methods
-    const countryMethods = getMethodsForCountry(country);
-
-    // Get merchant-enabled methods (defaults to crypto only)
-    const merchant = await db.getMerchant(address);
-    let merchantMethods = product.payment_methods || ["crypto"];
-
-    // If Stripe isn't connected, strip all fiat methods — only crypto/tokens remain
-    const FIAT_METHODS = ["card","sepa","ideal","bancontact","eps","klarna","blik","mbway","multibanco"];
-    if (!merchant?.stripe_account_id) {
-      merchantMethods = merchantMethods.filter(m => !FIAT_METHODS.includes(m));
-    }
-
-    // Intersection: only show methods both merchant enabled AND available in country
-    const available = merchantMethods.filter(m => countryMethods.includes(m));
-
-    // Always include crypto if merchant has it enabled
-    if (merchantMethods.includes("crypto") && !available.includes("crypto")) {
-      available.unshift("crypto");
-    }
-
-    res.json({
-      methods:  available.length > 0 ? available : ["crypto"],
-      country:  country || "unknown",
-      all_merchant_methods: merchantMethods,
-      amount: parseFloat(product.amount),
-      crypto_discount_pct: product.crypto_discount_pct ? parseFloat(product.crypto_discount_pct) : 0,
-      fiat_currency: product.fiat_currency || "eur",
-    });
-  } catch (err) {
-    console.error("[API] Payment methods error:", err.message);
-    res.json({ methods: ["crypto"], country: "unknown" });
   }
 });
 

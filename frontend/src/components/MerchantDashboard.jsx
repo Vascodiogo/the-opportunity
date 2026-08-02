@@ -671,10 +671,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const [yearlyAmount, setYearlyAmount] = useState("");
   const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "eurc"];
   const [cryptoTokens, setCryptoTokens]     = useState(["usdc"]);
-  const [paymentMethods, setPaymentMethods] = useState([]); // fiat methods, e.g. ["card"]
   const [fiatCurrency, setFiatCurrency]     = useState("eur");
-  const [hasCryptoDiscount, setHasCryptoDiscount] = useState(false);
-  const [cryptoDiscountPct, setCryptoDiscountPct] = useState("");
   const [gracePeriod, setGracePeriod]   = useState("7");
   const [saving, setSaving]             = useState(false);
   const [errors, setErrors]             = useState({});
@@ -685,10 +682,6 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
   const yearlyDiscount   = amount && yearlyAmount
     ? Math.round((1 - parseFloat(yearlyAmount) / (parseFloat(amount) * 12)) * 100)
     : 0;
-
-  const cryptoPrice = amount && hasCryptoDiscount && cryptoDiscountPct
-    ? (parseFloat(amount) * (1 - parseFloat(cryptoDiscountPct) / 100)).toFixed(4)
-    : amount ? parseFloat(amount).toFixed(2) : "";
 
   const toggleCryptoToken = (id) => {
     setCryptoTokens(prev => {
@@ -710,11 +703,6 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     }
     if (hasYearly) {
       if (!yearlyAmount || parseFloat(yearlyAmount) <= 0)          e.yearlyAmount = "Enter a valid yearly price";
-    }
-    if (hasCryptoDiscount) {
-      if (cryptoDiscountPct === "" || isNaN(cryptoDiscountPct) || parseFloat(cryptoDiscountPct) < 0 || parseFloat(cryptoDiscountPct) > 50) {
-        e.cryptoDiscount = "Enter a discount between 0 and 50%";
-      }
     }
     const gp = parseInt(gracePeriod);
     if (!gracePeriod || isNaN(gp) || gp < 1 || gp > 30) e.gracePeriod = "Enter a value between 1 and 30";
@@ -738,9 +726,8 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
           intro_amount:      hasIntro  ? parseFloat(introAmount)  : 0,
           intro_pulls:       hasIntro  ? parseInt(introPulls)     : 0,
           yearly_amount:     hasYearly ? parseFloat(yearlyAmount) : null,
-          payment_methods:   ["crypto", ...cryptoTokens, ...paymentMethods],
+          payment_methods:   ["crypto", ...cryptoTokens],
           fiat_currency:     fiatCurrency,
-          crypto_discount_pct: hasCryptoDiscount ? parseFloat(cryptoDiscountPct) : 0,
           grace_period_days: parseInt(gracePeriod),
         }),
       });
@@ -910,29 +897,6 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                 )}
               </div>
 
-              {/* Crypto discount */}
-              <div>
-                <div onClick={() => setHasCryptoDiscount(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
-                  <div>
-                    <div style={{ fontSize: 13, color: "var(--text-primary)" }}>Crypto discount</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Incentivise on-chain payment (0–50%)</div>
-                  </div>
-                  <div style={TOGGLE_TRACK(hasCryptoDiscount)}><div style={TOGGLE_THUMB(hasCryptoDiscount)} /></div>
-                </div>
-                {hasCryptoDiscount && (
-                  <div style={{ marginTop: 10 }}>
-                    <label style={SECTION_LABEL}>Discount (%)</label>
-                    <input type="number" min="0" max="50" step="0.5" placeholder="5" value={cryptoDiscountPct} onChange={e => setCryptoDiscountPct(e.target.value)} />
-                    {errors.cryptoDiscount && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{errors.cryptoDiscount}</div>}
-                    {amount && cryptoDiscountPct && !errors.cryptoDiscount && (
-                      <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
-                        Crypto: ${cryptoPrice} · Card: ${parseFloat(amount).toFixed(2)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
             </div>
           </div>
 
@@ -1027,12 +991,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
       ? initialMethods.filter(m => CRYPTO_TOKENS.includes(m))
       : ["usdc"]
   );
-  const [paymentMethods, setPaymentMethods] = useState(
-    initialMethods.filter(m => !CRYPTO_TOKENS.includes(m) && m !== "crypto") 
-  );
   const [fiatCurrency, setFiatCurrency] = useState(product.fiat_currency || "eur");
-  const [hasCryptoDiscount, setHasCryptoDiscount] = useState(!!product.crypto_discount_pct);
-  const [cryptoDiscountPct, setCryptoDiscountPct] = useState(product.crypto_discount_pct ? String(product.crypto_discount_pct) : "");
   const [gracePeriod, setGracePeriod] = useState(product.grace_period_days ? String(product.grace_period_days) : "7");
   const [saving, setSaving]           = useState(false);
 
@@ -1043,16 +1002,12 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
   const CRYPTO_TOKEN_IDS = ["usdc", "usdt", "eurc"];
 
   const toggleMethod = (method) => {
-    if (method === "crypto") return;
-    if (CRYPTO_TOKEN_IDS.includes(method)) {
-      // Toggle crypto token — at least one must remain selected
-      setCryptoTokens(prev => {
-        if (prev.includes(method) && prev.length === 1) return prev; // keep at least one
-        return prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method];
-      });
-    } else {
-      setPaymentMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
-    }
+    if (!CRYPTO_TOKEN_IDS.includes(method)) return;
+    // Toggle crypto token — at least one must remain selected
+    setCryptoTokens(prev => {
+      if (prev.includes(method) && prev.length === 1) return prev; // keep at least one
+      return prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method];
+    });
   };
 
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -1062,9 +1017,6 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
     if (hasIntro && (!introAmount || parseFloat(introAmount) <= 0)) { alert("Please enter a valid intro price."); return; }
     if (hasIntro && parseFloat(introAmount) > parseFloat(amount)) { alert("Intro price cannot be higher than the full price."); return; }
     if (hasYearly && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) { alert("Please enter a valid yearly price."); return; }
-    if (hasCryptoDiscount && (cryptoDiscountPct === "" || isNaN(cryptoDiscountPct) || parseFloat(cryptoDiscountPct) < 0 || parseFloat(cryptoDiscountPct) > 50)) {
-      alert("Enter a crypto discount between 0 and 50%."); return;
-    }
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/api/products/${merchantAddress}/${product.slug}`, {
@@ -1075,9 +1027,8 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
           intro_amount:  hasIntro  ? parseFloat(introAmount) : 0,
           intro_pulls:   hasIntro  ? parseInt(introPulls)    : 0,
           yearly_amount: hasYearly ? parseFloat(yearlyAmount): null,
-          payment_methods: ["crypto", ...cryptoTokens, ...paymentMethods],
+          payment_methods: ["crypto", ...cryptoTokens],
           fiat_currency: fiatCurrency,
-          crypto_discount_pct: hasCryptoDiscount ? parseFloat(cryptoDiscountPct) : 0,
           grace_period_days: parseInt(gracePeriod) || 7,
         }),
       });
@@ -1192,30 +1143,6 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
                 <option key={c.code} value={c.code}>{c.label}</option>
               ))}
             </select>
-          </div>
-
-          {/* Crypto discount toggle */}
-          <div>
-            <div onClick={() => setHasCryptoDiscount(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: hasCryptoDiscount ? 10 : 0 }}>
-              <div style={{ width: 32, height: 18, borderRadius: 99, background: hasCryptoDiscount ? "var(--green)" : "var(--border)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                <div style={{ position: "absolute", top: 2, left: hasCryptoDiscount ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-              </div>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Offer a crypto discount</span>
-            </div>
-            {hasCryptoDiscount && (
-              <div>
-                <label style={S.label}>Discount for paying with crypto (%)</label>
-                <input type="number" min="0" max="50" step="0.5" placeholder="5" value={cryptoDiscountPct} onChange={e => setCryptoDiscountPct(e.target.value)} />
-                {amount && cryptoDiscountPct && !isNaN(cryptoDiscountPct) && (
-                  <div style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
-                    Crypto price: ${(parseFloat(amount) * (1 - parseFloat(cryptoDiscountPct) / 100)).toFixed(4)} · Card price: ${parseFloat(amount).toFixed(2)}
-                  </div>
-                )}
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                  Common in Web3 — incentivises subscribers to pay on-chain, avoiding card processing fees.
-                </div>
-              </div>
-            )}
           </div>
 
           <button onClick={handleSave} disabled={saving || saveSuccess} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, opacity: saving ? 0.7 : 1, background: saveSuccess ? "var(--green)" : undefined }}>

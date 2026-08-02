@@ -223,9 +223,6 @@ export default function PayPage() {
   const [approveTxHash, setApproveTxHash]   = useState(null);
   const [subscribeTxHash, setSubscribeTxHash] = useState(null);
   const [selectedInterval, setSelectedInterval] = useState("monthly");
-  const [paymentMethod, setPaymentMethod]   = useState("crypto");
-  const [availableMethods, setAvailableMethods] = useState(null);
-  const [stripeLoading, setStripeLoading]   = useState(false);
   const [selectedToken, setSelectedToken]   = useState("usdc"); // crypto token choice
   const [subscriberEmail, setSubscriberEmail] = useState("");    // optional payment alert email
   const [agentWebhookUrl, setAgentWebhookUrl] = useState("");    // AI agent webhook endpoint
@@ -247,16 +244,9 @@ export default function PayPage() {
 
   const isYearly     = selectedInterval === "yearly" && product?.yearly_amount;
   const baseAmount   = isYearly ? product.yearly_amount : product?.amount;
-  const cryptoDiscountPct = product?.crypto_discount_pct || 0;
-  const activeAmount = (paymentMethod === "crypto" && cryptoDiscountPct > 0 && baseAmount)
-    ? baseAmount * (1 - cryptoDiscountPct / 100)
-    : baseAmount;
+  const activeAmount = baseAmount;
   const selectedTokenAddress = NETWORK_TOKENS[selectedToken] || USDC_ADDRESS;
   const selectedTokenMeta    = TOKEN_META[selectedToken] || TOKEN_META.usdc;
-
-  const fiatCurrency = (product?.fiat_currency || "usd").toLowerCase();
-  const FIAT_SYMBOLS = { usd: "$", eur: "€", gbp: "£", chf: "Fr ", sek: "kr ", nok: "kr ", dkk: "kr ", aud: "A$", cad: "C$", brl: "R$", sgd: "S$", hkd: "HK$", inr: "₹", jpy: "¥", krw: "₩" };
-  const fiatSymbol   = FIAT_SYMBOLS[fiatCurrency] || "$";
 
   // Crypto tokens this product accepts, in display order.
   // Filtered by both what the merchant's product accepts AND what's actually
@@ -332,14 +322,6 @@ export default function PayPage() {
       .then(data => setMerchant(data))
       .catch(() => setMerchant({ business_name: null }));
   }, [resolvedAddress]);
-
-  useEffect(() => {
-    if (!resolvedAddress || !productSlug) return;
-    fetch(`${API_BASE}/api/products/${resolvedAddress}/${productSlug}/payment-methods`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) { setAvailableMethods(data.methods); setPaymentMethod("crypto"); } })
-      .catch(() => setAvailableMethods(["crypto"]));
-  }, [resolvedAddress, productSlug]);
 
   useEffect(() => {
     if (isConnected && flowStatus === "idle") setFlowStatus("connected");
@@ -720,14 +702,14 @@ export default function PayPage() {
               {/* Price */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                 <span style={{ fontSize: 32, fontWeight: 800, color: "var(--green)", fontFamily: "monospace", letterSpacing: "-0.03em" }}>
-                  {paymentMethod === "crypto" ? "" : fiatSymbol}{activeAmount?.toFixed(2)}
+                  {activeAmount?.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {paymentMethod === "crypto" ? selectedTokenMeta.label : (product.fiat_currency || "usd").toUpperCase()}</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/ {isYearly ? "year" : intervalLabel} · {selectedTokenMeta.label}</span>
               </div>
 
-              {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{paymentMethod === "crypto" ? "" : fiatSymbol}{(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
-              {!isYearly && hasTrial && !hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Free for {trialDays} days, then {paymentMethod === "crypto" ? "" : fiatSymbol}{product.amount?.toFixed(2)}/{intervalLabel}</div>}
-              {!isYearly && !hasTrial && hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{paymentMethod === "crypto" ? "" : fiatSymbol}{product.intro_amount.toFixed(2)}/{intervalLabel} for {product.intro_pulls} {intervalPlural}, then {paymentMethod === "crypto" ? "" : fiatSymbol}{product.amount?.toFixed(2)}</div>}
+              {isYearly && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{(product.yearly_amount / 12).toFixed(2)}/month equivalent · billed annually</div>}
+              {!isYearly && hasTrial && !hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Free for {trialDays} days, then {product.amount?.toFixed(2)}/{intervalLabel}</div>}
+              {!isYearly && !hasTrial && hasIntro && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{product.intro_amount.toFixed(2)}/{intervalLabel} for {product.intro_pulls} {intervalPlural}, then {product.amount?.toFixed(2)}</div>}
             </div>
 
             {/* Network error */}
@@ -746,83 +728,8 @@ export default function PayPage() {
               </div>
             )}
 
-            {/* Payment method selector */}
-            {(flowStatus === "idle" || flowStatus === "connected") && availableMethods && availableMethods.length > 1 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Pay with</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {availableMethods.map(method => {
-                    const cfg = {
-                      crypto:     { label: "Crypto wallet", icon: "⛓" },
-                      card:       { label: "Card",          icon: "💳" },
-                      sepa:       { label: "SEPA Transfer", icon: "🏦" },
-                      ideal:      { label: "iDEAL",         icon: "🇳🇱" },
-                      bancontact: { label: "Bancontact",    icon: "🇧🇪" },
-                      eps:        { label: "EPS",           icon: "🇦🇹" },
-                      klarna:     { label: "Klarna",        icon: "🛍" },
-                      blik:       { label: "BLIK",          icon: "🇵🇱" },
-                      mbway:      { label: "MB Way",        icon: "📱" },
-                      multibanco: { label: "Multibanco",    icon: "🏧" },
-                    }[method] || { label: method, icon: "💳" };
-                    const sel = paymentMethod === method;
-                    const showDiscount = method === "crypto" && cryptoDiscountPct > 0 && baseAmount;
-                    const methodPrice = showDiscount
-                      ? (baseAmount * (1 - cryptoDiscountPct / 100))
-                      : baseAmount;
-                    return (
-                      <div key={method} onClick={() => setPaymentMethod(method)} style={{
-                        display: "flex", flexDirection: "column", gap: 4, padding: "10px 12px",
-                        borderRadius: 10, cursor: "pointer",
-                        border: `0.5px solid ${sel ? "rgba(29,158,117,0.4)" : "var(--border)"}`,
-                        background: sel ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 18 }}>{cfg.icon}</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: sel ? "var(--green)" : "var(--text-secondary)" }}>{cfg.label}</span>
-                        </div>
-                        {methodPrice != null && (
-                          <div style={{ fontSize: 11, color: sel ? "var(--green)" : "var(--text-muted)", paddingLeft: 28 }}>
-                            {method === "crypto" ? "" : fiatSymbol}{methodPrice.toFixed(showDiscount ? 4 : 2)}
-                            {showDiscount && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>(-{cryptoDiscountPct}%)</span>}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Stripe flow */}
-            {(flowStatus === "idle" || flowStatus === "connected") && paymentMethod !== "crypto" && (
-              <button
-                onClick={async () => {
-                  setStripeLoading(true); setErrorMsg("");
-                  try {
-                    const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        merchant_address: resolvedAddress, product_slug: productSlug,
-                        payment_method: paymentMethod, interval: isYearly ? "yearly" : "monthly",
-                        success_url: `${window.location.origin}/pay/${merchantAddress}/${productSlug}?checkout=success`,
-                        cancel_url: window.location.href,
-                      }),
-                    });
-                    const data = await res.json();
-                    if (data.url) window.location.href = data.url;
-                    else setErrorMsg(data.message || "Could not create checkout session.");
-                  } catch { setErrorMsg("Could not reach server."); }
-                  finally { setStripeLoading(false); }
-                }}
-                disabled={stripeLoading}
-                style={ctaBtn(stripeLoading)}
-              >
-                {stripeLoading ? "Redirecting..." : `Pay ${isYearly ? `${fiatSymbol}${product?.yearly_amount?.toFixed(2)}/year` : `${fiatSymbol}${product?.amount?.toFixed(2)}/${intervalLabel}`} →`}
-              </button>
-            )}
-
             {/* Crypto — token selector + wallet connect (idle) */}
-            {flowStatus === "idle" && paymentMethod === "crypto" && (
+            {flowStatus === "idle" && (
               <div style={{ textAlign: "center" }}>
                 {/* Token selector — idle, crypto path */}
                 {productCryptoTokens.length > 1 && (
@@ -867,7 +774,7 @@ export default function PayPage() {
             )}
 
             {/* Connected — steps + subscribe button */}
-            {(flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") && paymentMethod === "crypto" && (
+            {(flowStatus === "connected" || flowStatus === "approving" || flowStatus === "subscribing") && (
               <>
                 {/* Wallet badge */}
                 <div style={{
