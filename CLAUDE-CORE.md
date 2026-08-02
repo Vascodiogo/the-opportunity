@@ -401,6 +401,7 @@ frontend/src/
 - [ ] Base grant nomination form — needs demo video
 - [ ] CLAUDE-CORE.md update — this file ✅ done now
 - [ ] Mainnet deployment — blocked by audit
+- [ ] **USDT checkbox in `MerchantDashboard.jsx` should be disabled/grayed out with a "not available on this network" tooltip** when the token isn't in the network's configured list — currently low priority since it's testnet-only (no Sepolia USDT deployment exists). Revisit if worth doing before mainnet, or handle at mainnet launch once USDT is actually whitelisted there.
 
 ---
 
