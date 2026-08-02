@@ -402,6 +402,8 @@ frontend/src/
 - [ ] CLAUDE-CORE.md update — this file ✅ done now
 - [ ] Mainnet deployment — blocked by audit
 - [ ] **USDT checkbox in `MerchantDashboard.jsx` should be disabled/grayed out with a "not available on this network" tooltip** when the token isn't in the network's configured list — currently low priority since it's testnet-only (no Sepolia USDT deployment exists). Revisit if worth doing before mainnet, or handle at mainnet launch once USDT is actually whitelisted there.
+- [ ] **"Crypto discount" feature in `MerchantDashboard.jsx`/`PayPage.jsx`/`db.js` is real and functional** (persisted in `products.crypto_discount_pct`, actually changes subscription amounts), but its entire premise is broken — it discounts crypto payment vs. a non-crypto alternative that no longer works (see item below). Should likely be removed entirely once that item is resolved, since there's nothing left to discount against.
+- [ ] **`PayPage.jsx` still has a full non-crypto/Stripe payment method UI path that calls `/api/stripe/checkout`** — this endpoint was removed per the crypto-only pivot (§21) and no longer exists on the backend. **Checked live via DB query: 5 products currently have a non-crypto payment method enabled, all belonging to Vasco's own test wallets (`0x00df2dbb...`, `0xbb6d960b...`) — no real merchants or subscribers affected.** Currently theoretical, not a live bug — **low/medium priority**, not urgent. Should be fixed before onboarding real founding merchants, so they can't accidentally enable a payment method that would break at checkout.
 
 ---
 
