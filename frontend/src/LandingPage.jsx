@@ -232,19 +232,16 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
   const [price, setPrice] = useState(29);
   const [interval, setInterval] = useState("Monthly");
   const [grace, setGrace] = useState(7);
-  const [tokens, setTokens] = useState({ usdc: true, usdt: false, eurc: false });
+  const [tokens, setTokens] = useState({ usdc: true, eurc: false });
   const [introPrice, setIntroPrice] = useState(false);
   const [introCycles, setIntroCycles] = useState(3);
   const [introAmt, setIntroAmt] = useState(9);
   const [yearlyOption, setYearlyOption] = useState(false);
-  const [cryptoDiscount, setCryptoDiscount] = useState(false);
-  const [discountPct, setDiscountPct] = useState(10);
 
   const slug = name.toLowerCase().replace(/\s+/g, "-");
   const intervalWord = interval === "Monthly" ? "month" : interval === "Weekly" ? "week" : "year";
   const activeTokens = Object.entries(tokens).filter(([, v]) => v).map(([k]) => k.toUpperCase());
   const displayPrice = introPrice ? introAmt : price;
-  const cryptoPrice = cryptoDiscount ? Math.round(price * (1 - discountPct / 100) * 100) / 100 : price;
 
   const toggleStyle = (active, type = "crypto") => ({
     display: "flex", alignItems: "center", gap: 8,
@@ -289,7 +286,7 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
             </select>
           </div>
         </div>
-        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 USDT = 1 EURC</p>
+        <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 EURC</p>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Grace period (days, 1–30)"}</label>
         <input type="number" value={grace} min={1} max={30} onChange={e => setGrace(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
@@ -329,7 +326,7 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
             </div>
           )}
 
-          <div style={toggleRowStyle(yearlyOption)}>
+          <div style={{ ...toggleRowStyle(yearlyOption), borderBottom: "none" }}>
             <div>
               <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{"Yearly billing option"}</p>
               <p style={{ fontSize: 11, color: muted, margin: 0 }}>{"Annual plan alongside monthly"}</p>
@@ -338,25 +335,6 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
               <span style={{ position: "absolute", top: 2, left: yearlyOption ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
             </button>
           </div>
-
-          <div style={{ ...toggleRowStyle(cryptoDiscount), borderBottom: "none" }}>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{"Crypto discount"}</p>
-              <p style={{ fontSize: 11, color: muted, margin: 0 }}>{"Incentivise on-chain payment (0–50%)"}</p>
-            </div>
-            <button onClick={() => setCryptoDiscount(v => !v)} style={switchStyle(cryptoDiscount)} aria-label="Toggle crypto discount">
-              <span style={{ position: "absolute", top: 2, left: cryptoDiscount ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-            </button>
-          </div>
-          {cryptoDiscount && (
-            <div style={{ padding: "10px 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <label style={{ fontSize: 11, color: muted }}>{"Discount"}</label>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#34d399" }}>{discountPct}%</span>
-              </div>
-              <input type="range" min={0} max={50} step={5} value={discountPct} onChange={e => setDiscountPct(Number(e.target.value))} style={{ width: "100%" }} />
-            </div>
-          )}
         </div>
 
         <a href="#apply" style={{
@@ -398,13 +376,6 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
           )}
 
           <div>
-            {cryptoDiscount && (
-              <div style={{ background: "rgba(52,211,153,0.08)", border: "0.5px solid rgba(52,211,153,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12 }}>
-                <span style={{ color: "#34d399", fontWeight: 600 }}>{discountPct}% {"crypto discount applied"}</span>
-                <span style={{ color: muted, marginLeft: 8, textDecoration: "line-through" }}>${price}</span>
-                <span style={{ color: text, fontWeight: 700, marginLeft: 6 }}>${cryptoPrice.toFixed(2)}</span>
-              </div>
-            )}
             <div style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
               <p style={{ fontSize: 11, color: muted, margin: "0 0 6px" }}>{"Select token"}</p>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -618,6 +589,10 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
             )}
           </div>
 
+          <button onClick={onToggleTheme} style={{
+            background: "none", border: `0.5px solid ${border}`,
+            borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 14,
+          }}>{isDark ? "☀️" : "🌙"}</button>
           <button onClick={scrollToApply} style={{
             background: "linear-gradient(135deg, #34d399, #3b82f6)",
             border: "none", borderRadius: 8, padding: "9px 20px",
@@ -861,7 +836,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
         <div style={{ display: "flex", gap: 32, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
           {[
             "🔵 Base Network",
-            "💵 USDC · USDT · EURC",
+            "💵 USDC · EURC",
             "🔐 " + ("Non-custodial"),
             "⏳ " + ("Audit Q3 2026"),
             "🤖 ERC-1271 · EIP-712",
@@ -1031,7 +1006,6 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
           </p>
           {[
             { symbol: "USDC", color: "#2775CA", desc: "USD Coin" },
-            { symbol: "USDT", color: "#26A17B", desc: "Tether USD" },
             { symbol: "EURC", color: "#2B79D3", desc: "Euro Coin" },
           ].map((token, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1085,7 +1059,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
           </div>
         </div>
         <p style={{ textAlign: "center", color: muted, fontSize: 13, marginTop: 20, fontStyle: "italic", fontWeight: 300 }}>
-          {"Founding merchants are approved personally by the AuthOnce team within 48 hours. Subscribers can pay with crypto wallet or credit card — no wallet required for card payments."}
+          {"Founding merchants are approved personally by the AuthOnce team within 48 hours."}
         </p>
       </section>
 
@@ -1102,10 +1076,10 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
               {"Founding merchant offer"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              {"First 10 merchants pay zero fees for 3 months. First 5 get lifetime Growth tier free."}
+              {"First 10 merchants pay zero fees for 3 months. First 5 get Growth tier free for 12 months."}
             </h2>
             <p style={{ color: muted, fontSize: 15, lineHeight: 1.7, margin: "0 0 28px", fontWeight: 300 }}>
-              {"Standard protocol fee is 0.5% per transaction. No monthly fee. No setup fee. No contract. Founding merchants get 0% for their first 3 months plus lifetime Growth tier free."}
+              {"Standard protocol fee is 0.5% per transaction. No monthly fee. No setup fee. No contract. Founding merchants get 0% for their first 3 months plus Growth tier free for 12 months."}
             </p>
             <div style={{ display: "flex", gap: 32 }}>
               {[
@@ -1127,7 +1101,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
               { label: "Monthly fee",      value: "None", color: accent },
               { label: "Setup fee",           value: "None", color: accent },
               { label: "Contract",         value: "None",  color: accent },
-              { label: "Lifetime Growth", value: "Free",  color: amber  },
+              { label: "Growth (12 months)", value: "Free",  color: amber  },
             ].map((row, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1292,7 +1266,7 @@ const res = await fetch(
               },
               {
                 q: "What if AuthOnce disappears or gets hacked?",
-                a: "Because the protocol never custodies funds, there's no pool of money to lose — each pull moves directly from subscriber to merchant. The contracts are open and verified on Basescan; a full third-party audit is underway ahead of mainnet.",
+                a: "Because the protocol never custodies funds, there's no pool of money to lose — each pull moves directly from subscriber to merchant. The contracts are open and verified on Basescan; a third-party audit is planned ahead of mainnet, pending funding.",
               },
               {
                 q: "Is this actually live, or still just an idea?",
@@ -1329,7 +1303,7 @@ const res = await fetch(
               fontSize: 12, fontWeight: 600, color: isDark ? accent : "#0d9963",
             }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: accent, display: "inline-block", animation: "pulse-dot 2s infinite" }}/>
-              {"First 10 get 0% fees for 3 months · First 5 get lifetime Growth free"}
+              {"First 10 get 0% fees for 3 months · First 5 get Growth free for 12 months"}
             </div>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
               {"Founding Merchants"}
@@ -1338,7 +1312,7 @@ const res = await fetch(
               {"Be one of the first 10 merchants on AuthOnce."}
             </h2>
             <p style={{ fontSize: 15, color: muted, lineHeight: 1.7, margin: 0, fontWeight: 300 }}>
-              {"Founding merchants get lifetime Growth tier free (€49/month value), direct access to the founder, and input on the product roadmap."}
+              {"Founding merchants get Growth tier free for 12 months (€49/month value), direct access to the founder, and input on the product roadmap."}
             </p>
           </div>
 
@@ -1362,7 +1336,7 @@ const res = await fetch(
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[
-                { icon: "🎁", title: "Lifetime Growth tier free", sub: "€49/month value, forever" },
+                { icon: "🎁", title: "Growth tier free for 12 months", sub: "€49/month value" },
                 { icon: "✉️", title: "Direct founder access", sub: "WhatsApp / email line" },
                 { icon: "🗺️", title: "Roadmap input", sub: "Shape the product" },
                 { icon: "🏅", title: "Founding merchant badge", sub: "Permanent recognition" },
@@ -1436,7 +1410,7 @@ const res = await fetch(
               color: "#34d399",
               items: [
                 { done: true,  label: "Smart contracts on Base Sepolia", detail: "SubscriptionVault · MerchantRegistry · EIP-2612 · ERC-1271" },
-                { done: true,  label: "Keeper bot — automated pulls", detail: "47 successful pulls · 100% success rate" },
+                { done: true,  label: "Keeper bot — automated pulls", detail: "12 successful pulls, verified on-chain" },
                 { done: true,  label: "Merchant dashboard", detail: "Vanity slugs · CSV import · Grace period controls" },
                 { done: true,  label: "Single on-chain fee", detail: "0.5% protocol fee, hardcoded in executePull() — no off-chain processor" },
                 { done: true,  label: "Marketing site + SEO blog", detail: "authonce.io · blog.authonce.io · 11 articles" },
