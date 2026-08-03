@@ -214,8 +214,7 @@ function setup() {
   const vault    = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, wallet);
   return { provider, vault, wallet };
 }
-// ─── Get subscription IDs
-─────────────────────────────────────────────────────
+// ─── Get subscription IDs ─────────────────────────────────────────────────────
 // DB-driven: queries subscriptions table for active/paused IDs.
 // Falls back to sequential on-chain scan if DB unavailable.
 // DB is the source of truth — notifier writes to it on SubscriptionCreated events.
