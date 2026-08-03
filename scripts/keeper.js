@@ -210,11 +210,12 @@ function setup() {
   if (!KEEPER_PRIVKEY) throw new Error("KEEPER_PRIVATE_KEY not set in env");
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet   = new ethers.Wallet(KEEPER_PRIVKEY, provider);
+  console.log(`[keeper] Signing as address: ${wallet.address}`);
   const vault    = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, wallet);
-  return { provider, wallet, vault };
+  return { provider, vault, wallet };
 }
-
-// ─── Get subscription IDs ─────────────────────────────────────────────────────
+// ─── Get subscription IDs
+─────────────────────────────────────────────────────
 // DB-driven: queries subscriptions table for active/paused IDs.
 // Falls back to sequential on-chain scan if DB unavailable.
 // DB is the source of truth — notifier writes to it on SubscriptionCreated events.
