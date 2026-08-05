@@ -30,6 +30,7 @@ const express = require("express");
 const crypto  = require("crypto");
 const bcrypt  = require("bcryptjs");
 const jwt     = require("jsonwebtoken");
+const { ethers } = require("ethers");
 const db             = require("./db");
 const resendDomains   = require("./resend-domains");
 const { templates }    = require("./email-templates");
@@ -161,14 +162,122 @@ async function geofenceMiddleware(req, res, next) {
 // Auth middleware — merchant wallet
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Merchant Authentication — wallet signature → JWT session
+//
+// [SECURITY FIX] Previously, requireMerchantAuth trusted whatever address
+// showed up in the X-Merchant-Address header or request body, with ONLY a
+// format check (0x prefix, 42 chars) — no proof the caller actually controls
+// that wallet. Anyone could claim to be any merchant by setting a header.
+// Confirmed mainnet blocker; fixed here by reusing the same
+// ethers.verifyMessage + timestamp-window pattern already proven in
+// verifySubscriptionsAccess() below, but issuing a JWT session (like admin
+// auth) rather than requiring a fresh signature on every single request —
+// the merchant dashboard drives ~19 different endpoints, so a per-call
+// signature would mean re-signing on every click. A one-time signed login
+// that issues a session token matches how admin auth already works in this
+// file and how the stack was originally documented ("MetaMask/RainbowKit +
+// JWT") — that JWT issuance simply didn't exist in code until now.
+//
+// Message format: "AuthOnce: merchant login (<address>) (<unix_ms_timestamp>)"
+// Including the address in the signed message (not just the timestamp) means
+// a signature can't be replayed to authenticate as a different address.
+// -----------------------------------------------------------------------------
+
+const MERCHANT_SIGNATURE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes, same window as subscriber auth
+
 function requireMerchantAuth(req, res, next) {
-  const address = req.headers["x-merchant-address"] || req.body?.wallet_address;
-  if (!address || !address.startsWith("0x") || address.length !== 42) {
-    return res.status(401).json({ error: "invalid_address", message: "Valid wallet address required in X-Merchant-Address header" });
-  }
-  req.merchantAddress = address.toLowerCase();
-  next();
+  // [SECURITY FIX] Merchant routes previously bypassed geofencing entirely —
+  // only the public product page and subscriber routes had it. Chaining it
+  // here, inside the shared auth middleware, applies it to all ~20 routes
+  // that use requireMerchantAuth with a single change, rather than editing
+  // every individual route registration.
+  geofenceMiddleware(req, res, () => {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "unauthorized",
+        message: "Merchant session required. POST /api/merchant/login with a signed message first.",
+      });
+    }
+
+    try {
+      const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+      if (decoded.type !== "merchant" || !decoded.wallet) {
+        return res.status(401).json({ error: "invalid_token_type" });
+      }
+      req.merchantAddress = decoded.wallet.toLowerCase();
+      return next();
+    } catch (err) {
+      return res.status(401).json({ error: "invalid_token", message: "Session expired or invalid — log in again." });
+    }
+  });
 }
+
+// POST /api/merchant/login
+// Body: { wallet_address, signature, timestamp }
+// Verifies the wallet actually signed the expected message, then issues a
+// session JWT for use as `Authorization: Bearer <token>` on all
+// requireMerchantAuth-protected routes.
+app.post("/api/merchant/login", geofenceMiddleware, async (req, res) => {
+  try {
+    // Rate limit — same 5-attempts/15-min pattern as admin login, but a
+    // separate bucket ("merchant:" prefix) so the two don't share counters —
+    // a shared IP (e.g. an office) hitting one shouldn't lock out the other.
+    const ip = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.ip || "unknown";
+    const rateCheck = checkLoginRateLimit(`merchant:${ip}`);
+    if (!rateCheck.allowed) {
+      console.warn(`[MERCHANT] Rate limited login attempt from ${ip}`);
+      return res.status(429).json({
+        error: "too_many_attempts",
+        message: `Too many login attempts. Try again in ${rateCheck.retryAfter} minute(s).`,
+        retry_after_minutes: rateCheck.retryAfter,
+      });
+    }
+
+    const { wallet_address, signature, timestamp } = req.body || {};
+
+    if (!wallet_address || !wallet_address.startsWith("0x") || wallet_address.length !== 42) {
+      return res.status(400).json({ error: "invalid_address", message: "Valid wallet address required." });
+    }
+    if (!signature || !timestamp) {
+      return res.status(400).json({ error: "missing_signature", message: "signature and timestamp are required." });
+    }
+
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > MERCHANT_SIGNATURE_WINDOW_MS) {
+      return res.status(401).json({ error: "signature_expired", message: "Signature timestamp outside the allowed window — try again." });
+    }
+
+    const wallet = wallet_address.toLowerCase();
+    const message = `AuthOnce: merchant login (${wallet}) (${ts})`;
+
+    let recovered;
+    try {
+      recovered = ethers.verifyMessage(message, signature);
+    } catch {
+      return res.status(401).json({ error: "invalid_signature", message: "Could not verify signature." });
+    }
+
+    if (recovered.toLowerCase() !== wallet) {
+      return res.status(401).json({ error: "signature_mismatch", message: "Signature does not match the claimed wallet address." });
+    }
+
+    const token = jwt.sign(
+      { wallet, type: "merchant" },
+      JWT_SECRET,
+      { expiresIn: TOKEN_EXPIRY }
+    );
+
+    // Clear rate limit on successful login — same as admin login
+    _loginAttempts.delete(`merchant:${ip}`);
+    console.log(`[MERCHANT] Login: ${wallet}`);
+    res.json({ token, wallet_address: wallet, expires_in: TOKEN_EXPIRY });
+  } catch (err) {
+    console.error("[API] Merchant login error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
 
 // -----------------------------------------------------------------------------
 // Auth middleware — admin (JWT)
@@ -1402,7 +1511,9 @@ function checkLoginRateLimit(ip) {
 const passport       = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const session        = require("express-session");
-const { ethers }     = require("ethers");
+// ethers already imported at top of file — removed duplicate require here
+// (this used to redeclare `ethers` at module scope, which would now clash
+// with the top-level import added for merchant auth).
 
 // Use PostgreSQL session store to eliminate MemoryStore warning
 // and persist sessions across Railway restarts.

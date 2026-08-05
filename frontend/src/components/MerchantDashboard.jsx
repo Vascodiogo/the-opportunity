@@ -5,7 +5,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, useSignMessage } from "wagmi";
 import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
@@ -14,6 +14,9 @@ import {
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS, TOKEN_ADDRESSES,
   shortAddress, formatUSDC,
 } from "../config.js";
+import {
+  merchantLogin, merchantFetch, getMerchantWalletFromToken, clearMerchantToken,
+} from "../lib/merchantAuth.js";
 
 // ─── Token-aware amount formatting ───────────────────────────────────────────
 const _NETWORK        = import.meta.env.VITE_NETWORK || "base-sepolia";
@@ -285,9 +288,7 @@ function AnalyticsPanel({ address }) {
     if (!address) return;
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/api/merchants/${address}/analytics?range=${range}`, {
-      headers: { "X-Merchant-Address": address },
-    })
+    merchantFetch(`${API_BASE}/api/merchants/${address}/analytics?range=${range}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -716,9 +717,9 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
     setSaving(true);
     try {
       const intervalMap = { "0": "weekly", "1": "monthly", "2": "yearly" };
-      const res = await fetch(`${API_BASE}/api/products/${merchantAddress}`, {
+      const res = await merchantFetch(`${API_BASE}/api/products/${merchantAddress}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           amount:            parseFloat(amount),
@@ -1019,9 +1020,9 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
     if (hasYearly && (!yearlyAmount || parseFloat(yearlyAmount) <= 0)) { alert("Please enter a valid yearly price."); return; }
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/products/${merchantAddress}/${product.slug}`, {
+      const res = await merchantFetch(`${API_BASE}/api/products/${merchantAddress}/${product.slug}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name, amount: parseFloat(amount), interval: intervalMap[interval],
           intro_amount:  hasIntro  ? parseFloat(introAmount) : 0,
@@ -1168,9 +1169,9 @@ function WebhookModal({ merchantAddress, onClose, onSaved }) {
     if (!url || events.length === 0) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/merchants/${merchantAddress}/webhooks`, {
+      const res = await merchantFetch(`${API_BASE}/api/merchants/${merchantAddress}/webhooks`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Merchant-Address": merchantAddress },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, events }),
       });
       if (!res.ok) throw new Error("Failed to save webhook");
@@ -1572,6 +1573,47 @@ export default function MerchantDashboard({ address }) {
   const [handleSaving, setHandleSaving]             = useState(false);
   const [handleMsg, setHandleMsg]                   = useState(null);
 
+  // [SECURITY FIX] Merchant session — replaces the old X-Merchant-Address
+  // header trust with a signed-message login, matching the backend fix in
+  // scripts/api.js (requireMerchantAuth now requires a JWT, not a
+  // self-reported header). See frontend/src/lib/merchantAuth.js.
+  const { signMessageAsync } = useSignMessage();
+  const [merchantAuthReady, setMerchantAuthReady]   = useState(false); // true once login succeeded for the CURRENT address
+  const [merchantAuthError, setMerchantAuthError]   = useState(null);
+  const [merchantAuthLoading, setMerchantAuthLoading] = useState(false);
+
+  const attemptMerchantLogin = useCallback(async () => {
+    if (!address) return;
+    setMerchantAuthLoading(true);
+    setMerchantAuthError(null);
+    const result = await merchantLogin(`${API_BASE}/api/merchant/login`, address, signMessageAsync);
+    setMerchantAuthLoading(false);
+    if (result.ok) {
+      setMerchantAuthReady(true);
+    } else {
+      setMerchantAuthReady(false);
+      setMerchantAuthError(result.error);
+    }
+  }, [address, signMessageAsync]);
+
+  useEffect(() => {
+    if (!address) return;
+    const tokenWallet = getMerchantWalletFromToken();
+    if (tokenWallet && tokenWallet.toLowerCase() === address.toLowerCase()) {
+      // Existing session in this tab already matches the connected wallet —
+      // no need to re-sign. (Backend still rejects it independently if it's
+      // actually expired; a stale-but-present token just means the first
+      // API call will 401 and merchantFetch will clear it automatically.)
+      setMerchantAuthReady(true);
+      return;
+    }
+    // Different wallet than whatever session (if any) is stored, or no
+    // session at all — clear anything stale and prompt a fresh sign-in.
+    clearMerchantToken();
+    setMerchantAuthReady(false);
+    attemptMerchantLogin();
+  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // On-chain approval
   useEffect(() => {
     if (!address) return;
@@ -1582,7 +1624,7 @@ export default function MerchantDashboard({ address }) {
   const loadProducts = useCallback(async () => {
     if (!address) return;
     try {
-      const res = await fetch(`${API_BASE}/api/products/${address}`, { headers: { "X-Merchant-Address": address } });
+      const res = await merchantFetch(`${API_BASE}/api/products/${address}`);
       if (res.ok) {
         const data = await res.json();
         const INTERVAL_MAP = { weekly: 0, monthly: 1, yearly: 2 };
@@ -1601,7 +1643,7 @@ export default function MerchantDashboard({ address }) {
     if (!address) return;
     setPaymentsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/merchants/${address}/payments`, { headers: { "X-Merchant-Address": address } });
+      const res = await merchantFetch(`${API_BASE}/api/merchants/${address}/payments`);
       if (res.ok) { const data = await res.json(); setPayments(data.payments); }
     } catch (err) { console.error("[Dashboard] loadPayments error:", err); }
     finally { setPaymentsLoading(false); }
@@ -1610,7 +1652,7 @@ export default function MerchantDashboard({ address }) {
   const loadWebhooks = useCallback(async () => {
     if (!address) return;
     try {
-      const res = await fetch(`${API_BASE}/api/merchants/${address}/webhooks`, { headers: { "X-Merchant-Address": address } });
+      const res = await merchantFetch(`${API_BASE}/api/merchants/${address}/webhooks`);
       if (res.ok) { const data = await res.json(); setWebhooks(data.webhooks || []); }
     } catch (err) { console.error("[Dashboard] loadWebhooks error:", err); }
   }, [address]);
@@ -1638,7 +1680,7 @@ export default function MerchantDashboard({ address }) {
 
   useEffect(() => {
     fetchSubscribers(); loadProducts(); loadWebhooks(); loadPayments();
-    fetch(`${API_BASE}/api/merchant/handle`, { headers: { "X-Merchant-Address": address } })
+    merchantFetch(`${API_BASE}/api/merchant/handle`)
       .then(r => r.json()).then(d => { if (d.handle) { setHandle(d.handle); setHandleInput(d.handle); } })
       .catch(() => {});
   }, [fetchSubscribers, loadProducts, loadWebhooks, loadPayments]);
@@ -1665,6 +1707,37 @@ export default function MerchantDashboard({ address }) {
     : { label: "⚠ Pending",        bg: "rgba(251,191,36,0.12)",  color: "var(--amber)" };
 
   return (
+    <>
+      {/* Merchant sign-in banner — only shown when the signed session isn't
+          ready yet. Doesn't block rendering the dashboard shell below: the
+          on-chain reads (subscribers, isApproved) work without it; only the
+          API-backed calls (products, payments, webhooks, handle) need it,
+          and those already fail gracefully with console.error + empty state
+          if merchantFetch gets a 401. */}
+      {!merchantAuthReady && (
+        <div style={{
+          maxWidth: 1160, margin: "16px auto 0", padding: "12px 16px",
+          borderRadius: 10, display: "flex", alignItems: "center", gap: 12,
+          background: merchantAuthError ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.08)",
+          border: `0.5px solid ${merchantAuthError ? "rgba(248,113,113,0.25)" : "rgba(251,191,36,0.25)"}`,
+        }}>
+          <span style={{ fontSize: 13, color: merchantAuthError ? "var(--red)" : "var(--amber)", flex: 1 }}>
+            {merchantAuthLoading
+              ? "Waiting for signature — check your wallet..."
+              : merchantAuthError
+              ? `Sign-in required: ${merchantAuthError}`
+              : "Sign in with your wallet to load dashboard data."}
+          </span>
+          <button
+            onClick={attemptMerchantLogin}
+            disabled={merchantAuthLoading}
+            style={{ ...S.btn.ghost, opacity: merchantAuthLoading ? 0.5 : 1 }}
+          >
+            {merchantAuthLoading ? "Signing in..." : "Sign in"}
+          </button>
+        </div>
+      )}
+
     <div style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 24px", display: "flex", gap: 24, alignItems: "flex-start" }}>
 
       {/* Sidebar */}
@@ -1805,7 +1878,7 @@ export default function MerchantDashboard({ address }) {
                           <button onClick={async () => {
                             if (!window.confirm("Delete " + p.name + "?")) return;
                             try {
-                              const res = await fetch(`${API_BASE}/api/products/${address}/${p.slug}`, { method: "DELETE", headers: { "X-Merchant-Address": address } });
+                              const res = await merchantFetch(`${API_BASE}/api/products/${address}/${p.slug}`, { method: "DELETE" });
                               if (res.ok) loadProducts(); else alert("Could not delete product.");
                             } catch { alert("Could not reach server."); }
                           }} style={S.btn.danger}>Delete</button>
@@ -1942,9 +2015,9 @@ export default function MerchantDashboard({ address }) {
                             setTestFiring(prev => ({ ...prev, [wh.id]: true }));
                             setTestResults(prev => ({ ...prev, [wh.id]: null }));
                             try {
-                              const res  = await fetch(`${API_BASE}/api/webhooks/test`, {
+                              const res  = await merchantFetch(`${API_BASE}/api/webhooks/test`, {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json", "X-Merchant-Address": address },
+                                headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ webhook_id: wh.id, event: "test.ping" }),
                               });
                               const data = await res.json();
@@ -2112,9 +2185,9 @@ export default function MerchantDashboard({ address }) {
                     onClick={async () => {
                       setHandleSaving(true); setHandleMsg(null);
                       try {
-                        const res  = await fetch(`${API_BASE}/api/merchant/handle`, {
+                        const res  = await merchantFetch(`${API_BASE}/api/merchant/handle`, {
                           method: "POST",
-                          headers: { "Content-Type": "application/json", "X-Merchant-Address": address },
+                          headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ handle: handleInput }),
                         });
                         const data = await res.json();
@@ -2199,5 +2272,6 @@ export default function MerchantDashboard({ address }) {
         </div>
       )}
     </div>
+    </>
   );
 }
