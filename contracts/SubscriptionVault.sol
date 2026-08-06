@@ -47,11 +47,71 @@ pragma solidity 0.8.24;
 //    chainId:           <runtime>
 //    verifyingContract: <this contract>
 //
-//    [SV-01] CRITICAL — isContractVault flag stored at createSubscription time.
-//            extcodesize called once at subscription creation, result stored
-//            immutably in struct. executePull uses stored flag, not live check.
-//            Eliminates constructor-bypass of ERC-1271 verification.
-//            updateSafeVault updates isContractVault to match new vault type.
+//    [SV-01] SUPERSEDED BY SV-19 (see below) — this comment previously claimed
+//            storing isContractVault once at creation "eliminates constructor-
+//            bypass of ERC-1271 verification." That claim was WRONG and has
+//            been proven false by an automated scan (AuditAgent, Aug 2026): a
+//            cached, never-rechecked flag is exactly what ENABLED the bypass,
+//            not what prevented it. Left here, corrected, as a record of the
+//            mistake rather than silently deleted — see [SV-19] for the fix.
+//
+//    [SV-17] HIGH FIX — trialEndsAt was written directly into lastPulledAt at
+//            creation, and executePull()/isDue()/nextPullDue() all compute the
+//            next due date as lastPulledAt + intervalSeconds. This silently
+//            added one full extra billing interval on top of the advertised
+//            trial length before the first charge (a 7-day trial on a Monthly
+//            plan billed around day 37, not day 7). Fixed by anchoring
+//            lastPulledAt one interval earlier than trialEndsAt at creation,
+//            so the existing addition-based due-date arithmetic — unchanged
+//            at all three call sites — resolves to exactly trialEndsAt for
+//            the first pull. No-trial subscriptions are unaffected.
+//
+//    [SV-18] Cosmetic/gas — decimals() return value cached to a local before
+//            the require() in approveToken(), removing a call-then-check
+//            pattern an automated scan flagged as reentrancy-shaped. Actual
+//            exploitability was already nil: IERC20.decimals() is declared
+//            `view`, so Solidity compiles the call as STATICCALL, which
+//            structurally forbids any state mutation in the callee regardless
+//            of ordering. Fixed anyway for defense-in-depth and to remove the
+//            pattern-match trigger for future scans/auditors.
+//
+//    [SV-19] HIGH FIX — constructor-bypass of ERC-1271 verification, found by
+//            AuditAgent (Aug 2026). extcodesize(self) == 0 during a wallet's
+//            own constructor, so a smart-wallet/factory contract calling
+//            createSubscription() from inside its own constructor got cached
+//            as isContractVault == false PERMANENTLY. Every future pull then
+//            skipped ERC-1271 signature verification AND the
+//            maxAgentPullAmount cap entirely — see the (now corrected) SV-01
+//            comment above for the incorrect claim this fixes.
+//            Fix: executePull() now rechecks liveness at pull time instead of
+//            trusting the cached flag alone (sub.isContractVault ||
+//            _isContract(safeVault)). This is safe — not a "live check
+//            defeats the purpose" situation — because every subscription
+//            already has a mandatory full-interval delay before its first
+//            pull can be due (see SV-17). By the time any pull is eligible,
+//            the wallet's constructor transaction is long mined and its code
+//            is genuinely deployed, so extcodesize is accurate by then. Also
+//            adds a fail-safe retroactive maxAgentPullAmount check for the
+//            case where a subscription was misclassified at creation but is
+//            provably a contract by pull time.
+//
+//    [SV-20] Vault rotation — updateSafeVault() removed. It required
+//            newSafeVault == msg.sender == sub.owner (owner is immutable), so
+//            it could only ever write the same address back; it never
+//            actually allowed rotating billing to a different wallet, despite
+//            being the only rotation mechanism exposed. Replaced with a
+//            two-step propose/accept pair: proposeSafeVaultChange() (owner-
+//            only) and acceptSafeVaultChange() (must be called BY the new
+//            vault itself, proving it can originate a real transaction and
+//            genuinely controls the address — the check the old function
+//            never performed). Scope, deliberately: benign wallet migration
+//            only (Safe upgrade, wallet replacement) — NOT an incident-
+//            response tool for a leaked owner key. An attacker holding a
+//            leaked owner key can call proposeSafeVaultChange exactly as
+//            validly as the real owner; there is no on-chain way to
+//            distinguish them. For a suspected key compromise, use
+//            cancelSubscription() (owner-or-guardian, immediate, final) and
+//            create a fresh subscription from a known-clean wallet instead.
 //
 //    [SV-02] HIGH — billingPausedUntil field replaces lastPulledAt abuse in
 //            merchantPauseSubscription. lastPulledAt now only records actual
@@ -272,7 +332,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     // -------------------------------------------------------------------------
 
     string public constant PROTOCOL      = "AuthOnce Protocol";
-    string public constant VERSION       = "7.0.0";
+    string public constant VERSION       = "8.0.0";
     string public constant ORIGIN_DOMAIN = "authonce.io";
     string public constant ORIGIN_AUTHOR = "Vasco Humberto dos Reis Diogo";
     string public constant LICENSE_SPDX  = "BUSL-1.1";
@@ -360,10 +420,10 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 gracePeriodDays;    // Grace period in days before auto-expiry (1–30)
         bytes32 dataVaultId;        // DataOnce Phase 2 — encrypted data vault reference
         SubscriptionStatus status;
-        bool isContractVault;       // [SV-01] Set once at createSubscription. True if safeVault
-                                    //         had contract code at subscription creation time.
-                                    //         Immutable per pull — cannot be bypassed by
-                                    //         subscribing from a constructor.
+        bool isContractVault;       // Best-effort classification, set at creation and updated on
+                                    // rotation accept. [SV-19] executePull() no longer trusts this
+                                    // alone — it rechecks liveness at pull time as the real gate.
+        address pendingSafeVault;   // [SV-20] Proposed new safeVault awaiting self-accept (zero = none)
     }
 
     // -------------------------------------------------------------------------
@@ -454,12 +514,18 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         bool    isContractVault  // [SV-01] Vault type recorded in event for off-chain indexing
     );
 
-    event SafeVaultUpdated(
-        uint256 indexed id,
-        address indexed oldVault,
-        address indexed newVault,
-        bool    newIsContractVault  // [SV-06] Vault type change is explicit and auditable
-    );
+    // [SV-20] SafeVaultUpdated removed along with updateSafeVault() — replaced
+    // by the propose/accept event pair below.
+    event SafeVaultChangeProposed(uint256 indexed id, address indexed newSafeVault);
+    event SafeVaultChangeAccepted(uint256 indexed id, address indexed oldVault, address indexed newVault, bool isContractVault);
+    event SafeVaultChangeCancelled(uint256 indexed id, address cancelledBy);
+
+    /// @notice [SV-19] Emitted when executePull() detects a subscription whose
+    ///         cached isContractVault was false but is now provably a contract —
+    ///         i.e. the constructor-bypass pattern was attempted. Fail-safe cap
+    ///         enforcement still applies in the same transaction; this event is
+    ///         for monitoring/alerting only.
+    event ContractVaultMisclassificationDetected(uint256 indexed id, address indexed safeVault);
 
     event PaymentExecuted(
         uint256 indexed id,
@@ -760,6 +826,19 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         uint256 graceDays   = gracePeriodDays_ == 0 ? DEFAULT_GRACE_DAYS : gracePeriodDays_;
         uint256 trialEndsAt = trialDays > 0 ? block.timestamp + (trialDays * 1 days) : 0;
 
+        // [SV-17] Anchor lastPulledAt one interval earlier than trialEndsAt so
+        // that executePull()/isDue()/nextPullDue()'s existing
+        // `lastPulledAt + intervalSeconds` arithmetic resolves to exactly
+        // trialEndsAt for the first pull, instead of trialEndsAt + interval.
+        // No-trial subscriptions (trialEndsAt == 0) keep firstPullAnchor == 0,
+        // matching existing immediate-first-pull behaviour. Safe from
+        // underflow: trialEndsAt is always block.timestamp-scale (~1.7B+ on
+        // any live chain), far larger than the largest interval constant
+        // (YEARLY = 31,536,000).
+        uint256 firstPullAnchor = trialEndsAt > 0
+            ? trialEndsAt - _intervalToSeconds(interval)
+            : 0;
+
         bool contractVault = _isContract(safeVault);
 
         if (contractVault) {
@@ -779,7 +858,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             introPulls:         introPulls,
             pullCount:          0,
             interval:           interval,
-            lastPulledAt:       trialEndsAt,
+            lastPulledAt:       firstPullAnchor,
             billingPausedUntil: 0,
             pausedAt:           0,
             expiresAt:          0,
@@ -787,7 +866,8 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             gracePeriodDays:    graceDays,
             dataVaultId:        dataVaultId_,
             status:             SubscriptionStatus.Active,
-            isContractVault:    contractVault
+            isContractVault:    contractVault,
+            pendingSafeVault:   address(0)
         });
 
         emit SubscriptionCreated(
@@ -844,34 +924,55 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         emit SubscriptionResumed(id, block.timestamp);
     }
 
-    /// @notice Update the safeVault address for a subscription.
-    ///         Only the subscription owner can call this.
-    ///         [SV-06] Updates isContractVault flag to match the new vault type.
-    ///         Vault type change is emitted explicitly in SafeVaultUpdated event.
-    function updateSafeVault(uint256 id, address newSafeVault) external {
+    /// @notice [SV-20] Step 1 of vault rotation — owner proposes moving this
+    ///         subscription's funding wallet to a new address. Does NOT change
+    ///         safeVault yet; the old vault continues funding pulls until
+    ///         acceptSafeVaultChange() completes the rotation.
+    ///         Scope: benign wallet migration only (Safe upgrade, wallet
+    ///         replacement) — NOT incident response for a leaked owner key.
+    ///         See [SV-20] changelog note above for why.
+    function proposeSafeVaultChange(uint256 id, address newSafeVault) external {
         Subscription storage sub = subscriptions[id];
-        require(msg.sender == sub.owner,        "NotOwner");
-        require(newSafeVault != address(0),     "ZeroVault");
-        // [V7-C1] newSafeVault must be the caller — same invariant as createSubscription [H2].
-        // Prevents any address from becoming the safeVault without holding the key.
-        require(newSafeVault == msg.sender,     "VaultMustBeCaller");
+        require(msg.sender == sub.owner,    "NotOwner");
+        require(newSafeVault != address(0), "ZeroVault");
+        require(newSafeVault != sub.safeVault, "SameVault");
         require(
             sub.status == SubscriptionStatus.Active ||
             sub.status == SubscriptionStatus.Paused,
             "InactiveSubscription"
         );
+        sub.pendingSafeVault = newSafeVault;
+        emit SafeVaultChangeProposed(id, newSafeVault);
+    }
+
+    /// @notice [SV-20] Step 2 — must be called BY the new vault address itself.
+    ///         Proves it can originate a real transaction (i.e. is not
+    ///         mid-construction, and genuinely controls the address) before it
+    ///         becomes the funding source for future pulls — the check the old
+    ///         single-step updateSafeVault() never performed.
+    function acceptSafeVaultChange(uint256 id) external {
+        Subscription storage sub = subscriptions[id];
+        require(sub.pendingSafeVault != address(0), "NoPendingChange");
+        require(msg.sender == sub.pendingSafeVault, "NotPendingVault");
+
         address oldVault = sub.safeVault;
+        sub.safeVault        = sub.pendingSafeVault;
+        sub.pendingSafeVault = address(0);
 
-        // [SV-06] Re-evaluate vault type for the new address.
-        // If switching from EOA to contract wallet: ERC-1271 will now be required.
-        // If switching from contract wallet to EOA: ERC-1271 will no longer be required.
-        // Both changes are recorded on-chain via the event.
-        bool newContractVault = _isContract(newSafeVault);
+        // Best-effort classification at rotation time. [SV-19] executePull()'s
+        // live recheck is the actual enforcement point, not this cached value.
+        sub.isContractVault = _isContract(msg.sender);
 
-        sub.safeVault       = newSafeVault;
-        sub.isContractVault = newContractVault;
+        emit SafeVaultChangeAccepted(id, oldVault, sub.safeVault, sub.isContractVault);
+    }
 
-        emit SafeVaultUpdated(id, oldVault, newSafeVault, newContractVault);
+    /// @notice [SV-20] Owner can cancel a pending, not-yet-accepted rotation.
+    function cancelSafeVaultChange(uint256 id) external {
+        Subscription storage sub = subscriptions[id];
+        require(msg.sender == sub.owner, "NotOwner");
+        require(sub.pendingSafeVault != address(0), "NoPendingChange");
+        sub.pendingSafeVault = address(0);
+        emit SafeVaultChangeCancelled(id, msg.sender);
     }
 
     // =========================================================================
@@ -1042,8 +1143,24 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             ? introAmount
             : sub.amount;
 
-        // [SV-01] Use stored isContractVault flag — not live _isContract() call.
-        if (sub.isContractVault) {
+        // [SV-19] Live recheck, not the cached creation-time value alone. Safe
+        // to do because every subscription already has a mandatory full-
+        // interval delay before its first pull is due (SV-17) — by the time
+        // ANY pull is eligible, a legitimately-constructed wallet's code is
+        // genuinely deployed, so extcodesize is accurate here.
+        bool requiresErc1271 = sub.isContractVault || _isContract(safeVault);
+
+        if (requiresErc1271) {
+            if (!sub.isContractVault) {
+                // Cached flag said EOA, live check says contract — this is the
+                // exact constructor-bypass pattern. Enforce the agent pull cap
+                // retroactively rather than silently honouring a pull that
+                // should never have been allowed through that gate at
+                // creation, and flag it for monitoring.
+                require(pullAmount <= maxAgentPullAmount, "AgentPullExceedsCap");
+                emit ContractVaultMisclassificationDetected(id, safeVault);
+            }
+
             require(deadline > block.timestamp,                            "DeadlineExpired");
             require(deadline <= block.timestamp + PULL_DEADLINE_TOLERANCE, "DeadlineTooFar");
 
@@ -1060,7 +1177,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             bytes4 result  = IERC1271(safeVault).isValidSignature(digest, signature);
             require(result == ERC1271_MAGIC, "ERC1271InvalidSignature");
         }
-        // EOA path: deadline and signature ignored.
+        // Genuine EOA path (still not a contract at pull time): deadline and signature ignored.
 
         // Check token balance
         uint256 currentBalance = IERC20(token).balanceOf(safeVault);
@@ -1183,7 +1300,9 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         require(token != address(0),    "ZeroToken");
         require(!approvedTokens[token], "AlreadyApproved");
         // [V7-M6] Only 6-decimal tokens supported. Matches MAX_SUBSCRIPTION_AMOUNT calibration.
-        require(IERC20(token).decimals() == 6, "Only6DecimalTokens");
+        // [SV-18] Cached to a local before the require — see changelog note above.
+        uint8 tokenDecimals = IERC20(token).decimals();
+        require(tokenDecimals == 6, "Only6DecimalTokens");
         approvedTokens[token] = true;
         approvedTokenCount++;
         // [V7-L3] Only push to _tokenList on first-ever approval.
@@ -1392,8 +1511,11 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     }
 
     /// @notice Returns true if address has contract code deployed.
-    ///         [SV-01] Called ONLY at createSubscription and updateSafeVault.
-    ///         Result stored in isContractVault. Never called inside executePull.
+    ///         [SV-19] Now also called LIVE inside executePull() — no longer
+    ///         "never called inside executePull" as the superseded SV-01
+    ///         comment claimed. Also still called at createSubscription and
+    ///         acceptSafeVaultChange for the cached isContractVault value used
+    ///         in events and the creation-time agent-pull-cap check.
     function _isContract(address addr) internal view returns (bool) {
         uint256 size;
         assembly { size := extcodesize(addr) }

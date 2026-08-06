@@ -1091,7 +1091,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
         {tab === "contracts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { label: "SubscriptionVault v7", address: VAULT_ADDRESS,    note: "Subscription lifecycle, executePull, EIP-712, multi-token, agent pull cap" },
+              { label: "SubscriptionVault v8", address: VAULT_ADDRESS,    note: "Subscription lifecycle, executePull, EIP-712, multi-token, agent pull cap" },
               { label: "MerchantRegistry v2",  address: REGISTRY_ADDRESS, note: "Merchant whitelist, self-serve toggle, two-step admin transfer" },
               { label: "USDC",                 address: isMainnet ? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" : "0x036CbD53842c5426634e7929541eC2318f3dCF7e", note: "Primary payment token" },
             ].map(c => (
