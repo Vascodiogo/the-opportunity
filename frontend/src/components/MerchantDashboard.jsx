@@ -191,6 +191,19 @@ function Sidebar({ tab, setTab, onPaymentsClick, activeSubs, totalMRR, products,
         }}>
           {approvalBadge.label}
         </span>
+        {/* [STUCK-FUNDS WARNING] No separate payout-address field exists —
+            this connected wallet IS the payout wallet. Every subscriber
+            payment goes here directly, non-custodial, with no admin
+            override. If this wallet later can't move funds out (e.g. a
+            smart-contract wallet with an expired/misconfigured signer, or
+            one deployed to a broken multisig setup), AuthOnce has no
+            recovery mechanism — this is the actual on-chain design, not a
+            missing feature. Placed once, here, since this is the only
+            place a merchant sees this address framed as "this is you" in
+            the product. */}
+        <div style={{ fontSize: 10.5, lineHeight: 1.5, color: "var(--text-muted)", marginTop: 10 }}>
+          This wallet receives every payment directly — AuthOnce never holds funds, so make sure it can send funds out before relying on it.
+        </div>
       </div>
 
       {/* Nav items */}
