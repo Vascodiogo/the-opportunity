@@ -1284,6 +1284,160 @@ app.post("/api/merchants/notify-admin", async (req, res) => {
   }
 });
 
+// -----------------------------------------------------------------------------
+// POST /api/merchants/:address/subscribers/import
+//
+// [NEW FEATURE — fixed Aug 2026] The old "CSV import" button called an
+// endpoint that never existed on the backend, named in a way that implied
+// something impossible for a non-custodial protocol: you cannot migrate an
+// already-authorized Stripe subscription onto AuthOnce, because every
+// subscription here can only be created by the SUBSCRIBER'S OWN wallet
+// signing a transaction. There is no server-side path to create a
+// subscription on someone else's behalf.
+//
+// What this endpoint actually does: takes a merchant-uploaded CSV of past
+// customers, and emails each one a real, working AuthOnce pay-link for the
+// chosen product so they can subscribe themselves — same flow as any brand
+// new customer, just bulk-invited instead of manually emailed one by one.
+// UI copy calls this "Invite past customers"; this route keeps the
+// "/subscribers/import" path and uses the existing createSubscriberImport()
+// / updateSubscriberImport() helpers in db.js, which were already written
+// for exactly this but were dead code — nothing ever called them, and the
+// subscriber_imports table they insert into was never actually created in
+// initSchema(). Both fixed as part of this change; see db.js and the
+// accompanying migration.
+//
+// Design decisions (confirmed with Vasco, Aug 2026):
+// - wallet_address in the CSV is OPTIONAL, informational only — the
+//   subscriber connects whatever wallet they want when they click the link,
+//   not necessarily the one listed in the CSV.
+// - amount_usdc in the CSV (e.g. a subscriber's old grandfathered Stripe
+//   price) is compared against the product's actual live price. Mismatches
+//   are flagged back to the merchant in the response — the invite still
+//   goes out at the real live price, since the protocol has no
+//   per-subscriber price override. Not persisted to DB, response-only.
+// -----------------------------------------------------------------------------
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+app.post("/api/merchants/:address/subscribers/import", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+
+    const { rows, product_slug } = req.body || {};
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "invalid_rows", message: "At least one row is required." });
+    }
+    if (rows.length > 500) {
+      return res.status(400).json({ error: "too_many_rows", message: "Max 500 rows per import." });
+    }
+    if (!product_slug) {
+      return res.status(400).json({ error: "missing_product", message: "Select which product these invites are for." });
+    }
+
+    const product = await db.getProduct(address, product_slug);
+    if (!product) {
+      return res.status(404).json({ error: "product_not_found", message: "Selected product not found." });
+    }
+
+    // The price a brand-new subscriber actually starts at — intro pricing
+    // if the product has it, otherwise the regular price. This is what a
+    // CSV row's amount_usdc gets compared against for the mismatch flag.
+    const effectiveStartingPrice = parseFloat(product.intro_amount) > 0
+      ? parseFloat(product.intro_amount)
+      : parseFloat(product.amount);
+
+    // Build the real pay link the same way the frontend does — handle if
+    // claimed, otherwise the raw address.
+    const handleResult = await db.query(
+      "SELECT handle FROM merchant_handles WHERE wallet_address = $1",
+      [address]
+    );
+    const merchantSlug = handleResult.rows[0]?.handle || address;
+    const payLink = `https://authonce.io/pay/${merchantSlug}/${product_slug}`;
+
+    const results = [];
+    let sentCount = 0;
+
+    for (const row of rows) {
+      const email = (row.email || "").trim().toLowerCase();
+      const name  = (row.name || "").trim();
+      const walletAddress = (row.wallet_address || "").trim();
+      const csvAmount = row.amount_usdc !== undefined && row.amount_usdc !== "" ? parseFloat(row.amount_usdc) : null;
+      const interval = (row.interval || "monthly").trim().toLowerCase();
+
+      if (!email || !EMAIL_REGEX.test(email)) {
+        results.push({ email: row.email || "(blank)", status: "invalid_email" });
+        continue;
+      }
+      if (walletAddress && (!walletAddress.startsWith("0x") || walletAddress.length !== 42)) {
+        results.push({ email, status: "invalid_wallet" });
+        continue;
+      }
+
+      const priceMismatch = csvAmount !== null && !Number.isNaN(csvAmount) &&
+        Math.abs(csvAmount - effectiveStartingPrice) > 0.005;
+
+      let importRecord;
+      try {
+        importRecord = await db.createSubscriberImport({
+          merchantAddress: address,
+          importType: "invite",
+          email,
+          walletAddress: walletAddress || null,
+          productSlug: product_slug,
+          amountUsdc: csvAmount,
+          interval,
+        });
+      } catch (dbErr) {
+        console.error("[IMPORT] DB insert error:", dbErr.message);
+        results.push({ email, status: "server_error" });
+        continue;
+      }
+
+      if (!importRecord) {
+        // createSubscriberImport returns null on ON CONFLICT DO NOTHING —
+        // this email was already invited for this product before.
+        results.push({ email, status: "duplicate", price_mismatch: priceMismatch });
+        continue;
+      }
+
+      try {
+        await resend.emails.send({
+          from: "AuthOnce <noreply@authonce.io>",
+          to: email,
+          subject: `You're invited to subscribe to ${product.name}`,
+          text: `Hi${name ? " " + name : ""},\n\n` +
+            `You've been invited to subscribe to ${product.name} (${product.amount} USDC/${product.interval}) via AuthOnce — a non-custodial stablecoin billing protocol.\n\n` +
+            `Subscribe here: ${payLink}\n\n` +
+            `You'll connect your own wallet (MetaMask, Coinbase Wallet, or WalletConnect) and sign to subscribe. AuthOnce never holds your funds — payments move directly from your wallet to the merchant on each billing cycle.\n\n` +
+            `— AuthOnce`,
+        });
+        await db.updateSubscriberImport(importRecord.id, {
+          status: "sent",
+          onboardingEmailSentAt: new Date(),
+        });
+        sentCount++;
+        results.push({ email, status: "sent", price_mismatch: priceMismatch });
+      } catch (emailErr) {
+        console.error("[IMPORT] Email send error:", emailErr.message);
+        await db.updateSubscriberImport(importRecord.id, {
+          status: "failed",
+          errorMessage: emailErr.message,
+        });
+        results.push({ email, status: "send_failed" });
+      }
+    }
+
+    console.log(`[IMPORT] ${address} invited ${sentCount}/${rows.length} for product ${product_slug}`);
+    res.json({ success: true, sent: sentCount, total: rows.length, results });
+  } catch (err) {
+    console.error("[API] Subscriber import error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
+  }
+});
+
 // =============================================================================
 // Products
 // NOTE: Two-param route MUST be registered before one-param route.

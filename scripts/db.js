@@ -179,6 +179,31 @@ async function initSchema() {
     )
   `);
 
+  // Subscriber imports/invites — "Invite past customers to subscribe"
+  // feature. Helper functions below (createSubscriberImport etc.) were
+  // already written against this table, but the table itself was never
+  // actually created here, and nothing called those functions — a
+  // disconnected, half-built feature until now (Aug 2026 fix).
+  await query(`
+    CREATE TABLE IF NOT EXISTS subscriber_imports (
+      id                        SERIAL PRIMARY KEY,
+      merchant_address          TEXT NOT NULL,
+      import_type               TEXT NOT NULL DEFAULT 'fiat',
+      email                     TEXT,
+      wallet_address            TEXT,
+      product_slug              TEXT NOT NULL,
+      amount_usdc               NUMERIC,
+      interval                  TEXT NOT NULL DEFAULT 'monthly',
+      status                    TEXT NOT NULL DEFAULT 'pending',
+      error_message             TEXT,
+      onboarding_email_sent_at  TIMESTAMPTZ,
+      subscribed_at             TIMESTAMPTZ,
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (merchant_address, product_slug, email)
+    )
+  `);
+
   // Indexes for common queries
   await query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_merchant ON subscriptions(merchant_address)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_owner ON subscriptions(owner_address)`);
@@ -837,9 +862,10 @@ async function createSubscriberImport({ merchantAddress, importType = "fiat", em
     INSERT INTO subscriber_imports
       (merchant_address, import_type, email, wallet_address, product_slug, amount_usdc, interval, status, created_at, updated_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',NOW(),NOW())
+    ON CONFLICT (merchant_address, product_slug, email) DO NOTHING
     RETURNING *
   `, [merchantAddress?.toLowerCase(), importType, email?.toLowerCase(), walletAddress?.toLowerCase(), productSlug, amountUsdc, interval]);
-  return res.rows[0];
+  return res.rows[0] || null; // null means this email was already invited for this product
 }
 
 async function updateSubscriberImport(id, { status, walletAddress, errorMessage, onboardingEmailSentAt, subscribedAt } = {}) {

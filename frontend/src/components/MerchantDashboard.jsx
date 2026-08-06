@@ -277,15 +277,26 @@ function AnalyticsStat({ label, value, sub, color }) {
   );
 }
 
-function AnalyticsPanel({ address }) {
+function AnalyticsPanel({ address, merchantAuthReady }) {
   const [range, setRange]         = useState("12m");
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [activeChart, setActiveChart] = useState("mrr"); // "mrr" | "gtv"
 
+  // [BUG FIX — Aug 2026] This effect used to fire on mount keyed only on
+  // [address, range], racing the async wallet-signature login and landing a
+  // permanent "Could not load analytics: HTTP 401" with no retry once the
+  // session token actually arrived. Now waits for merchantAuthReady and
+  // re-fires the moment it flips true, instead of erroring once and never
+  // trying again.
   useEffect(() => {
     if (!address) return;
+    if (!merchantAuthReady) {
+      setLoading(true);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     merchantFetch(`${API_BASE}/api/merchants/${address}/analytics?range=${range}`)
@@ -295,7 +306,7 @@ function AnalyticsPanel({ address }) {
       })
       .then(d => { setData(d); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
-  }, [address, range]);
+  }, [address, range, merchantAuthReady]);
 
   // Format month key "2026-05" → "May" or "May '26"
   const fmtMonth = (key, short = false) => {
@@ -938,11 +949,50 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
               </select>
             </div>
 
-            {/* Pay link preview */}
+            {/* Live product preview — mirrors what the actual pay page will show,
+                not just the URL. Reflects intro pricing, yearly toggle,
+                currency, and token selection as the merchant edits the form. */}
             {name && amount && (
-              <div style={{ background: "rgba(29,158,117,0.06)", border: "0.5px solid rgba(29,158,117,0.2)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--green)", marginBottom: 4 }}>Pay link preview</div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", wordBreak: "break-all" }}>
+              <div style={{ background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ fontSize: 11, color: "var(--green)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Live preview</div>
+
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 6 }}>{name}</div>
+
+                {hasYearly && (
+                  <div style={{ display: "inline-flex", gap: 6, marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "rgba(29,158,117,0.15)", color: "var(--green)", fontWeight: 600 }}>Monthly</span>
+                    <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, color: "var(--text-muted)" }}>
+                      Yearly{yearlyDiscount > 0 ? ` — save ${yearlyDiscount}%` : ""}
+                    </span>
+                  </div>
+                )}
+
+                {hasIntro && introAmount && (
+                  <div style={{ display: "inline-block", fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "rgba(251,191,36,0.15)", color: "var(--amber)", fontWeight: 600, marginBottom: 8 }}>
+                    🎁 Intro: {currencySymbol}{parseFloat(introAmount).toFixed(2)} × {introPulls}
+                  </div>
+                )}
+
+                <div style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.02em" }}>
+                  {currencySymbol}{parseFloat(amount).toFixed(2)}
+                  <span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-muted)" }}> / {intervalLabel[interval]}ly</span>
+                </div>
+
+                {hasIntro && introAmount && (
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                    {currencySymbol}{parseFloat(introAmount).toFixed(2)}/{intervalLabel[interval]} for {introPulls} cycle{introPulls !== "1" ? "s" : ""}, then {currencySymbol}{parseFloat(amount).toFixed(2)}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  {cryptoTokens.map(t => (
+                    <span key={t} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 6, background: "rgba(148,163,184,0.12)", color: "var(--text-secondary)", fontWeight: 600 }}>
+                      {t.toUpperCase()}
+                    </span>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10, fontFamily: "monospace", wordBreak: "break-all" }}>
                   {BASE_URL}/{shortAddress(merchantAddress)}/{name.toLowerCase().replace(/\s+/g, "-")}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
@@ -1156,7 +1206,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
 }
 
 // ─── Webhook Modal ────────────────────────────────────────────────────────────
-function WebhookModal({ merchantAddress, onClose, onSaved }) {
+function WebhookModal({ merchantAddress, merchantAuthReady, onClose, onSaved }) {
   const [url, setUrl]       = useState("");
   const [events, setEvents] = useState(["payment.success"]);
   const [saving, setSaving] = useState(false);
@@ -1165,19 +1215,42 @@ function WebhookModal({ merchantAddress, onClose, onSaved }) {
 
   const toggleEvent = (e) => setEvents(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]);
 
+  // [BUG FIX — Aug 2026] Previously swallowed the real failure reason behind
+  // a generic "Could not save webhook. Please try again." — indistinguishable
+  // whether the cause was a 401 (session not ready/expired, the actual bug
+  // reported), a validation error, or a real server error. Now surfaces the
+  // real status/message and — for the specific 401 case — tells the merchant
+  // to sign in again rather than blindly retry, since retrying without a
+  // fresh sign-in fails identically every time.
   const handleSave = async () => {
     if (!url || events.length === 0) return;
+    if (!merchantAuthReady) {
+      alert("Still signing you in — wait a moment and try again.");
+      return;
+    }
     setSaving(true);
     try {
-      const res = await merchantFetch(`${API_BASE}/api/merchants/${merchantAddress}/webhooks`, {
+      const res = await merchantFetch(`${API_BASE}/api/webhooks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, events }),
       });
-      if (!res.ok) throw new Error("Failed to save webhook");
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try { const body = await res.json(); if (body?.message || body?.error) detail = body.message || body.error; } catch {}
+        if (res.status === 401) {
+          alert("Your session expired. Please sign in again (banner at the top of the dashboard), then retry.");
+        } else {
+          alert(`Could not save webhook: ${detail}`);
+        }
+        return;
+      }
       onSaved(); onClose();
-    } catch { alert("Could not save webhook. Please try again."); }
-    finally { setSaving(false); }
+    } catch (err) {
+      alert(`Could not save webhook: ${err.message || "network error"}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1229,8 +1302,10 @@ function CsvImport({ address, products = [] }) {
   const [error, setError]             = useState(null);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [copied, setCopied]           = useState(false);
-
-  const API = import.meta.env.VITE_API_URL || "https://the-opportunity-production.up.railway.app";
+  // [FIX] Previously read a token from localStorage.getItem("merchant_token")
+  // — a key nothing ever wrote to, so this was always broken — and used its
+  // own separate API_BASE guess instead of the module-level constant. Now
+  // uses the same merchantFetch/API_BASE as the rest of the dashboard.
 
   function parseCSV(text) {
     const lines = text.trim().split("\n").filter(l => l.trim());
@@ -1258,20 +1333,23 @@ function CsvImport({ address, products = [] }) {
 
   async function handleImport() {
     if (!file) return;
+    if (!selectedProduct) {
+      setError("Select which product these invites are for first.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
     try {
       const text = await file.text();
       const rows = parseCSV(text);
-      const token = localStorage.getItem("merchant_token");
-      const res = await fetch(`${API}/api/merchants/${address}/subscribers/import`, {
+      const res = await merchantFetch(`${API_BASE}/api/merchants/${address}/subscribers/import`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ rows }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows, product_slug: selectedProduct }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || "Import failed");
+      if (!res.ok) throw new Error(data.message || data.error || "Sending invites failed");
       setResult(data);
       setFile(null);
       setPreview([]);
@@ -1301,17 +1379,17 @@ function CsvImport({ address, products = [] }) {
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <button onClick={() => setOpen(true)} style={ghostBtn}>
-          ⬆ Import subscribers from CSV
+          ✉ Invite past customers to subscribe
         </button>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          email, wallet, amount, interval · max 500 rows ·{" "}
+          email, wallet (optional), amount, interval · max 500 rows ·{" "}
           <button
             onClick={() => {
               const sample = "email,name,wallet_address,amount_usdc,interval\nalice@example.com,Alice Smith,0xAbCd1234567890AbCd1234567890AbCd12345678,9.99,monthly\nbob@example.com,Bob Jones,0x1234567890AbCd1234567890AbCd1234567890Ab,49.99,yearly";
               const blob = new Blob([sample], { type: "text/csv" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
-              a.href = url; a.download = "authonce-import-template.csv"; a.click();
+              a.href = url; a.download = "authonce-invite-template.csv"; a.click();
             }}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--green)", fontSize: 12, textDecoration: "underline" }}
           >
@@ -1326,9 +1404,11 @@ function CsvImport({ address, products = [] }) {
     <div style={cardStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>Import subscribers</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>Invite past customers</div>
           <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-            Migrate existing subscribers from Stripe or another platform.
+            Send a real AuthOnce pay-link to people who used to pay you elsewhere — they connect
+            their own wallet and subscribe themselves, same as any new customer. AuthOnce can't
+            create a subscription on someone's behalf; only their own wallet can authorize that.
           </div>
         </div>
         <button onClick={() => { setOpen(false); setFile(null); setPreview([]); setResult(null); setError(null); }} style={ghostBtn}>✕</button>
@@ -1357,7 +1437,11 @@ function CsvImport({ address, products = [] }) {
         email, name, wallet_address, amount_usdc, interval<br />
         subscriber@email.com, Alice, 0x123...abc, 9.99, monthly
         <div style={{ marginTop: 6, color: "var(--text-muted)" }}>
-          Intervals: <strong>weekly</strong> · <strong>monthly</strong> · <strong>yearly</strong> · Max 500 rows per import.
+          <strong>wallet_address</strong> is optional/informational — the subscriber uses whatever
+          wallet they connect, not necessarily this one. <strong>amount_usdc</strong> (e.g. an old
+          Stripe price) is only used to flag a mismatch if it differs from this product's real
+          price — every invite goes out at the live price, since AuthOnce has no per-subscriber
+          price override. Max 500 rows.
         </div>
       </div>
 
@@ -1397,8 +1481,8 @@ function CsvImport({ address, products = [] }) {
       {/* Actions */}
       {file && !result && (
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={handleImport} disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.6 : 1 }}>
-            {loading ? "Importing..." : "Import subscribers"}
+          <button onClick={handleImport} disabled={loading || !selectedProduct} style={{ ...btnStyle, opacity: (loading || !selectedProduct) ? 0.6 : 1 }}>
+            {loading ? "Sending invites..." : "Send invites"}
           </button>
           <button onClick={() => { setFile(null); setPreview([]); }} style={ghostBtn}>Clear</button>
         </div>
@@ -1414,24 +1498,23 @@ function CsvImport({ address, products = [] }) {
       {/* Result */}
       {result && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ padding: "10px 14px", background: "rgba(29,158,117,0.08)", border: "0.5px solid rgba(29,158,117,0.3)", borderRadius: 8, fontSize: 13, color: "var(--green)", marginBottom: result.errors?.length > 0 ? 8 : 0 }}>
-            ✓ {result.imported} subscriber{result.imported !== 1 ? "s" : ""} imported successfully.
-            {result.skipped > 0 && ` ${result.skipped} row${result.skipped !== 1 ? "s" : ""} skipped.`}
+          <div style={{ padding: "10px 14px", background: "rgba(29,158,117,0.08)", border: "0.5px solid rgba(29,158,117,0.3)", borderRadius: 8, fontSize: 13, color: "var(--green)" }}>
+            ✓ {result.sent} invite{result.sent !== 1 ? "s" : ""} sent out of {result.total} row{result.total !== 1 ? "s" : ""}.
           </div>
 
           {/* Pay link to share */}
           {selectedProduct && (
             <div style={{ marginTop: 10, padding: "12px 14px", background: "var(--bg-tag)", border: "0.5px solid var(--border)", borderRadius: 8 }}>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
-                Share this pay link with your imported subscribers so they can complete their subscription:
+                This is the exact pay link each invited customer received:
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <code style={{ fontSize: 12, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {`${window.location.origin}/pay/${address}/${selectedProduct}`}
+                  {`${BASE_URL}/${shortAddress(address)}/${selectedProduct}`}
                 </code>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/pay/${address}/${selectedProduct}`);
+                    navigator.clipboard.writeText(`${BASE_URL}/${address.toLowerCase()}/${selectedProduct}`);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
@@ -1443,14 +1526,34 @@ function CsvImport({ address, products = [] }) {
             </div>
           )}
 
-          {result.errors?.length > 0 && (
-            <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.06)", border: "0.5px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: 12, color: "var(--red)", marginTop: 8 }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Row errors:</div>
-              {result.errors.map((e, i) => (
-                <div key={i}>Row {e.row}{e.email ? ` (${e.email})` : ""}: {e.reason}</div>
+          {/* Price mismatches — informational, invite still sent at the real live price */}
+          {result.results?.some(r => r.price_mismatch) && (
+            <div style={{ padding: "10px 14px", background: "rgba(251,191,36,0.06)", border: "0.5px solid rgba(251,191,36,0.2)", borderRadius: 8, fontSize: 12, color: "var(--amber)", marginTop: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>⚠ Price differs from your CSV for these rows (sent at the real live price anyway — no per-subscriber override exists):</div>
+              {result.results.filter(r => r.price_mismatch).map((r, i) => (
+                <div key={i}>{r.email}</div>
               ))}
             </div>
           )}
+
+          {/* Skipped/failed rows */}
+          {result.results?.some(r => r.status !== "sent") && (
+            <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.06)", border: "0.5px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: 12, color: "var(--red)", marginTop: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Not sent:</div>
+              {result.results.filter(r => r.status !== "sent").map((r, i) => (
+                <div key={i}>
+                  {r.email} — {{
+                    duplicate: "already invited for this product before",
+                    invalid_email: "invalid email address",
+                    invalid_wallet: "wallet_address isn't a valid address",
+                    send_failed: "email failed to send — try again",
+                    server_error: "server error — try again",
+                  }[r.status] || r.status}
+                </div>
+              ))}
+            </div>
+          )}
+
           <button onClick={() => { setResult(null); setOpen(false); setCopied(false); }} style={{ ...ghostBtn, marginTop: 10 }}>Done</button>
         </div>
       )}
@@ -1678,12 +1781,35 @@ export default function MerchantDashboard({ address }) {
     finally { setLoading(false); }
   }, [address]);
 
+  // [BUG FIX — Aug 2026] loadWebhooks/loadPayments/handle all call merchantFetch,
+  // which needs a session token from attemptMerchantLogin(). That login requires
+  // an async wallet signature (attemptMerchantLogin runs in a SEPARATE effect,
+  // see above) — a real user interaction that can take several seconds. This
+  // effect used to fire all four calls unconditionally on mount, racing the
+  // still-pending signature and landing 401 with no retry once the token
+  // actually arrived (this is what caused "Could not load analytics: HTTP 401"
+  // and webhook saves silently failing even well after page load, since a
+  // failed load here was never retried — only a full page refresh, which
+  // reused an already-stored token from a prior session, ever "fixed" it).
+  //
+  // fetchSubscribers (on-chain read) and loadProducts (GET /api/products/:address
+  // is intentionally a PUBLIC route, so PayPage can show it to non-merchants)
+  // don't need a session and still fire immediately. loadWebhooks/loadPayments/
+  // handle DO need one and now wait for merchantAuthReady, re-firing the moment
+  // it flips true rather than only at mount.
   useEffect(() => {
-    fetchSubscribers(); loadProducts(); loadWebhooks(); loadPayments();
+    fetchSubscribers();
+    loadProducts();
+  }, [fetchSubscribers, loadProducts]);
+
+  useEffect(() => {
+    if (!merchantAuthReady) return;
+    loadWebhooks();
+    loadPayments();
     merchantFetch(`${API_BASE}/api/merchant/handle`)
       .then(r => r.json()).then(d => { if (d.handle) { setHandle(d.handle); setHandleInput(d.handle); } })
       .catch(() => {});
-  }, [fetchSubscribers, loadProducts, loadWebhooks, loadPayments]);
+  }, [merchantAuthReady, loadWebhooks, loadPayments]);
 
   const copyLink = (text, id) => {
     navigator.clipboard.writeText(text);
@@ -1770,7 +1896,7 @@ export default function MerchantDashboard({ address }) {
 
             {/* Analytics panel */}
             <div style={{ ...S.card, gridColumn: "1 / -1" }}>
-              <AnalyticsPanel address={address} />
+              <AnalyticsPanel address={address} merchantAuthReady={merchantAuthReady} />
             </div>
 
             {/* Subscriber breakdown */}
@@ -1836,7 +1962,7 @@ export default function MerchantDashboard({ address }) {
             <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 20, letterSpacing: "-0.01em" }}>
               Analytics
             </div>
-            <AnalyticsPanel address={address} />
+            <AnalyticsPanel address={address} merchantAuthReady={merchantAuthReady} />
           </div>
         )}
 
@@ -1894,7 +2020,11 @@ export default function MerchantDashboard({ address }) {
                           {copied === p.id ? "✓ Copied" : "Copy"}
                         </button>
                         <button onClick={() => setQrProduct(p)} style={{ ...S.btn.ghost, padding: "6px 12px", fontSize: 11 }}>QR</button>
-                        <button onClick={() => setTrialProduct(p)} style={{ ...S.btn.ghost, padding: "6px 12px", fontSize: 11 }}>Trial Link</button>
+                        <button
+                          onClick={() => setTrialProduct(p)}
+                          title="Generate a special link that gives new subscribers 1–60 free days before their first payment. Share it for promotions or campaigns — your regular pay link is unaffected."
+                          style={{ ...S.btn.ghost, padding: "6px 12px", fontSize: 11 }}
+                        >Trial Link</button>
                         <button onClick={() => setPriceChangeProduct(p)} style={{ ...S.btn.amber, fontSize: 11 }}>📢 Price Change</button>
                       </div>
                     </div>
@@ -2235,7 +2365,7 @@ export default function MerchantDashboard({ address }) {
       {/* Modals */}
       {showAddProduct && <AddProductModal merchantAddress={address} onClose={() => setShowAddProduct(false)} onAdded={loadProducts} />}
       {editProduct    && <EditProductModal merchantAddress={address} product={editProduct} onClose={() => setEditProduct(null)} onSaved={loadProducts} />}
-      {showAddWebhook && <WebhookModal merchantAddress={address} onClose={() => setShowAddWebhook(false)} onSaved={loadWebhooks} />}
+      {showAddWebhook && <WebhookModal merchantAddress={address} merchantAuthReady={merchantAuthReady} onClose={() => setShowAddWebhook(false)} onSaved={loadWebhooks} />}
       {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
       {priceChangeProduct && <PriceChangeModal product={priceChangeProduct} address={address} onClose={() => setPriceChangeProduct(null)} />}
 
