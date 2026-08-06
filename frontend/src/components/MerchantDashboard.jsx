@@ -1264,6 +1264,7 @@ function WebhookModal({ merchantAddress, merchantAuthReady, onClose, onSaved }) 
           <div>
             <label style={S.label}>Endpoint URL</label>
             <input placeholder="https://yourdomain.com/webhooks/authonce" value={url} onChange={e => setUrl(e.target.value)} />
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>Must be a full URL starting with https:// — the gray text above is just an example, not a filled-in value.</div>
           </div>
           <div>
             <label style={S.label}>Events to subscribe</label>
