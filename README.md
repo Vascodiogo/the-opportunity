@@ -1,9 +1,8 @@
 # AuthOnce Protocol
-
-![Base Network](https://img.shields.io/badge/Base-Network-0052FF?style=flat&logo=coinbase&logoColor=white)
-![License](https://img.shields.io/badge/License-BUSL--1.1-orange?style=flat)
-![Mainnet](https://img.shields.io/badge/Mainnet-Q3%202026-34d399?style=flat)
-![Testnet](https://img.shields.io/badge/Testnet-Live%20on%20Base%20Sepolia-blue?style=flat)
+[![Base Network](https://img.shields.io/badge/Base-Network-0052FF?style=flat&logo=coinbase&logoColor=white)](https://base.org)
+[![License](https://img.shields.io/badge/License-BUSL--1.1-orange?style=flat)](#license)
+[![Mainnet](https://img.shields.io/badge/Mainnet-Q3%202026-3d399?style=flat)](#)
+[![Testnet](https://img.shields.io/badge/Testnet-Live%20on%20Base%20Sepolia-blue?style=flat)](#)
 
 **Non-custodial recurring payments on Base. Authorize once. Pay forever.**
 
@@ -32,7 +31,7 @@ No funds are ever held by the protocol. The subscriber's wallet is never drained
 - **Free trials** — Up to 90-day trial periods before first payment.
 - **30-day price change notice** — Enforced on-chain. Merchants cannot change prices without minimum notice.
 - **Non-custodial** — Protocol never holds funds. No VASP/CASP licence required.
-- **AI agent payments** — Smart contract wallets authorize pulls via EIP-712 structured signatures with per-pull deadlines.
+- **AI agent payments** — Smart contract wallets authorize pulls via EIP-712 structured signatures with per-pull deadlines. Currently requires a signature every billing cycle — full autonomous operation is planned via on-chain session keys, not yet built.
 - **DataOnce ready** — `dataVaultId` field on every subscription for Phase 2 encrypted data vaults.
 
 ---
@@ -44,7 +43,7 @@ SubscriptionVault.sol     — Core protocol. Subscriptions, pulls, grace periods
 MerchantRegistry.sol      — Merchant whitelist. Invite-only with self-serve toggle.
 scripts/keeper.js         — Keeper bot. Polls due subscriptions, executes pulls.
 scripts/notifier.js       — Event listener. Sends webhooks and emails on all events.
-scripts/api.js            — REST API. Merchant dashboard, Google OAuth, Stripe Connect.
+scripts/api.js            — REST API. Merchant dashboard, Google OAuth, JWT wallet auth.
 scripts/db.js             — PostgreSQL schema and queries.
 scripts/webhook.js        — HMAC-SHA256 webhook dispatcher with exponential backoff.
 frontend/                 — React + Vite merchant and subscriber portal.
@@ -56,19 +55,19 @@ frontend/                 — React + Vite merchant and subscriber portal.
 
 ### Base Sepolia (testnet — live)
 
-| Contract | Address |
-|---|---|
-| SubscriptionVault | `0x2ED847da7f88231Ac6907196868adF4840A97f49` |
-| MerchantRegistry | `0xE62aF1DcADeF946ecC08978dec565344A63B8f9b` |
-| USDC (test) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Contract          | Address                                      |
+| ----------------- | -------------------------------------------- |
+| SubscriptionVault | `0xd6377Fa4809C4b745F5F1801193e5a90cD4AAE26` |
+| MerchantRegistry  | `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` |
+| USDC (test)       | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 
 ### Base Mainnet
 
-| Contract | Address |
-|---|---|
-| SubscriptionVault | `[deploy pending — Q3 2026]` |
-| MerchantRegistry | `[deploy pending — Q3 2026]` |
-| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| Contract          | Address                                      |
+| ----------------- | -------------------------------------------- |
+| SubscriptionVault | `[deploy pending — Q3 2026]`                 |
+| MerchantRegistry  | `[deploy pending — Q3 2026]`                 |
+| USDC              | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Protocol Treasury | `0x737D4EeAEF67f776724482a29367615703A2DEB1` |
 
 ---
@@ -96,14 +95,16 @@ The permit is signed once and stored. The keeper bot presents it on each billing
 Contract wallet subscribers (AI agents, Gnosis Safe, smart wallets) authorize pulls via EIP-712 structured signatures.
 
 **Domain:**
+
 ```
 name:              "AuthOnce"
-version:           "5"
+version:           "7"
 chainId:           <runtime>
 verifyingContract: <SubscriptionVault address>
 ```
 
 **PullAuthorisation type:**
+
 ```
 PullAuthorisation(
   uint256 subscriptionId,
@@ -122,33 +123,33 @@ PullAuthorisation(
 
 **On-chain protocol fee: 0.5% on every payment. Same for all merchants, all tokens.**
 
-Merchant tiers determine platform features and Stripe application fee — not the on-chain fee.
+Merchant tiers determine platform features only — not the on-chain fee.
 
-| Tier | Price | What you get |
-|---|---|---|
-| Starter | Free | Full protocol access, all tokens, webhooks, basic notifications |
-| Growth | €49/month | Branded subscriber emails, priority support, lower Stripe fee |
-| Business | €199/month | Advanced analytics, dedicated support, lowest Stripe fee |
-| Enterprise | Custom | Custom integrations, SLA, white-label options |
+| Tier       | Price      | What you get                                                    |
+| ---------- | ---------- | --------------------------------------------------------------- |
+| Starter    | Free       | Full protocol access, all tokens, webhooks, basic notifications |
+| Growth     | €49/month  | Branded subscriber emails, priority support                     |
+| Business   | €199/month | Custom sender domain, advanced analytics                        |
+| Enterprise | Custom     | Custom integrations, SLA, white-label options                   |
 
-Tier enforcement is off-chain (API + Stripe Connect). The contract is tier-agnostic.
+Tier enforcement is off-chain (API). The contract is tier-agnostic.
 
 ---
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Smart contracts | Solidity 0.8.24, Hardhat, Base Network |
-| Keeper + Notifier | Node.js, Railway |
-| Backend API | Express.js, PostgreSQL, Railway |
-| Frontend | React, Vite, Cloudflare Pages |
-| Subscriber auth | Google OAuth via Passport.js |
-| Merchant auth | MetaMask / RainbowKit + JWT |
-| Fiat onramp | Stripe Checkout (card, MB Way, Multibanco, SEPA) |
-| Merchant payouts | Stripe Connect |
-| Notifications | Resend + HMAC-signed webhooks |
-| DNS + CDN | Cloudflare |
+| Layer             | Technology                                       |
+| ----------------- | ------------------------------------------------- |
+| Smart contracts   | Solidity 0.8.24, Hardhat, Base Network             |
+| Keeper + Notifier | Node.js, Railway                                   |
+| Backend API       | Express.js, PostgreSQL, Railway                    |
+| Frontend          | React, Vite, Cloudflare Pages                      |
+| Subscriber auth   | Google OAuth (Passport.js) or wallet-signature login |
+| Merchant auth     | Wallet-signature login (MetaMask / RainbowKit) + JWT |
+| Notifications     | Resend + HMAC-signed webhooks                      |
+| DNS + CDN         | Cloudflare                                         |
+
+AuthOnce is fully crypto-native — no fiat payment processor anywhere in the stack. All payments settle directly on-chain, wallet to wallet.
 
 ---
 
@@ -162,7 +163,7 @@ Tier enforcement is off-chain (API + Stripe Connect). The contract is tier-agnos
 
 ### Setup
 
-```bash
+```
 git clone https://github.com/Vascodiogo/the-opportunity
 cd the-opportunity
 npm install
@@ -182,13 +183,13 @@ RESEND_API_KEY=            # Resend email API key
 GOOGLE_CLIENT_ID=          # Google OAuth client ID
 GOOGLE_CLIENT_SECRET=      # Google OAuth client secret
 JWT_SECRET=                # Admin JWT secret
-ENCRYPTION_KEY=            # AES-256 key: encrypts merchant IBAN + subscriber wallet keys at rest; also the wallet-derivation seed fallback if WALLET_SEED_SECRET unset (see CLAUDE-CORE.md §24)
+ENCRYPTION_KEY=            # AES-256 key used for at-rest encryption of sensitive off-chain data
 PROTOCOL_TREASURY_ADDRESS= # Safe multisig treasury address
 ```
 
 ### Deploy contracts
 
-```bash
+```
 # Base Sepolia
 npx hardhat run scripts/deploy.js --network base-sepolia
 
@@ -198,7 +199,7 @@ npx hardhat run scripts/deploy.js --network base-mainnet
 
 ### Run locally
 
-```bash
+```
 node scripts/api.js       # Backend API
 node scripts/keeper.js    # Keeper bot
 node scripts/notifier.js  # Notification backend
@@ -211,17 +212,17 @@ cd frontend && npm run dev # Frontend
 
 AuthOnce sends HMAC-SHA256 signed webhooks to registered merchant endpoints on all subscription lifecycle events.
 
-| Event | Trigger |
-|---|---|
-| `subscription.created` | New subscription authorized |
-| `payment.success` | Pull executed successfully |
-| `payment.failed` | Insufficient funds or allowance |
-| `payment.upcoming` | 3 days before next payment |
-| `subscription.paused` | Subscription entered grace period |
-| `subscription.resumed` | Subscription resumed after grace |
-| `subscription.cancelled` | Subscriber cancelled |
-| `subscription.expired` | Grace period ended, no recovery |
-| `subscription.expiring` | Price change notice (30 days) |
+| Event                    | Trigger                           |
+| ------------------------ | ---------------------------------- |
+| `subscription.created`   | New subscription authorized        |
+| `payment.success`        | Pull executed successfully         |
+| `payment.failed`         | Insufficient funds or allowance    |
+| `payment.upcoming`       | 3 days before next payment         |
+| `subscription.paused`    | Subscription entered grace period  |
+| `subscription.resumed`   | Subscription resumed after grace   |
+| `subscription.cancelled` | Subscriber cancelled               |
+| `subscription.expired`   | Grace period ended, no recovery    |
+| `subscription.expiring`  | Price change notice (30 days)      |
 
 ---
 
