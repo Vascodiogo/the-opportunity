@@ -1034,7 +1034,13 @@ app.get("/api/merchants/:address/subscribers", requireMerchantAuth, async (req, 
 // POST /api/webhooks — save a new webhook endpoint
 app.post("/api/webhooks", requireMerchantAuth, async (req, res) => {
   try {
-    const { url, events } = req.body;
+    // [FIX — Aug 2026] Trim before validating/storing. A stray leading/
+    // trailing space (e.g. pasted from a form field) previously passed the
+    // startsWith("https://") check fine but produced a URL that fails to
+    // parse at actual delivery time — silently, since delivery itself was
+    // broken until today's fix, so this went unnoticed until now.
+    const url = (req.body.url || "").trim();
+    const { events } = req.body;
     if (!url || !url.startsWith("https://")) {
       return res.status(400).json({ error: "invalid_url", message: "URL must start with https://" });
     }
@@ -1078,6 +1084,25 @@ app.get("/api/merchants/:address/webhooks", requireMerchantAuth, async (req, res
   } catch (err) {
     console.error("[API] List webhooks error:", err.message);
     res.status(500).json({ error: "server_error" });
+  }
+});
+
+// [FIX — Aug 2026] DELETE /api/webhooks/:id — was entirely missing. A
+// merchant who added a webhook with a typo'd or dead URL had no way to
+// remove or fix it through the product at all. Ownership is verified
+// (merchant_address must match the authenticated caller) before deleting,
+// same pattern as the product-deactivation route above.
+app.delete("/api/webhooks/:id", requireMerchantAuth, async (req, res) => {
+  try {
+    const result = await db.query(
+      "DELETE FROM webhook_endpoints WHERE id = $1 AND merchant_address = $2 RETURNING id",
+      [req.params.id, req.merchantAddress]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "not_found" });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API] Delete webhook error:", err.message);
+    res.status(500).json({ error: "server_error", message: err.message });
   }
 });
 

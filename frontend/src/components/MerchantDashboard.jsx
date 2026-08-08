@@ -1672,6 +1672,7 @@ export default function MerchantDashboard({ address }) {
   const [editProduct, setEditProduct]               = useState(null);
   const [testFiring, setTestFiring]                 = useState({});
   const [testResults, setTestResults]               = useState({});
+  const [deletingWebhook, setDeletingWebhook]        = useState({});
   const [handle, setHandle]                         = useState(null);
   const [handleInput, setHandleInput]               = useState("");
   const [handleSaving, setHandleSaving]             = useState(false);
@@ -2168,6 +2169,31 @@ export default function MerchantDashboard({ address }) {
                           style={{ ...S.btn.amber, opacity: testFiring[wh.id] ? 0.6 : 1 }}
                         >
                           {testFiring[wh.id] ? "Sending..." : "Test"}
+                        </button>
+                        {/* [FIX — Aug 2026] Delete was entirely missing —
+                            a merchant with a typo'd or dead URL had no way
+                            to remove or fix it through the product. */}
+                        <button
+                          disabled={deletingWebhook[wh.id]}
+                          onClick={async () => {
+                            if (!window.confirm(`Remove webhook ${wh.url}? This can't be undone.`)) return;
+                            setDeletingWebhook(prev => ({ ...prev, [wh.id]: true }));
+                            try {
+                              const res = await merchantFetch(`${API_BASE}/api/webhooks/${wh.id}`, { method: "DELETE" });
+                              if (res.ok) {
+                                loadWebhooks();
+                              } else {
+                                alert("Could not remove webhook. Please try again.");
+                              }
+                            } catch {
+                              alert("Could not reach server.");
+                            } finally {
+                              setDeletingWebhook(prev => ({ ...prev, [wh.id]: false }));
+                            }
+                          }}
+                          style={{ ...S.btn.danger, opacity: deletingWebhook[wh.id] ? 0.6 : 1 }}
+                        >
+                          {deletingWebhook[wh.id] ? "Removing..." : "Delete"}
                         </button>
                       </div>
                     </div>
