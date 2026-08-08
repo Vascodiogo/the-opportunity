@@ -1146,14 +1146,26 @@ app.post("/api/webhooks/test", requireMerchantAuth, async (req, res) => {
     const wh = result.rows[0];
     const payload = {
       event: "test.ping",
-      merchant_address: req.merchantAddress,
-      timestamp: new Date().toISOString(),
-      message: "This is a test delivery from AuthOnce.",
+      data: {
+        merchant_address: req.merchantAddress,
+        message: "This is a test delivery from AuthOnce.",
+      },
+      timestamp: Math.floor(Date.now() / 1000),
     };
 
-    const { dispatchWebhook } = require("./webhook.js");
-    await dispatchWebhook(req.merchantAddress, "test.ping", payload);
-    res.json({ success: true, status: 200, url: wh.url });
+    // [FIX — Aug 2026] Fire directly at the specific endpoint just fetched
+    // (wh.url / wh.secret), not the generic merchant-level dispatcher —
+    // previously this discarded `wh` entirely and the response was
+    // hardcoded to always report success regardless of what happened.
+    const { testWebhookOnce } = require("./webhook.js");
+    const outcome = await testWebhookOnce(wh.url, wh.secret, payload);
+
+    res.json({
+      success: outcome.delivered,
+      status: outcome.status,
+      url: wh.url,
+      body: outcome.body,
+    });
   } catch (err) {
     console.error("[API] Webhook test error:", err.message);
     res.status(500).json({ error: "server_error", message: err.message });

@@ -191,19 +191,6 @@ function Sidebar({ tab, setTab, onPaymentsClick, activeSubs, totalMRR, products,
         }}>
           {approvalBadge.label}
         </span>
-        {/* [STUCK-FUNDS WARNING] No separate payout-address field exists —
-            this connected wallet IS the payout wallet. Every subscriber
-            payment goes here directly, non-custodial, with no admin
-            override. If this wallet later can't move funds out (e.g. a
-            smart-contract wallet with an expired/misconfigured signer, or
-            one deployed to a broken multisig setup), AuthOnce has no
-            recovery mechanism — this is the actual on-chain design, not a
-            missing feature. Placed once, here, since this is the only
-            place a merchant sees this address framed as "this is you" in
-            the product. */}
-        <div style={{ fontSize: 10.5, lineHeight: 1.5, color: "var(--text-muted)", marginTop: 10 }}>
-          This wallet receives every payment directly — AuthOnce never holds funds, so make sure it can send funds out before relying on it.
-        </div>
       </div>
 
       {/* Nav items */}
@@ -2165,7 +2152,13 @@ export default function MerchantDashboard({ address }) {
                                 body: JSON.stringify({ webhook_id: wh.id, event: "test.ping" }),
                               });
                               const data = await res.json();
-                              setTestResults(prev => ({ ...prev, [wh.id]: res.ok ? { ok: true, text: `✓ Delivered — ${data.status || 200}` } : { ok: false, text: data.message || "Delivery failed" } }));
+                              // [FIX — Aug 2026] Was checking res.ok — the HTTP
+                              // status of the /api/webhooks/test call itself,
+                              // which is always 200 whether or not the actual
+                              // webhook delivery succeeded. Must check
+                              // data.success (the real delivery outcome) instead,
+                              // or this always shows "Delivered" even on failure.
+                              setTestResults(prev => ({ ...prev, [wh.id]: data.success ? { ok: true, text: `✓ Delivered — ${data.status || 200}` } : { ok: false, text: data.body || data.message || `Failed${data.status ? ` — ${data.status}` : ""}` } }));
                             } catch {
                               setTestResults(prev => ({ ...prev, [wh.id]: { ok: false, text: "Could not reach server" } }));
                             } finally {

@@ -10,7 +10,7 @@
 
 require("dotenv").config();
 const crypto = require("crypto");
-const { getMerchantWebhook, logWebhookDelivery, getMerchant } = require("./db");
+const { getMerchantWebhook, getActiveWebhooksForEvent, logWebhookDelivery, getMerchant } = require("./db");
 const { templates } = require("./email-templates");
 
 const RETRY_DELAYS_MS = [10_000, 60_000, 300_000, 1_800_000, 7_200_000];
@@ -93,39 +93,147 @@ async function fireWebhook(url, secret, payload, attempt = 1) {
 // Fire webhook with retry logic
 // -----------------------------------------------------------------------------
 
-async function dispatchWebhook(merchantAddress, event, data, { skipEmailFallback = false } = {}) {
-  const merchant = await getMerchantWebhook(merchantAddress);
+// -----------------------------------------------------------------------------
+// Fire one webhook with retry logic — used per-endpoint below.
+// -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Single-shot test fire — used by POST /api/webhooks/test (the dashboard's
+// "Test" button on a specific webhook). One attempt, no retry/backoff — a
+// merchant clicking Test wants an immediate honest answer, not to trigger a
+// queue that might still be retrying two hours later. Returns full detail
+// (status code, response body) rather than just a boolean, since the
+// dashboard shows the real HTTP status to the merchant.
+//
+// [FIX — Aug 2026] Previously the test endpoint fetched the specific
+// webhook record correctly, then discarded it and called the general
+// dispatchWebhook(merchantAddress, "test.ping", ...) instead — which
+// checked a merchant-level webhook, not the specific endpoint under test,
+// and the API route returned a hardcoded {success:true, status:200}
+// regardless of what actually happened. The dashboard's "Delivered — 200"
+// was true even when nothing was ever sent to that URL. This function
+// fires directly at the exact endpoint being tested and reports the truth.
+async function testWebhookOnce(url, secret, payload) {
+  const body = JSON.stringify(payload);
+  const signature = signPayload(body, secret);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-AuthOnce-Signature": signature,
+        "X-AuthOnce-Event": payload.event,
+        "X-AuthOnce-Timestamp": String(payload.timestamp),
+      },
+      body,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const responseBody = await res.text().catch(() => "");
+    const delivered = res.ok;
+
+    await logWebhookDelivery({
+      merchantAddress: payload.data?.merchant_address || "unknown",
+      eventType: payload.event,
+      payload,
+      responseStatus: res.status,
+      responseBody: responseBody.substring(0, 500),
+      attempt: 1,
+      delivered,
+    });
+
+    return { delivered, status: res.status, body: responseBody.substring(0, 500) };
+  } catch (err) {
+    clearTimeout(timeout);
+    await logWebhookDelivery({
+      merchantAddress: payload.data?.merchant_address || "unknown",
+      eventType: payload.event,
+      payload,
+      responseStatus: null,
+      responseBody: err.message,
+      attempt: 1,
+      delivered: false,
+    });
+    return { delivered: false, status: null, body: err.message };
+  }
+}
+
+async function fireWithRetry(url, secret, payload) {
+  for (let attempt = 1; attempt <= RETRY_DELAYS_MS.length + 1; attempt++) {
+    const success = await fireWebhook(url, secret, payload, attempt);
+    if (success) return true;
+
+    if (attempt <= RETRY_DELAYS_MS.length) {
+      const delay = RETRY_DELAYS_MS[attempt - 1];
+      console.log(`[WEBHOOK] Retrying ${url} in ${delay / 1000}s (attempt ${attempt + 1}/5)...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  console.error(`[WEBHOOK] All 5 attempts failed for ${payload.event} → ${url}`);
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Dispatch — fires to every active, subscribed webhook_endpoints row for
+// this merchant + event, in parallel (each with its own independent retry
+// sequence so one dead endpoint can't delay delivery to a working one).
+// Falls back to email only if there is nothing configured at all, or if
+// every configured endpoint ultimately failed after retries.
+// -----------------------------------------------------------------------------
+//
+// [FIX — Aug 2026] This function previously only ever checked
+// merchants.webhook_url — a single legacy field with no UI path to set it
+// anywhere in the product. The dashboard's "Add Webhook" screen writes to
+// webhook_endpoints instead, a completely different table this function
+// never queried. Net effect: every real event, for every merchant, always
+// fell back to email regardless of what was configured in the dashboard.
+// Now queries the real table the UI actually manages, and fires to every
+// endpoint subscribed to this specific event type — a merchant can have
+// multiple endpoints with different event subscriptions, and all matching
+// ones should receive it. merchants.webhook_url is kept as an additional
+// legacy target (deduped by URL) purely for backward compatibility, in
+// case it was ever set directly outside the normal product flow — it costs
+// nothing to keep checking and breaks nothing to leave in.
+
+async function dispatchWebhook(merchantAddress, event, data, { skipEmailFallback = false } = {}) {
   const payload = {
     event,
     timestamp: Math.floor(Date.now() / 1000),
     data,
   };
 
-  // No webhook configured — fall back to email
-  if (!merchant?.webhook_url) {
-    console.log(`[WEBHOOK] No webhook for ${merchantAddress} — falling back to email`);
+  const endpoints = await getActiveWebhooksForEvent(merchantAddress, event);
+
+  // Fold in the legacy single-URL field too, if set, deduped by URL so a
+  // merchant who somehow has both configured doesn't get double-fired.
+  const legacy = await getMerchantWebhook(merchantAddress);
+  const targets = endpoints.map(e => ({ url: e.url, secret: e.secret }));
+  if (legacy?.webhook_url && !targets.some(t => t.url === legacy.webhook_url)) {
+    targets.push({ url: legacy.webhook_url, secret: legacy.webhook_secret });
+  }
+
+  if (targets.length === 0) {
+    console.log(`[WEBHOOK] No active webhook endpoints for ${merchantAddress} — falling back to email`);
     if (!skipEmailFallback) await sendEmailFallback(merchantAddress, event, data);
     return;
   }
 
-  const { webhook_url, webhook_secret } = merchant;
+  console.log(`[WEBHOOK] Dispatching ${event} to ${targets.length} endpoint(s) for ${merchantAddress}`);
 
-  // Try up to 5 times with exponential backoff
-  for (let attempt = 1; attempt <= RETRY_DELAYS_MS.length + 1; attempt++) {
-    const success = await fireWebhook(webhook_url, webhook_secret, payload, attempt);
-    if (success) return;
+  const results = await Promise.all(
+    targets.map(t => fireWithRetry(t.url, t.secret, payload))
+  );
 
-    if (attempt <= RETRY_DELAYS_MS.length) {
-      const delay = RETRY_DELAYS_MS[attempt - 1];
-      console.log(`[WEBHOOK] Retrying in ${delay / 1000}s (attempt ${attempt + 1}/5)...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
+  const anyDelivered = results.some(Boolean);
+  if (!anyDelivered) {
+    console.error(`[WEBHOOK] Every endpoint failed for ${event} → ${merchantAddress}, falling back to email`);
+    if (!skipEmailFallback) await sendEmailFallback(merchantAddress, event, data);
   }
-
-  console.error(`[WEBHOOK] All 5 attempts failed for ${event} → ${merchantAddress}`);
-  // After all retries fail, send email alert to merchant
-  if (!skipEmailFallback) await sendEmailFallback(merchantAddress, event, data);
 }
 
 // -----------------------------------------------------------------------------
@@ -294,4 +402,4 @@ async function sendEmailFallback(merchantAddress, event, data) {
 // Exports
 // -----------------------------------------------------------------------------
 
-module.exports = { dispatchWebhook };
+module.exports = { dispatchWebhook, fireWebhook, testWebhookOnce };

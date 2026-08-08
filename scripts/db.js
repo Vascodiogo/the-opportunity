@@ -179,6 +179,29 @@ async function initSchema() {
     )
   `);
 
+  // [FIX — Aug 2026] webhook_endpoints — the multi-endpoint, per-event
+  // webhook system managed via the merchant dashboard's "Add Webhook" UI
+  // (POST/GET/DELETE /api/webhooks in api.js). This table existed live in
+  // the database but had NO corresponding CREATE TABLE statement anywhere
+  // in this schema-bootstrap file — it was created manually, out of band,
+  // at some point. That meant a fresh database (new environment, disaster
+  // recovery, a teammate's local setup) would have every webhook-management
+  // API route fail with "relation does not exist" the moment anyone tried
+  // to add a webhook, with no indication why. Folding it into the normal
+  // bootstrap process, matching every other table here.
+  await query(`
+    CREATE TABLE IF NOT EXISTS webhook_endpoints (
+      id                  SERIAL PRIMARY KEY,
+      merchant_address    TEXT NOT NULL,
+      url                 TEXT NOT NULL,
+      events              JSONB NOT NULL DEFAULT '[]',
+      secret              TEXT NOT NULL,
+      active              BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_merchant ON webhook_endpoints (LOWER(merchant_address))`);
+
   // Subscriber imports/invites — "Invite past customers to subscribe"
   // feature. Helper functions below (createSubscriberImport etc.) were
   // already written against this table, but the table itself was never
@@ -690,6 +713,27 @@ async function getMerchantWebhook(merchantAddress) {
   return res.rows[0] || null;
 }
 
+// [FIX — Aug 2026] The real, UI-managed webhook system. Returns every
+// ACTIVE webhook_endpoints row for this merchant that is subscribed to the
+// given event type — a merchant can have multiple endpoints, each
+// subscribed to a different subset of events, and all matching ones should
+// receive a given event. Previously nothing in the codebase queried this
+// table for real event dispatch at all; dispatchWebhook() in webhook.js
+// only ever read the legacy single-URL merchants.webhook_url field, which
+// has no UI path to set it — meaning every real event silently fell back
+// to email for every merchant, regardless of what was configured in the
+// dashboard's "Add Webhook" screen.
+async function getActiveWebhooksForEvent(merchantAddress, eventType) {
+  const res = await query(
+    `SELECT id, url, secret FROM webhook_endpoints
+     WHERE LOWER(merchant_address) = LOWER($1)
+       AND active = TRUE
+       AND events @> $2::jsonb`,
+    [merchantAddress, JSON.stringify([eventType])]
+  );
+  return res.rows;
+}
+
 // -----------------------------------------------------------------------------
 // Product helpers
 // -----------------------------------------------------------------------------
@@ -932,6 +976,7 @@ module.exports = {
   upsertMerchant,
   getMerchant,
   getMerchantWebhook,
+  getActiveWebhooksForEvent,
   // Products
   upsertProduct,
   getProduct,
