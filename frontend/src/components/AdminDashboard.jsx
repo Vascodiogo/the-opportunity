@@ -171,48 +171,72 @@ function EmptyState({ message }) {
 }
 
 // ─── Manual Approve ───────────────────────────────────────────────────────────
-function ManualApprove({ token, onRefresh }) {
+function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg]         = useState(null);
 
-  const handleApprove = async () => {
-    if (!address.startsWith("0x") || address.length !== 42) {
-      setMsg({ ok: false, text: "Invalid address." }); return;
-    }
+  const isValid = address.startsWith("0x") && address.length === 42;
+
+  // [FIX — Aug 2026] This used to call a backend endpoint that only ever
+  // updated a database flag — it never touched the real on-chain
+  // MerchantRegistry contract. The merchant-facing "✓ Approved" badge
+  // (their own dashboard) reads the REAL on-chain status, so clicking the
+  // old "Approve Merchant" button would show "✓ Approved" here while the
+  // merchant still couldn't actually receive any subscriptions — a
+  // confusing, silent mismatch between two disconnected systems. Now this
+  // just keeps a simple internal note (so the merchant shows up in this
+  // list at all) — the actual approval happens separately, on Basescan,
+  // same as every other admin action in this project.
+  const handleSaveNote = async () => {
+    if (!isValid) { setMsg({ ok: false, text: "Invalid address." }); return; }
     setLoading(true); setMsg(null);
     try {
       await fetch(`${API_BASE}/api/merchants/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet_address: address.toLowerCase() }),
       });
-      const res = await fetch(`${API_BASE}/api/admin/merchants/${address}/approve`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setMsg({ ok: true, text: `✓ ${shortAddr(address)} approved.` });
-        setAddress(""); onRefresh();
-      } else {
-        setMsg({ ok: false, text: "Could not approve." });
-      }
+      setMsg({ ok: true, text: `Saved. Now approve on Basescan below — that's the step that actually matters.` });
+      onRefresh();
     } catch { setMsg({ ok: false, text: "Could not reach server." }); }
     finally { setLoading(false); }
   };
 
+  const handleApproveOnChain = () => {
+    if (!isValid) { setMsg({ ok: false, text: "Enter the merchant's address first." }); return; }
+    copyToClipboard(address);
+    window.open(`${basescanBase}/address/${registryAddress}#writeContract`, "_blank", "noopener,noreferrer");
+    setMsg({ ok: true, text: `Address copied. On the new tab: Connect Wallet → find "approveMerchant" → paste the address → Write.` });
+  };
+
   return (
     <div style={{ ...S.card, padding: "16px 20px", marginBottom: 16 }}>
-      <span style={S.label}>Approve by address</span>
+      <span style={S.label}>Add a merchant</span>
       <div style={{ display: "flex", gap: 8 }}>
         <input value={address} onChange={e => setAddress(e.target.value.trim())}
           placeholder="0x merchant wallet address"
           style={{ flex: 1, fontFamily: "monospace" }}
         />
-        <button onClick={handleApprove} disabled={loading || !address}
-          style={{ ...S.btn.primary, opacity: loading || !address ? 0.5 : 1 }}>
-          {loading ? "Approving..." : "Approve Merchant"}
+        <button onClick={handleSaveNote} disabled={loading || !address}
+          style={{ ...S.btn.ghost, opacity: loading || !address ? 0.5 : 1 }}>
+          {loading ? "Saving..." : "Save note"}
         </button>
       </div>
-      {msg && <div style={{ fontSize: 12, marginTop: 8, color: msg.ok ? "var(--green)" : "var(--red)" }}>{msg.text}</div>}
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+        This just adds them to the list below — it does NOT let them receive payments yet.
+      </div>
+
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "0.5px solid var(--border)" }}>
+        <button onClick={handleApproveOnChain} disabled={!address}
+          style={{ ...S.btn.primary, opacity: !address ? 0.5 : 1, width: "100%" }}>
+          Approve on Basescan (required) →
+        </button>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+          This is the real approval. Opens Basescan and copies the address for you — connect your wallet there and click "Write" to finish.
+        </div>
+      </div>
+
+      {msg && <div style={{ fontSize: 12, marginTop: 10, color: msg.ok ? "var(--green)" : "var(--red)" }}>{msg.text}</div>}
     </div>
   );
 }
@@ -831,7 +855,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
               </div>
               <button onClick={fetchMerchants} style={S.btn.ghost}>↻ Refresh</button>
             </div>
-            <ManualApprove token={token} onRefresh={fetchMerchants} />
+            <ManualApprove token={token} onRefresh={fetchMerchants} registryAddress={REGISTRY_ADDRESS} basescanBase={basescanBase} />
             <div style={{ ...S.card, overflow: "hidden" }}>
               <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr auto" }}>
                 <span>Merchant</span><span>Email</span><span>Registered</span><span>Status</span><span /><span />
