@@ -1896,9 +1896,45 @@ export default function MerchantDashboard({ address }) {
         {tab === "overview" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
-            {/* Analytics panel */}
-            <div style={{ ...S.card, gridColumn: "1 / -1" }}>
-              <AnalyticsPanel address={address} merchantAuthReady={merchantAuthReady} />
+            {/* [FIX — Aug 2026] Was a duplicate embed of the exact same
+                AnalyticsPanel chart shown on the dedicated Analytics tab —
+                Overview showed strictly nothing the Analytics tab didn't
+                already show, making that tab redundant. Replaced with a
+                quick-glance widget instead: next payment due, computed
+                from data already loaded (lastPulledAt + interval per
+                subscriber), no new backend call needed. */}
+            <div style={S.card}>
+              <span style={S.label}>Next payment due</span>
+              {(() => {
+                const INTERVAL_SECONDS = [7 * 86400, 30 * 86400, 365 * 86400]; // Weekly, Monthly, Yearly
+                const now = Math.floor(Date.now() / 1000);
+                const upcoming = subscribers
+                  .filter(s => s.status === 0 && s.lastPulledAt > 0)
+                  .map(s => ({ ...s, nextDue: s.lastPulledAt + INTERVAL_SECONDS[s.interval] }))
+                  .filter(s => s.nextDue >= now)
+                  .sort((a, b) => a.nextDue - b.nextDue);
+
+                if (upcoming.length === 0) {
+                  return <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No upcoming payments</div>;
+                }
+
+                const next = upcoming[0];
+                const daysUntil = Math.max(0, Math.ceil((next.nextDue - now) / 86400));
+                return (
+                  <>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", fontFamily: "monospace", marginTop: 8 }}>
+                      {daysUntil === 0 ? "Today" : `${daysUntil}d`}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                      {new Date(next.nextDue * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
+                      {" · "}{shortAddress(next.owner)}
+                    </div>
+                    {upcoming.length > 1 && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>+{upcoming.length - 1} more due after</div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Subscriber breakdown */}
