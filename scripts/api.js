@@ -946,6 +946,41 @@ app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req
 });
 
 // -----------------------------------------------------------------------------
+// [v9 — SV-21] Merchant payout rotation — pending change requests.
+//
+// "Outgoing" — requests THIS merchant proposed (they're the current
+// merchant on some subscription), still waiting on the new address to
+// accept. "Incoming" — requests where THIS merchant is the proposed NEW
+// payout wallet for someone else's subscription. The contract alone can't
+// answer "incoming" at all without scanning every subscription ID looking
+// for a matching pendingMerchant — this is exactly why notifier.js indexes
+// MerchantChangeProposed events into their own table.
+// -----------------------------------------------------------------------------
+app.get("/api/merchants/:address/pending-changes/outgoing", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+    const rows = await db.getOutgoingPendingChanges(address);
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error("[API] Outgoing pending changes error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+app.get("/api/merchants/:address/pending-changes/incoming", requireMerchantAuth, async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (address !== req.merchantAddress) return res.status(403).json({ error: "forbidden" });
+    const rows = await db.getIncomingPendingChanges(address);
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error("[API] Incoming pending changes error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // GET /api/merchants/:address/payments
 // -----------------------------------------------------------------------------
 app.get("/api/merchants/:address/payments", requireMerchantAuth, async (req, res) => {

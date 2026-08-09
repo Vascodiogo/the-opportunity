@@ -202,6 +202,36 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_merchant ON webhook_endpoints (LOWER(merchant_address))`);
 
+  // [v9 — SV-21] Merchant payout rotation requests. Indexed from the
+  // MerchantChangeProposed/Accepted/Cancelled events by notifier.js — the
+  // contract itself only ever stores ONE pending change at a time per
+  // subscription (sub.pendingMerchant), with no history. This table keeps
+  // the full history and, more importantly, makes it possible to answer
+  // "which subscriptions have proposed ME as their new payout wallet" —
+  // something the contract alone can't answer without scanning every
+  // subscription ID, since pendingMerchant isn't indexed on-chain.
+  await query(`
+    CREATE TABLE IF NOT EXISTS merchant_change_requests (
+      id                  SERIAL PRIMARY KEY,
+      subscription_id     BIGINT NOT NULL,
+      old_merchant        TEXT NOT NULL,
+      new_merchant        TEXT NOT NULL,
+      status              TEXT NOT NULL DEFAULT 'pending', -- pending | accepted | cancelled
+      proposed_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved_at         TIMESTAMPTZ,
+      propose_tx_hash     TEXT,
+      resolve_tx_hash     TEXT
+    )
+  `);
+  // Only one PENDING request per subscription can exist at once — matches
+  // the contract's own invariant (a new propose overwrites sub.pendingMerchant
+  // rather than stacking). Partial unique index, not a table-level UNIQUE,
+  // since multiple historical accepted/cancelled rows for the same
+  // subscription are expected and fine.
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_merchant_change_one_pending ON merchant_change_requests (subscription_id) WHERE status = 'pending'`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_merchant_change_new_merchant ON merchant_change_requests (LOWER(new_merchant), status)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_merchant_change_old_merchant ON merchant_change_requests (LOWER(old_merchant), status)`);
+
   // Subscriber imports/invites — "Invite past customers to subscribe"
   // feature. Helper functions below (createSubscriberImport etc.) were
   // already written against this table, but the table itself was never
@@ -734,6 +764,52 @@ async function getActiveWebhooksForEvent(merchantAddress, eventType) {
   return res.rows;
 }
 
+// [v9 — SV-21] Merchant payout rotation — indexing functions, called by
+// notifier.js's event listeners.
+
+async function createMerchantChangeRequest({ subscriptionId, oldMerchant, newMerchant, txHash }) {
+  await query(
+    `INSERT INTO merchant_change_requests (subscription_id, old_merchant, new_merchant, propose_tx_hash)
+     VALUES ($1, $2, $3, $4)`,
+    [subscriptionId, oldMerchant, newMerchant, txHash]
+  );
+}
+
+async function resolveMerchantChangeRequest({ subscriptionId, status, txHash }) {
+  // Resolves whichever row is currently 'pending' for this subscription —
+  // there can only ever be one, enforced by the partial unique index above.
+  await query(
+    `UPDATE merchant_change_requests
+     SET status = $2, resolved_at = NOW(), resolve_tx_hash = $3
+     WHERE subscription_id = $1 AND status = 'pending'`,
+    [subscriptionId, status, txHash]
+  );
+}
+
+// Requests THIS merchant proposed, still awaiting the new address's accept.
+async function getOutgoingPendingChanges(merchantAddress) {
+  const res = await query(
+    `SELECT * FROM merchant_change_requests
+     WHERE LOWER(old_merchant) = LOWER($1) AND status = 'pending'
+     ORDER BY proposed_at DESC`,
+    [merchantAddress]
+  );
+  return res.rows;
+}
+
+// Requests where THIS merchant is the proposed new payout wallet — the
+// thing the contract alone can't answer, since pendingMerchant isn't
+// indexed on-chain by new-merchant address.
+async function getIncomingPendingChanges(merchantAddress) {
+  const res = await query(
+    `SELECT * FROM merchant_change_requests
+     WHERE LOWER(new_merchant) = LOWER($1) AND status = 'pending'
+     ORDER BY proposed_at DESC`,
+    [merchantAddress]
+  );
+  return res.rows;
+}
+
 // -----------------------------------------------------------------------------
 // Product helpers
 // -----------------------------------------------------------------------------
@@ -977,6 +1053,10 @@ module.exports = {
   getMerchant,
   getMerchantWebhook,
   getActiveWebhooksForEvent,
+  createMerchantChangeRequest,
+  resolveMerchantChangeRequest,
+  getOutgoingPendingChanges,
+  getIncomingPendingChanges,
   // Products
   upsertProduct,
   getProduct,

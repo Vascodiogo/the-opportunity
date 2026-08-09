@@ -41,7 +41,7 @@ const BASESCAN_URL = process.env.NETWORK === "mainnet"
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-// ─── v4 ABI ──────────────────────────────────────────────────────────────────
+// ─── v9 ABI ──────────────────────────────────────────────────────────────────
 const VAULT_ABI = [
   "event SubscriptionCreated(uint256 indexed id, address indexed owner, address indexed merchant, address safeVault, address token, uint256 amount, uint256 introAmount, uint256 introPulls, uint8 interval, address guardian, uint256 trialEndsAt, uint256 gracePeriodDays, bool isContractVault)",
   "event PaymentExecuted(uint256 indexed id, address indexed token, uint256 amount, uint256 merchantReceived, uint256 fee, uint256 pullCount, uint256 timestamp)",
@@ -52,8 +52,26 @@ const VAULT_ABI = [
   "event SubscriptionExpired(uint256 indexed id, uint256 timestamp)",
   "event SubscriptionResumed(uint256 indexed id, uint256 timestamp)",
   "event TrialStarted(uint256 indexed id, uint256 trialEndsAt)",
+  // [v9 — SV-21] Merchant payout rotation events.
+  "event MerchantChangeProposed(uint256 indexed id, address indexed newMerchant)",
+  "event MerchantChangeAccepted(uint256 indexed id, address indexed oldMerchant, address indexed newMerchant)",
+  "event MerchantChangeCancelled(uint256 indexed id, address cancelledBy)",
   // View functions for proactive notifications
-  "function subscriptions(uint256 id) external view returns (address owner, address guardian, address merchant, address safeVault, uint256 amount, uint256 introAmount, uint256 introPulls, uint256 pullCount, uint8 interval, uint256 lastPulledAt, uint256 pausedAt, uint256 expiresAt, uint256 trialEndsAt, uint256 gracePeriodDays, uint8 status)",
+  //
+  // [FIX — Aug 2026] This declaration was missing `token` between safeVault
+  // and amount — not at the end, in the MIDDLE of the struct. ethers.js
+  // decodes ABI-encoded returns purely positionally from what you declare;
+  // it has no way to know the real on-chain struct has an extra field here.
+  // Every field after the missing one (amount, introAmount, introPulls,
+  // everything) was being decoded from the wrong byte offset — reading
+  // amount as if it were the token address's bytes, and so on cascading
+  // through the whole struct. This only affected notifier.js's own use of
+  // subscriptions() for proactive reminders (3-day payment reminders,
+  // price-change notices) — keeper.js maintains its own separate, correct
+  // copy of this struct and was never affected; actual payment execution
+  // was never at risk. Corrected to match the real deployed struct exactly,
+  // including the two new v9 fields at the end.
+  "function subscriptions(uint256 id) external view returns (address owner, address guardian, address merchant, address safeVault, address token, uint256 amount, uint256 introAmount, uint256 introPulls, uint256 pullCount, uint8 interval, uint256 lastPulledAt, uint256 billingPausedUntil, uint256 pausedAt, uint256 expiresAt, uint256 trialEndsAt, uint256 gracePeriodDays, bytes32 dataVaultId, uint8 status, bool isContractVault, address pendingSafeVault, address pendingMerchant)",
   "function nextPullAmount(uint256 id) external view returns (uint256)",
   "function vaultAllowance(uint256 id) external view returns (uint256)",
   "function vaultBalance(uint256 id) external view returns (uint256)",
@@ -816,6 +834,75 @@ async function onSubscriptionResumed(log, iface) {
   });
 }
 
+// [v9 — SV-21] Merchant payout rotation event handlers.
+
+async function onMerchantChangeProposed(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, newMerchant } = parsed.args;
+  console.log(`\n[EVENT] MerchantChangeProposed #${id} → ${newMerchant}`);
+
+  // oldMerchant isn't in this event's args — read it from our own record of
+  // the subscription (still accurate at propose-time, since merchant_address
+  // doesn't change until MerchantChangeAccepted fires).
+  const sub = await db.getSubscription(id.toString());
+  const oldMerchant = sub?.merchant_address;
+  if (!oldMerchant) {
+    console.warn(`  No local record for subscription #${id} — cannot determine old merchant, skipping index.`);
+    return;
+  }
+
+  await db.createMerchantChangeRequest({
+    subscriptionId: id.toString(),
+    oldMerchant,
+    newMerchant,
+    txHash: log.transactionHash,
+  });
+
+  await dispatchWebhook(oldMerchant, "merchant_change.proposed", {
+    subscription_id: id.toString(),
+    new_merchant: newMerchant,
+  });
+}
+
+async function onMerchantChangeAccepted(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, oldMerchant, newMerchant } = parsed.args;
+  console.log(`\n[EVENT] MerchantChangeAccepted #${id}: ${oldMerchant} → ${newMerchant}`);
+
+  await db.resolveMerchantChangeRequest({
+    subscriptionId: id.toString(),
+    status: "accepted",
+    txHash: log.transactionHash,
+  });
+
+  // Update our OWN record of who the merchant is. Without this, every other
+  // part of the product (dashboards, notification routing, webhook
+  // dispatch) would keep treating the old merchant as the payout recipient
+  // even though the contract itself has already moved on — the on-chain
+  // state and our indexed state would silently diverge.
+  await db.query(
+    "UPDATE subscriptions SET merchant_address = $1 WHERE id = $2",
+    [newMerchant, id.toString()]
+  );
+
+  await dispatchWebhook(newMerchant, "merchant_change.accepted", {
+    subscription_id: id.toString(),
+    old_merchant: oldMerchant,
+  });
+}
+
+async function onMerchantChangeCancelled(log, iface) {
+  const parsed = iface.parseLog(log);
+  const { id, cancelledBy } = parsed.args;
+  console.log(`\n[EVENT] MerchantChangeCancelled #${id} by ${cancelledBy}`);
+
+  await db.resolveMerchantChangeRequest({
+    subscriptionId: id.toString(),
+    status: "cancelled",
+    txHash: log.transactionHash,
+  });
+}
+
 // ─── Event Topic Map ──────────────────────────────────────────────────────────
 
 const EVENT_HANDLERS = {
@@ -827,6 +914,9 @@ const EVENT_HANDLERS = {
   "SubscriptionCancelled": onSubscriptionCancelled,
   "SubscriptionExpired":   onSubscriptionExpired,
   "SubscriptionResumed":   onSubscriptionResumed,
+  "MerchantChangeProposed": onMerchantChangeProposed,
+  "MerchantChangeAccepted": onMerchantChangeAccepted,
+  "MerchantChangeCancelled": onMerchantChangeCancelled,
 };
 
 // ─── Polling Loop ─────────────────────────────────────────────────────────────

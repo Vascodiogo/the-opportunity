@@ -30,7 +30,7 @@ export const RPC_URLS = [
 ];
 
 // ─── Contract addresses ───────────────────────────────────────────────────────
-export const VAULT_ADDRESS    = "0xd6377Fa4809C4b745F5F1801193e5a90cD4AAE26"; // v8
+export const VAULT_ADDRESS    = "0xDd41E5C83d000ff63d3e9E8cBBD79609b7029d3C"; // v9 — SV-21 merchant rotation + permit front-run fix, tested live Aug 8 2026
 export const REGISTRY_ADDRESS = "0x393BA721aB45f4d4DaAC1B914e7F6377508C0299"; // v4
 export const USDC_ADDRESS     = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // USDC Base Sepolia
 export const ADMIN_ADDRESS    = "0x00df2Dbb2455C372204EdD901894E27281fA02C0";
@@ -81,6 +81,8 @@ export const VAULT_ABI = [
       { name: "dataVaultId",        type: "bytes32" },
       { name: "status",             type: "uint8"   },
       { name: "isContractVault",    type: "bool"    }, // v6: vault type flag (SV-01)
+      { name: "pendingSafeVault",   type: "address" }, // v9 [SV-20]: proposed new safeVault awaiting self-accept (zero = none)
+      { name: "pendingMerchant",    type: "address" }, // v9 [SV-21]: proposed new merchant awaiting self-accept (zero = none)
     ],
   },
   {
@@ -277,6 +279,31 @@ export const VAULT_ABI = [
     ],
     outputs: [],
   },
+  // [v9 — SV-21] Merchant payout rotation, two-step propose/accept.
+  {
+    name: "proposeMerchantChange",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "id",          type: "uint256" },
+      { name: "newMerchant", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "acceptMerchantChange",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "cancelMerchantChange",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
   // Events
   {
     name: "SubscriptionCreated",
@@ -353,6 +380,32 @@ export const VAULT_ABI = [
     inputs: [
       { name: "id",          type: "uint256", indexed: true  },
       { name: "trialEndsAt", type: "uint256", indexed: false },
+    ],
+  },
+  // [v9 — SV-21] Merchant payout rotation events.
+  {
+    name: "MerchantChangeProposed",
+    type: "event",
+    inputs: [
+      { name: "id",          type: "uint256", indexed: true },
+      { name: "newMerchant", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "MerchantChangeAccepted",
+    type: "event",
+    inputs: [
+      { name: "id",          type: "uint256", indexed: true },
+      { name: "oldMerchant", type: "address", indexed: true },
+      { name: "newMerchant", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "MerchantChangeCancelled",
+    type: "event",
+    inputs: [
+      { name: "id",          type: "uint256", indexed: true  },
+      { name: "cancelledBy", type: "address", indexed: false },
     ],
   },
 ];

@@ -1293,6 +1293,72 @@ function WebhookModal({ merchantAddress, merchantAuthReady, onClose, onSaved }) 
   );
 }
 
+// ─── Change Payout Wallet Modal [NEW — v9 SV-21] ──────────────────────────────
+// Step 1 of the two-step rotation — proposes a new payout wallet for one
+// subscription. Does NOT move anything yet; the new address must
+// independently accept (see the "Incoming requests" banner) before payouts
+// actually redirect. Requires a real on-chain transaction + wallet
+// signature — writeContractAsync is passed down from the main dashboard
+// component rather than calling useWriteContract() again here, since a
+// single wagmi connection is shared across the whole page.
+function ChangePayoutWalletModal({ subscriptionId, onClose, onSaved, writeContractAsync }) {
+  const [newMerchant, setNewMerchant] = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [errorMsg, setErrorMsg]       = useState("");
+
+  const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(newMerchant.trim());
+
+  const handlePropose = async () => {
+    if (!isValidAddress) { setErrorMsg("Enter a valid wallet address (0x... 42 characters)."); return; }
+    setSaving(true);
+    setErrorMsg("");
+    try {
+      await writeContractAsync({
+        address: VAULT_ADDRESS, abi: VAULT_ABI,
+        functionName: "proposeMerchantChange",
+        args: [BigInt(subscriptionId), newMerchant.trim()],
+      });
+      // notifier.js needs a few seconds to pick up and index the event —
+      // onSaved triggers a reload, but an immediate one would likely still
+      // show nothing yet. Caller handles the delay.
+      onSaved();
+      onClose();
+    } catch (err) {
+      // The contract reverts with NewMerchantNotApproved if the address
+      // isn't already MerchantRegistry-approved — surface that plainly
+      // rather than a raw revert string.
+      const msg = err.shortMessage || err.message || "Transaction failed";
+      setErrorMsg(msg.includes("NewMerchantNotApproved")
+        ? "That address isn't an approved AuthOnce merchant yet — it needs to be approved before you can propose it as a payout wallet."
+        : msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={onClose}>
+      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>Change Payout Wallet — Subscription #{subscriptionId}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
+          This is a two-step change. The new wallet must already be an approved AuthOnce merchant, and must separately accept this proposal before anything actually moves. Payments keep going to your current wallet until then.
+        </div>
+        <div>
+          <label style={S.label}>New payout wallet address</label>
+          <input placeholder="0x..." value={newMerchant} onChange={e => setNewMerchant(e.target.value)} />
+        </div>
+        {errorMsg && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>{errorMsg}</div>}
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <button onClick={onClose} style={S.btn.ghost}>Cancel</button>
+          <button onClick={handlePropose} disabled={saving || !isValidAddress} style={{ ...S.btn.primary, opacity: (saving || !isValidAddress) ? 0.6 : 1 }}>
+            {saving ? "Confirming..." : "Propose Change"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── CSV Import ───────────────────────────────────────────────────────────────
 function CsvImport({ address, products = [] }) {
   const [open, setOpen]               = useState(false);
@@ -1650,6 +1716,7 @@ function EmptyState({ message, sub }) {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function MerchantDashboard({ address }) {
+  const { writeContractAsync } = useWriteContract();
   const [tab, setTab]                               = useState("overview");
   const [subscribers, setSubscribers]               = useState([]);
   const [products, setProducts]                     = useState([]);
@@ -1669,6 +1736,10 @@ export default function MerchantDashboard({ address }) {
   const [qrProduct, setQrProduct]                   = useState(null);
   const [trialProduct, setTrialProduct]             = useState(null);
   const [priceChangeProduct, setPriceChangeProduct] = useState(null);
+  const [pendingOutgoing, setPendingOutgoing]        = useState([]);
+  const [pendingIncoming, setPendingIncoming]        = useState([]);
+  const [changePayoutSub, setChangePayoutSub]        = useState(null); // subscription id currently being proposed
+  const [acceptingChange, setAcceptingChange]        = useState({});  // { [requestId]: true } while accept tx pending
   const [editProduct, setEditProduct]               = useState(null);
   const [testFiring, setTestFiring]                 = useState({});
   const [testResults, setTestResults]               = useState({});
@@ -1762,6 +1833,21 @@ export default function MerchantDashboard({ address }) {
     } catch (err) { console.error("[Dashboard] loadWebhooks error:", err); }
   }, [address]);
 
+  // [v9 — SV-21] Pending merchant-rotation requests, both directions.
+  // Same auth-gating pattern as loadWebhooks/loadPayments above — needs a
+  // session token from attemptMerchantLogin(), not just fires on mount.
+  const loadPendingChanges = useCallback(async () => {
+    if (!address) return;
+    try {
+      const [outRes, inRes] = await Promise.all([
+        merchantFetch(`${API_BASE}/api/merchants/${address}/pending-changes/outgoing`),
+        merchantFetch(`${API_BASE}/api/merchants/${address}/pending-changes/incoming`),
+      ]);
+      if (outRes.ok) { const d = await outRes.json(); setPendingOutgoing(d.requests || []); }
+      if (inRes.ok)  { const d = await inRes.json();  setPendingIncoming(d.requests || []); }
+    } catch (err) { console.error("[Dashboard] loadPendingChanges error:", err); }
+  }, [address]);
+
   const fetchSubscribers = useCallback(async () => {
     if (!address) return;
     setLoading(true);
@@ -1808,10 +1894,11 @@ export default function MerchantDashboard({ address }) {
     if (!merchantAuthReady) return;
     loadWebhooks();
     loadPayments();
+    loadPendingChanges();
     merchantFetch(`${API_BASE}/api/merchant/handle`)
       .then(r => r.json()).then(d => { if (d.handle) { setHandle(d.handle); setHandleInput(d.handle); } })
       .catch(() => {});
-  }, [merchantAuthReady, loadWebhooks, loadPayments]);
+  }, [merchantAuthReady, loadWebhooks, loadPayments, loadPendingChanges]);
 
   const copyLink = (text, id) => {
     navigator.clipboard.writeText(text);
@@ -1883,6 +1970,46 @@ export default function MerchantDashboard({ address }) {
 
       {/* Main content */}
       <div style={{ flex: 1, minWidth: 0 }}>
+
+        {/* [NEW — v9 SV-21] Incoming payout-wallet requests. Shown above
+            everything else, regardless of which tab is active — this is
+            actionable, time-relevant information (someone is proposing to
+            make THIS wallet the new payout destination for a subscription),
+            not routine dashboard content a merchant might not check. */}
+        {pendingIncoming.length > 0 && (
+          <div style={{ ...S.card, marginBottom: 20, border: "0.5px solid var(--amber)", background: "rgba(251,191,36,0.06)" }}>
+            <span style={{ ...S.label, color: "var(--amber)" }}>
+              {pendingIncoming.length === 1 ? "Payout wallet request" : `${pendingIncoming.length} payout wallet requests`}
+            </span>
+            {pendingIncoming.map(req => (
+              <div key={req.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "0.5px solid var(--border)", gap: 12 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  <strong style={{ color: "var(--text-primary)" }}>{shortAddress(req.old_merchant)}</strong> wants this wallet to receive payouts for subscription <strong>#{req.subscription_id}</strong> going forward.
+                </div>
+                <button
+                  disabled={acceptingChange[req.id]}
+                  onClick={async () => {
+                    setAcceptingChange(prev => ({ ...prev, [req.id]: true }));
+                    try {
+                      await writeContractAsync({
+                        address: VAULT_ADDRESS, abi: VAULT_ABI,
+                        functionName: "acceptMerchantChange",
+                        args: [BigInt(req.subscription_id)],
+                      });
+                      setTimeout(loadPendingChanges, 3000);
+                    } catch (err) {
+                      alert(`Could not accept: ${err.shortMessage || err.message}`);
+                      setAcceptingChange(prev => ({ ...prev, [req.id]: false }));
+                    }
+                  }}
+                  style={{ ...S.btn.primary, opacity: acceptingChange[req.id] ? 0.6 : 1, flexShrink: 0 }}
+                >
+                  {acceptingChange[req.id] ? "Confirming..." : "Accept"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Stat cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
@@ -2094,32 +2221,78 @@ export default function MerchantDashboard({ address }) {
               <EmptyState message="No subscribers yet" sub="Share your pay link to get your first subscriber." />
             ) : (
               <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)" }}>
-                  <span>Subscriber</span><span>Amount</span><span>Interval</span><span>Status</span><span>Last Pull</span>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)" }}>
+                  <span>Subscriber</span><span>Amount</span><span>Interval</span><span>Status</span><span>Last Pull</span><span>Payout Wallet</span>
                 </div>
-                {subscribers.map((sub, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < subscribers.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                {subscribers.map((sub, i) => {
+                  const pendingReq = pendingOutgoing.find(r => String(r.subscription_id) === String(sub.id));
+                  return (
+                  <div key={sub.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < subscribers.length - 1 ? "0.5px solid var(--border)" : "none" }}>
                     <div>
                       {sub.name && <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>{sub.name}</div>}
                       {sub.email && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>{sub.email}</div>}
                       <div style={{ fontFamily: "monospace", fontSize: 11, color: sub.name || sub.email ? "var(--text-muted)" : "var(--text-primary)" }}>
-                        {shortAddress(sub.vault_address)}
+                        {/* [FIX — Aug 2026] Was sub.vault_address, a field that
+                            doesn't exist on this on-chain-sourced object —
+                            always rendered blank. Real field is safeVault. */}
+                        {shortAddress(sub.safeVault)}
                         {sub.type === "fiat"   && <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(59,130,246,0.1)", color: "var(--blue)" }}>fiat</span>}
                         {sub.type === "crypto" && <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(29,158,117,0.1)", color: "var(--green)" }}>crypto</span>}
                       </div>
                     </div>
-                    <span style={{ color: "var(--green)", fontWeight: 600, fontFamily: "monospace" }}>${sub.amount_usdc}</span>
-                    <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[{ weekly: 0, monthly: 1, yearly: 2 }[sub.interval]] || sub.interval}</span>
-                    <StatusBadge status={{ active: 0, paused: 1, cancelled: 2, expired: 3 }[sub.status] ?? sub.status} />
+                    {/* [FIX] Was ${sub.amount_usdc} — that field doesn't
+                        exist either, rendered literal "$undefined". Real
+                        field is sub.amount, raw USDC (6 decimals). */}
+                    <span style={{ color: "var(--green)", fontWeight: 600, fontFamily: "monospace" }}>{formatUSDC(sub.amount)}</span>
+                    {/* [FIX] sub.interval is already the numeric index (0/1/2)
+                        matching INTERVAL_NAMES' own order — the old code
+                        wrapped it in a string-keyed lookup object expecting
+                        'weekly'/'monthly'/'yearly' strings that were never
+                        actually there, so this always fell through to the
+                        raw number as a fallback ("0" instead of "Weekly"). */}
+                    <span style={{ color: "var(--text-secondary)" }}>{INTERVAL_NAMES[sub.interval] || "—"}</span>
+                    {/* [FIX] Same issue — sub.status is already the numeric
+                        enum StatusBadge expects directly; the string-keyed
+                        lookup here always missed and fell back to passing
+                        the raw number through anyway, so this one likely
+                        happened to still work by coincidence, but simplified
+                        for correctness and to match the pattern above. */}
+                    <StatusBadge status={sub.status} />
                     <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
                       {sub.lastPulledAt && sub.lastPulledAt > 0
                         ? new Date(sub.lastPulledAt * 1000).toLocaleDateString()
-                        : sub.last_pulled_at
-                          ? new Date(sub.last_pulled_at).toLocaleDateString()
-                          : "Never"}
+                        : "Never"}
                     </span>
+                    {/* [NEW — v9 SV-21] Payout wallet rotation. Only shown
+                        for active/paused subs — a cancelled/expired sub has
+                        nothing left to redirect. */}
+                    <div>
+                      {pendingReq ? (
+                        <div style={{ fontSize: 11 }}>
+                          <span style={{ color: "var(--amber)" }}>Pending → {shortAddress(pendingReq.new_merchant)}</span>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await writeContractAsync({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "cancelMerchantChange", args: [BigInt(sub.id)] });
+                                setTimeout(loadPendingChanges, 3000); // give notifier.js time to index the event
+                              } catch (err) { alert(`Could not cancel: ${err.shortMessage || err.message}`); }
+                            }}
+                            style={{ display: "block", marginTop: 4, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (sub.status === 0 || sub.status === 1) ? (
+                        <button onClick={() => setChangePayoutSub(sub.id)} style={{ background: "none", border: "0.5px solid var(--border)", borderRadius: 6, color: "var(--text-secondary)", fontSize: 11, cursor: "pointer", padding: "4px 8px" }}>
+                          Change wallet
+                        </button>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: 11 }}>—</span>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -2437,6 +2610,14 @@ export default function MerchantDashboard({ address }) {
       {showAddWebhook && <WebhookModal merchantAddress={address} merchantAuthReady={merchantAuthReady} onClose={() => setShowAddWebhook(false)} onSaved={loadWebhooks} />}
       {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
       {priceChangeProduct && <PriceChangeModal product={priceChangeProduct} address={address} onClose={() => setPriceChangeProduct(null)} />}
+      {changePayoutSub !== null && (
+        <ChangePayoutWalletModal
+          subscriptionId={changePayoutSub}
+          writeContractAsync={writeContractAsync}
+          onClose={() => setChangePayoutSub(null)}
+          onSaved={() => setTimeout(loadPendingChanges, 3000)}
+        />
+      )}
 
       {/* QR Modal */}
       {qrProduct && (
