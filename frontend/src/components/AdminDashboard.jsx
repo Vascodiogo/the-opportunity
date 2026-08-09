@@ -528,6 +528,16 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
   const REGISTRY_ADDRESS = isMainnet ? "[MAINNET]" : REGISTRY_ADDRESS_TESTNET;
   const VAULT_ADDRESS    = isMainnet ? "[MAINNET]" : VAULT_ADDRESS_TESTNET;
   const basescanBase     = isMainnet ? "https://basescan.org" : "https://sepolia.basescan.org";
+  // [NEW — read-only treasury balance] Same address on both networks —
+  // confirmed against project docs, this is a Safe address, not something
+  // chain-specific. Read-only: eth_getBalance + a balanceOf() eth_call
+  // against a public RPC. No wallet connection, no write capability, no
+  // custody surface — deliberately NOT a Safe SDK integration. See the
+  // reasoning in the "system" tab render below for why fund-movement UI
+  // was intentionally left out of this panel.
+  const PROTOCOL_TREASURY = "0x737D4EeAEF67f776724482a29367615703A2DEB1";
+  const rpcUrl            = isMainnet ? "https://mainnet.base.org" : "https://sepolia.base.org";
+  const usdcAddress       = isMainnet ? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" : "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 
   const apiFetch = useCallback(async (path) => {
     const res = await fetch(`${API_BASE}${path}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -581,6 +591,49 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     finally { setSystemLoading(false); }
   }, []);
 
+  // [NEW — read-only treasury balance] Two raw JSON-RPC calls against a
+  // public RPC — eth_getBalance for ETH, eth_call with the balanceOf(address)
+  // selector for USDC. No wallet, no signing, no write capability. Errors
+  // fail silently to null (shown as "—" in the UI) rather than surfacing a
+  // scary error for what's ultimately a nice-to-have display.
+  const [treasuryBalances, setTreasuryBalances] = useState(null);
+  const [treasuryLoading, setTreasuryLoading]   = useState(false);
+
+  const fetchTreasuryBalances = useCallback(async () => {
+    setTreasuryLoading(true);
+    try {
+      const ethRes = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", method: "eth_getBalance", params: [PROTOCOL_TREASURY, "latest"], id: 1 }),
+      });
+      const ethData = await ethRes.json();
+      const eth = ethData.result ? Number(BigInt(ethData.result)) / 1e18 : null;
+
+      const selector   = "0x70a08231"; // balanceOf(address)
+      const paddedAddr = PROTOCOL_TREASURY.slice(2).toLowerCase().padStart(64, "0");
+      const usdcRes = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", method: "eth_call",
+          params: [{ to: usdcAddress, data: selector + paddedAddr }, "latest"],
+          id: 2,
+        }),
+      });
+      const usdcData = await usdcRes.json();
+      const usdc = usdcData.result && usdcData.result !== "0x" ? Number(BigInt(usdcData.result)) / 1e6 : null;
+
+      setTreasuryBalances({ eth, usdc });
+    } catch (err) {
+      console.error("Could not load treasury balances:", err.message);
+      setTreasuryBalances(null);
+    } finally {
+      setTreasuryLoading(false);
+    }
+  }, [rpcUrl, usdcAddress]);
+
+
   useEffect(() => {
     fetchStats();
     fetchMerchants();
@@ -594,7 +647,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     if (tab === "analytics"     && payments.length === 0)       fetchPayments();
     if (tab === "webhooks"      && webhooks.length === 0)       fetchWebhooks();
     if (tab === "audit"         && auditLog.length === 0)       fetchAuditLog();
-    if (tab === "system")                                        fetchSystemHealth();
+    if (tab === "system")       { fetchSystemHealth(); fetchTreasuryBalances(); }
   }, [tab]);
 
   const pendingCount  = merchants.filter(m => !m.approved_at).length;
@@ -1091,7 +1144,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
         {tab === "contracts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { label: "SubscriptionVault v8", address: VAULT_ADDRESS,    note: "Subscription lifecycle, executePull, EIP-712, multi-token, agent pull cap" },
+              { label: "SubscriptionVault v9", address: VAULT_ADDRESS,    note: "Subscription lifecycle, executePull, EIP-712, multi-token, agent pull cap, merchant payout rotation (SV-21), permit front-run fix" },
               { label: "MerchantRegistry v2",  address: REGISTRY_ADDRESS, note: "Merchant whitelist, self-serve toggle, two-step admin transfer" },
               { label: "USDC",                 address: isMainnet ? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" : "0x036CbD53842c5426634e7929541eC2318f3dCF7e", note: "Primary payment token" },
             ].map(c => (
@@ -1128,7 +1181,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)", marginBottom: 12 }}>Mainnet deployment checklist</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {[
-                  ["Deploy SubscriptionVault v7 to Base Mainnet",          false],
+                  ["Deploy SubscriptionVault to Base Mainnet",             false],
                   ["Deploy MerchantRegistry v2 to Base Mainnet",           false],
                   ["Update VITE_NETWORK=mainnet in Cloudflare env",        false],
                   ["Update VAULT_ADDRESS + REGISTRY_ADDRESS in config.js", false],
@@ -1195,6 +1248,52 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
                     : "No heartbeat yet"} />
                 <SysRow label="Smart Contracts" status="operational"  detail={`Base Network · ${VAULT_ADDRESS}`} />
               </div>
+
+              {/* [NEW — read-only treasury balance] Deliberately no
+                  send/withdraw UI here. This panel could technically embed
+                  the Safe SDK to propose transactions, but that wouldn't
+                  remove the Safe's own 2/2 approval requirement — both
+                  signers still need to separately approve via their own
+                  wallets, same as today. The protocol itself is
+                  non-custodial (never holds accumulated balances, only
+                  1× a subscription amount for the seconds a pull takes),
+                  so there's nothing to "withdraw" from the vault contract
+                  at all — this treasury balance is the Safe's own,
+                  entirely separate from vault funds. Moving it is already
+                  handled well and safely by Safe's own audited app
+                  (app.safe.global) — recreating that here would add real
+                  custody-adjacent risk for a problem that's already
+                  solved. This card is read-only by design, not by
+                  omission. */}
+              <div style={{ ...S.card, padding: "16px 20px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Protocol Treasury</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{PROTOCOL_TREASURY}</div>
+                  </div>
+                  <a href={`${basescanBase}/address/${PROTOCOL_TREASURY}`} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 11, color: "var(--green)", textDecoration: "none" }}>
+                    View on Basescan ↗
+                  </a>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "monospace" }}>
+                      {treasuryLoading ? "…" : treasuryBalances?.eth != null ? treasuryBalances.eth.toFixed(4) : "—"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>ETH — gas for admin actions</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "monospace", color: "var(--green)" }}>
+                      {treasuryLoading ? "…" : treasuryBalances?.usdc != null ? treasuryBalances.usdc.toFixed(2) : "—"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>USDC — accumulated protocol fees</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 12 }}>
+                  Read-only — to move funds, use the Safe app directly at app.safe.global (requires both signers).
+                </div>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 12 }}>
                 <StatCard label="Keeper cycle"       value={k?.last_cycle_ms ? `${k.last_cycle_ms}ms` : "—"} color="var(--text-secondary)" />
                 <StatCard label="Keeper age"         value={k?.age_seconds != null ? `${k.age_seconds}s` : "—"} color={k?.age_seconds > 120 ? "var(--amber)" : "var(--green)"} />
@@ -1202,7 +1301,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
                 <StatCard label="Failed webhooks"    value={s?.metrics?.failed_webhooks_24h ?? "—"} color={s?.metrics?.failed_webhooks_24h > 0 ? "var(--red)" : "var(--text-secondary)"} />
               </div>
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={fetchSystemHealth} style={S.btn.ghost}>↻ Refresh</button>
+                <button onClick={() => { fetchSystemHealth(); fetchTreasuryBalances(); }} style={S.btn.ghost}>↻ Refresh</button>
                 <a href="/status" target="_blank" rel="noopener noreferrer"
                   style={{ ...S.btn.ghost, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                   Public status page ↗
