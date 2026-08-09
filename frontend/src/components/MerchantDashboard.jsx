@@ -1301,59 +1301,89 @@ function WebhookModal({ merchantAddress, merchantAuthReady, onClose, onSaved }) 
 // signature — writeContractAsync is passed down from the main dashboard
 // component rather than calling useWriteContract() again here, since a
 // single wagmi connection is shared across the whole page.
-function ChangePayoutWalletModal({ subscriptionId, onClose, onSaved, writeContractAsync }) {
+// [UPDATED — batch support] Takes subscriptionIds as an ARRAY (a single
+// selection is just an array of one) — a merchant proposing a wallet
+// change for several subscriptions at once still needs one signature per
+// subscription (the contract has no batch function), but the UI loops
+// through them with the same progress-tracking pattern already used by
+// PriceChangeModal above, rather than making the merchant open this modal
+// N separate times.
+function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContractAsync }) {
   const [newMerchant, setNewMerchant] = useState("");
   const [saving, setSaving]           = useState(false);
+  const [progress, setProgress]       = useState(null);
+  const [done, setDone]               = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
 
   const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(newMerchant.trim());
+  const count = subscriptionIds.length;
 
   const handlePropose = async () => {
     if (!isValidAddress) { setErrorMsg("Enter a valid wallet address (0x... 42 characters)."); return; }
     setSaving(true);
     setErrorMsg("");
-    try {
-      await writeContractAsync({
-        address: VAULT_ADDRESS, abi: VAULT_ABI,
-        functionName: "proposeMerchantChange",
-        args: [BigInt(subscriptionId), newMerchant.trim()],
-      });
-      // notifier.js needs a few seconds to pick up and index the event —
-      // onSaved triggers a reload, but an immediate one would likely still
-      // show nothing yet. Caller handles the delay.
-      onSaved();
-      onClose();
-    } catch (err) {
-      // The contract reverts with NewMerchantNotApproved if the address
-      // isn't already MerchantRegistry-approved — surface that plainly
-      // rather than a raw revert string.
-      const msg = err.shortMessage || err.message || "Transaction failed";
-      setErrorMsg(msg.includes("NewMerchantNotApproved")
-        ? "That address isn't an approved AuthOnce merchant yet — it needs to be approved before you can propose it as a payout wallet."
-        : msg);
-    } finally {
-      setSaving(false);
+    setProgress({ done: 0, total: count });
+    for (let i = 0; i < count; i++) {
+      try {
+        await writeContractAsync({
+          address: VAULT_ADDRESS, abi: VAULT_ABI,
+          functionName: "proposeMerchantChange",
+          args: [BigInt(subscriptionIds[i]), newMerchant.trim()],
+        });
+        setProgress({ done: i + 1, total: count });
+      } catch (err) {
+        const msg = err.shortMessage || err.message || "Transaction failed";
+        setErrorMsg(`Failed on subscription #${subscriptionIds[i]} (${i + 1}/${count}): ` + (msg.includes("NewMerchantNotApproved")
+          ? "that address isn't an approved AuthOnce merchant yet."
+          : msg));
+        setSaving(false);
+        return;
+      }
     }
+    setSaving(false);
+    setDone(true);
+    // notifier.js needs a few seconds to pick up and index these events —
+    // caller's onSaved schedules the reload with its own delay.
+    onSaved();
   };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={onClose}>
       <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>Change Payout Wallet — Subscription #{subscriptionId}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+          Change Payout Wallet — {count === 1 ? `Subscription #${subscriptionIds[0]}` : `${count} subscriptions`}
+        </div>
         <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
-          This is a two-step change. The new wallet must already be an approved AuthOnce merchant, and must separately accept this proposal before anything actually moves. Payments keep going to your current wallet until then.
+          This is a two-step change{count > 1 ? ", done once per subscription" : ""}. The new wallet must already be an approved AuthOnce merchant, and must separately accept before anything actually moves. Payments keep going to your current wallet until then.
         </div>
         <div>
           <label style={S.label}>New payout wallet address</label>
-          <input placeholder="0x..." value={newMerchant} onChange={e => setNewMerchant(e.target.value)} />
+          <input placeholder="0x..." value={newMerchant} onChange={e => setNewMerchant(e.target.value)} disabled={saving || done} />
         </div>
+        {progress && !done && (
+          <div style={{ background: "rgba(29,158,117,0.06)", border: "0.5px solid rgba(29,158,117,0.2)", borderRadius: 8, padding: "10px 14px", marginTop: 14, fontSize: 12, color: "var(--green)" }}>
+            Proposing... {progress.done} / {progress.total}
+            <div style={{ marginTop: 6, background: "rgba(29,158,117,0.2)", borderRadius: 4, height: 4 }}>
+              <div style={{ background: "var(--green)", height: 4, borderRadius: 4, width: `${(progress.done / progress.total) * 100}%`, transition: "width 0.3s" }} />
+            </div>
+          </div>
+        )}
         {errorMsg && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>{errorMsg}</div>}
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button onClick={onClose} style={S.btn.ghost}>Cancel</button>
-          <button onClick={handlePropose} disabled={saving || !isValidAddress} style={{ ...S.btn.primary, opacity: (saving || !isValidAddress) ? 0.6 : 1 }}>
-            {saving ? "Confirming..." : "Propose Change"}
-          </button>
-        </div>
+        {done ? (
+          <div style={{ textAlign: "center", padding: "16px 0 0" }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
+            <div style={{ color: "var(--green)", fontSize: 13, fontWeight: 600 }}>Proposed for {count} subscription{count !== 1 ? "s" : ""}</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Waiting on the new wallet to accept.</div>
+            <button onClick={onClose} style={{ ...S.btn.ghost, marginTop: 16 }}>Close</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+            <button onClick={onClose} disabled={saving} style={S.btn.ghost}>Cancel</button>
+            <button onClick={handlePropose} disabled={saving || !isValidAddress} style={{ ...S.btn.primary, opacity: (saving || !isValidAddress) ? 0.6 : 1, flex: 1 }}>
+              {saving ? `Confirming ${progress?.done || 0}/${count}...` : count === 1 ? "Propose Change" : `Propose for ${count} subscriptions`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1738,8 +1768,11 @@ export default function MerchantDashboard({ address }) {
   const [priceChangeProduct, setPriceChangeProduct] = useState(null);
   const [pendingOutgoing, setPendingOutgoing]        = useState([]);
   const [pendingIncoming, setPendingIncoming]        = useState([]);
-  const [changePayoutSub, setChangePayoutSub]        = useState(null); // subscription id currently being proposed
+  const [changePayoutSub, setChangePayoutSub]        = useState(null); // single subscription id, from per-row button
+  const [selectedSubs, setSelectedSubs]              = useState({});  // { [id]: true } — bulk selection checkboxes
+  const [bulkChangeOpen, setBulkChangeOpen]           = useState(false);
   const [acceptingChange, setAcceptingChange]        = useState({});  // { [requestId]: true } while accept tx pending
+  const [acceptingAll, setAcceptingAll]               = useState(false);
   const [editProduct, setEditProduct]               = useState(null);
   const [testFiring, setTestFiring]                 = useState({});
   const [testResults, setTestResults]               = useState({});
@@ -1978,16 +2011,50 @@ export default function MerchantDashboard({ address }) {
             not routine dashboard content a merchant might not check. */}
         {pendingIncoming.length > 0 && (
           <div style={{ ...S.card, marginBottom: 20, border: "0.5px solid var(--amber)", background: "rgba(251,191,36,0.06)" }}>
-            <span style={{ ...S.label, color: "var(--amber)" }}>
-              {pendingIncoming.length === 1 ? "Payout wallet request" : `${pendingIncoming.length} payout wallet requests`}
-            </span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...S.label, color: "var(--amber)" }}>
+                {pendingIncoming.length === 1 ? "Payout wallet request" : `${pendingIncoming.length} payout wallet requests`}
+              </span>
+              {/* [NEW — batch rotation] Only worth showing once there's
+                  more than one — for a single request the per-row Accept
+                  button below is already the fastest path. */}
+              {pendingIncoming.length > 1 && (
+                <button
+                  disabled={acceptingAll}
+                  onClick={async () => {
+                    setAcceptingAll(true);
+                    for (const req of pendingIncoming) {
+                      setAcceptingChange(prev => ({ ...prev, [req.id]: true }));
+                      try {
+                        await writeContractAsync({
+                          address: VAULT_ADDRESS, abi: VAULT_ABI,
+                          functionName: "acceptMerchantChange",
+                          args: [BigInt(req.subscription_id)],
+                        });
+                      } catch (err) {
+                        alert(`Failed on subscription #${req.subscription_id}: ${err.shortMessage || err.message}`);
+                        setAcceptingChange(prev => ({ ...prev, [req.id]: false }));
+                        setAcceptingAll(false);
+                        setTimeout(loadPendingChanges, 3000);
+                        return;
+                      }
+                    }
+                    setAcceptingAll(false);
+                    setTimeout(loadPendingChanges, 3000);
+                  }}
+                  style={{ ...S.btn.ghost, opacity: acceptingAll ? 0.6 : 1, fontSize: 12 }}
+                >
+                  {acceptingAll ? "Accepting..." : `Accept all ${pendingIncoming.length}`}
+                </button>
+              )}
+            </div>
             {pendingIncoming.map(req => (
               <div key={req.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "0.5px solid var(--border)", gap: 12 }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                   <strong style={{ color: "var(--text-primary)" }}>{shortAddress(req.old_merchant)}</strong> wants this wallet to receive payouts for subscription <strong>#{req.subscription_id}</strong> going forward.
                 </div>
                 <button
-                  disabled={acceptingChange[req.id]}
+                  disabled={acceptingChange[req.id] || acceptingAll}
                   onClick={async () => {
                     setAcceptingChange(prev => ({ ...prev, [req.id]: true }));
                     try {
@@ -2210,7 +2277,17 @@ export default function MerchantDashboard({ address }) {
         {/* ── Subscribers ── */}
         {tab === "subscribers" && (
           <div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{subscribers.length} total</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{subscribers.length} total</span>
+              {/* [NEW — batch rotation] Only appears once 1+ rows are
+                  selected — the rest of the time this bar doesn't exist,
+                  so nothing changes for merchants who never use it. */}
+              {Object.values(selectedSubs).filter(Boolean).length > 0 && (
+                <button onClick={() => setBulkChangeOpen(true)} style={S.btn.primary}>
+                  Change wallet for {Object.values(selectedSubs).filter(Boolean).length} selected
+                </button>
+              )}
+            </div>
 
             {/* ── CSV Import ── */}
             <CsvImport address={address} products={products} />
@@ -2221,13 +2298,29 @@ export default function MerchantDashboard({ address }) {
               <EmptyState message="No subscribers yet" sub="Share your pay link to get your first subscriber." />
             ) : (
               <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "auto 2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={subscribers.length > 0 && subscribers.filter(s => (s.status === 0 || s.status === 1) && !pendingOutgoing.some(r => String(r.subscription_id) === String(s.id))).every(s => selectedSubs[s.id])}
+                    onChange={e => {
+                      const eligible = subscribers.filter(s => (s.status === 0 || s.status === 1) && !pendingOutgoing.some(r => String(r.subscription_id) === String(s.id)));
+                      const next = {};
+                      if (e.target.checked) eligible.forEach(s => { next[s.id] = true; });
+                      setSelectedSubs(next);
+                    }}
+                  />
                   <span>Subscriber</span><span>Amount</span><span>Interval</span><span>Status</span><span>Last Pull</span><span>Payout Wallet</span>
                 </div>
                 {subscribers.map((sub, i) => {
                   const pendingReq = pendingOutgoing.find(r => String(r.subscription_id) === String(sub.id));
                   return (
-                  <div key={sub.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < subscribers.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                  <div key={sub.id} style={{ display: "grid", gridTemplateColumns: "auto 2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < subscribers.length - 1 ? "0.5px solid var(--border)" : "none", gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      disabled={!(sub.status === 0 || sub.status === 1) || !!pendingReq}
+                      checked={!!selectedSubs[sub.id]}
+                      onChange={e => setSelectedSubs(prev => ({ ...prev, [sub.id]: e.target.checked }))}
+                    />
                     <div>
                       {sub.name && <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>{sub.name}</div>}
                       {sub.email && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>{sub.email}</div>}
@@ -2610,12 +2703,12 @@ export default function MerchantDashboard({ address }) {
       {showAddWebhook && <WebhookModal merchantAddress={address} merchantAuthReady={merchantAuthReady} onClose={() => setShowAddWebhook(false)} onSaved={loadWebhooks} />}
       {trialProduct   && <TrialPopover product={trialProduct} address={address} onClose={() => setTrialProduct(null)} />}
       {priceChangeProduct && <PriceChangeModal product={priceChangeProduct} address={address} onClose={() => setPriceChangeProduct(null)} />}
-      {changePayoutSub !== null && (
+      {(changePayoutSub !== null || bulkChangeOpen) && (
         <ChangePayoutWalletModal
-          subscriptionId={changePayoutSub}
+          subscriptionIds={bulkChangeOpen ? Object.keys(selectedSubs).filter(id => selectedSubs[id]) : [changePayoutSub]}
           writeContractAsync={writeContractAsync}
-          onClose={() => setChangePayoutSub(null)}
-          onSaved={() => setTimeout(loadPendingChanges, 3000)}
+          onClose={() => { setChangePayoutSub(null); setBulkChangeOpen(false); }}
+          onSaved={() => { setSelectedSubs({}); setTimeout(loadPendingChanges, 3000); }}
         />
       )}
 
