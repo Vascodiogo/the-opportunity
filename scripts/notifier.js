@@ -836,18 +836,44 @@ async function onSubscriptionResumed(log, iface) {
 
 // [v9 — SV-21] Merchant payout rotation event handlers.
 
-async function onMerchantChangeProposed(log, iface) {
+async function onMerchantChangeProposed(log, iface, provider) {
   const parsed = iface.parseLog(log);
   const { id, newMerchant } = parsed.args;
   console.log(`\n[EVENT] MerchantChangeProposed #${id} → ${newMerchant}`);
 
-  // oldMerchant isn't in this event's args — read it from our own record of
-  // the subscription (still accurate at propose-time, since merchant_address
-  // doesn't change until MerchantChangeAccepted fires).
-  const sub = await db.getSubscription(id.toString());
-  const oldMerchant = sub?.merchant_address;
-  if (!oldMerchant) {
-    console.warn(`  No local record for subscription #${id} — cannot determine old merchant, skipping index.`);
+  // [FIX — Aug 2026] Previously read oldMerchant from our own local DB
+  // record (db.getSubscription). That's wrong: the `subscriptions` table
+  // has no vault-address scoping — its primary key is just the raw
+  // numeric `id`, which resets to 0 on every contract redeploy. This
+  // notifier only started listening to v9 today, so it never saw v9
+  // subscription #0's real SubscriptionCreated event and never overwrote
+  // whatever row already existed under id=0 from an earlier, now-defunct
+  // deployment — meaning "old merchant" could silently be leftover data
+  // from a completely different contract. Confirmed this exact scenario
+  // in production: the banner showed the deployer wallet (a self-test
+  // artifact from months ago) instead of the real proposing merchant.
+  //
+  // Fix: read the CURRENT on-chain merchant directly from the vault
+  // contract we're actually listening to, at the moment this event
+  // fires — this is always correctly scoped to VAULT_ADDRESS, immune to
+  // the ID-collision problem, and reliably still holds the "old" value
+  // at this point since the contract only overwrites `merchant` on
+  // MerchantChangeAccepted, not on Proposed.
+  //
+  // This does not fix the underlying table-scoping gap itself — that's a
+  // separate, larger schema change (adding vault_address to every
+  // subscription-keyed table) tracked as its own item, not solved here.
+  const vault = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, provider);
+  let oldMerchant;
+  try {
+    const sub = await vault.subscriptions(id);
+    oldMerchant = sub.merchant;
+  } catch (err) {
+    console.warn(`  Could not read on-chain merchant for subscription #${id}: ${err.message} — skipping index.`);
+    return;
+  }
+  if (!oldMerchant || oldMerchant === ethers.ZeroAddress) {
+    console.warn(`  On-chain merchant for subscription #${id} is empty — skipping index.`);
     return;
   }
 
