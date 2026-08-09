@@ -404,7 +404,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     struct Subscription {
         address owner;              // Subscriber wallet — EOA or ERC-1271 contract wallet
         address guardian;           // Can also cancel/pause/resume — zero address if none
-        address merchant;           // Approved merchant — immutable after creation
+        address merchant;           // Approved merchant — mutable only via propose/accept [SV-21], never by direct assignment
         address safeVault;          // Wallet holding tokens — must equal owner at creation
         address token;              // Payment token — from admin whitelist, immutable
         uint256 amount;             // Full recurring amount per pull (token decimals)
@@ -424,6 +424,7 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
                                     // rotation accept. [SV-19] executePull() no longer trusts this
                                     // alone — it rechecks liveness at pull time as the real gate.
         address pendingSafeVault;   // [SV-20] Proposed new safeVault awaiting self-accept (zero = none)
+        address pendingMerchant;    // [SV-21] Proposed new merchant awaiting self-accept (zero = none)
     }
 
     // -------------------------------------------------------------------------
@@ -519,6 +520,15 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     event SafeVaultChangeProposed(uint256 indexed id, address indexed newSafeVault);
     event SafeVaultChangeAccepted(uint256 indexed id, address indexed oldVault, address indexed newVault, bool isContractVault);
     event SafeVaultChangeCancelled(uint256 indexed id, address cancelledBy);
+
+    /// @notice [SV-21] Merchant-side payout rotation. Mirrors the subscriber-
+    ///         side SafeVaultChange pattern exactly, for the same reasons:
+    ///         two-step propose/accept so the new address proves it can
+    ///         originate a real transaction before becoming the payout
+    ///         destination, rather than trusting a caller-supplied address.
+    event MerchantChangeProposed(uint256 indexed id, address indexed newMerchant);
+    event MerchantChangeAccepted(uint256 indexed id, address indexed oldMerchant, address indexed newMerchant);
+    event MerchantChangeCancelled(uint256 indexed id, address cancelledBy);
 
     /// @notice [SV-19] Emitted when executePull() detects a subscription whose
     ///         cached isContractVault was false but is now provably a contract —
@@ -758,7 +768,36 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         ) {
             // permit succeeded — allowance is now set on-chain
         } catch {
-            revert("PermitFailed");
+            // [PERMIT-FRONTRUN FIX] Do NOT hard-revert here.
+            //
+            // Threat: a bot watching the mempool extracts (v, r, s) from this
+            // pending tx and calls permit() directly on the token first. That
+            // consumes the signer's nonce, so THIS call's permit() then
+            // reverts with a stale-nonce error — even though the exact
+            // allowance the subscriber intended (type(uint256).max, this
+            // contract as spender) was already set on-chain by the
+            // front-runner. Previously this reverted unconditionally with
+            // "PermitFailed", forcing the subscriber to re-sign and retry —
+            // a free, repeatable griefing vector with no cost to the
+            // attacker.
+            //
+            // Fix: swallow the revert and fall through to the allowance
+            // check below, which was already present for a different reason
+            // (defending against non-standard tokens whose permit() silently
+            // caps or ignores the value). That same check now also recovers
+            // this case for free: if the allowance is already sufficient —
+            // by front-run or by any other prior cause — proceed normally.
+            // If it is NOT sufficient, the check below reverts with a clear
+            // "InsufficientAllowanceAfterPermit" reason, so no legitimate
+            // failure case is silently swallowed.
+            //
+            // Security note: this does not let anyone spend on the
+            // subscriber's behalf. It only tolerates the case where the
+            // on-chain allowance state already matches exactly what the
+            // subscriber's own signature authorised (this contract as
+            // spender, amount >= this cycle's pullAmount) — nothing here
+            // trusts or accepts an allowance set by a third party for any
+            // other purpose.
         }
 
         // Defensive check: confirm the resulting on-chain allowance actually
@@ -867,7 +906,8 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
             dataVaultId:        dataVaultId_,
             status:             SubscriptionStatus.Active,
             isContractVault:    contractVault,
-            pendingSafeVault:   address(0)
+            pendingSafeVault:   address(0),
+            pendingMerchant:    address(0)
         });
 
         emit SubscriptionCreated(
@@ -973,6 +1013,93 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         require(sub.pendingSafeVault != address(0), "NoPendingChange");
         sub.pendingSafeVault = address(0);
         emit SafeVaultChangeCancelled(id, msg.sender);
+    }
+
+    // =========================================================================
+    // MERCHANT PAYOUT ROTATION [SV-21]
+    // =========================================================================
+    //
+    // Gap found and fixed: `merchant` was immutable after creation with no
+    // rotation path at all — not even an unsafe single-step one. A merchant
+    // switching wallets for any reason (security hygiene, lost device,
+    // business restructuring) had no way to redirect EXISTING subscriptions;
+    // only new ones would pick up the new address. Every subscription created
+    // before the switch would keep paying the old wallet permanently, with no
+    // migration path, matching neither this contract's own subscriber-side
+    // capability (SafeVaultChange) nor reasonable real-world expectations.
+    //
+    // Mirrors SafeVaultChange's two-step propose/accept exactly, for the same
+    // reason: the new address must prove it can originate a real transaction
+    // (i.e. is not a typo, is not mid-construction) before becoming the
+    // payout destination.
+    //
+    // One deliberate addition beyond the SafeVaultChange pattern: newMerchant
+    // must already be MerchantRegistry-approved at both propose AND accept
+    // time. Without this, a compromised merchant key becomes strictly more
+    // dangerous than it is today — it could redirect a merchant's entire
+    // existing subscriber revenue stream to any arbitrary unvetted address,
+    // bypassing the same admin-approval gate that protects every new
+    // subscription. Re-checking at accept time (not just propose time) closes
+    // the window where admin revokes the new address's approval in between
+    // the two steps.
+    //
+    // Product decision, stated explicitly, not silently assumed: this does
+    // NOT require subscriber consent or notification. A merchant rotating
+    // payout wallets is treated the same as a business changing which bank
+    // account receives its payment-processor payouts — the subscriber's
+    // relationship is with the merchant, not the specific wallet address.
+    // Revisit if that assumption is wrong for this product.
+    // =========================================================================
+
+    /// @notice Step 1 — current merchant proposes moving this subscription's
+    ///         payout destination to a new address. Does NOT change `merchant`
+    ///         yet; the old address continues receiving payouts until
+    ///         acceptMerchantChange() completes the rotation.
+    function proposeMerchantChange(uint256 id, address newMerchant) external {
+        Subscription storage sub = subscriptions[id];
+        require(msg.sender == sub.merchant,  "NotMerchant");
+        require(newMerchant != address(0),   "ZeroMerchant");
+        require(newMerchant != sub.merchant, "SameMerchant");
+        require(
+            IMerchantRegistry(merchantRegistry).isApproved(newMerchant),
+            "NewMerchantNotApproved"
+        );
+        require(
+            sub.status == SubscriptionStatus.Active ||
+            sub.status == SubscriptionStatus.Paused,
+            "InactiveSubscription"
+        );
+        sub.pendingMerchant = newMerchant;
+        emit MerchantChangeProposed(id, newMerchant);
+    }
+
+    /// @notice Step 2 — must be called BY the new merchant address itself,
+    ///         proving control before it becomes the payout destination.
+    ///         Re-checks registry approval at accept time, not just propose
+    ///         time — closes the window where approval is revoked in between.
+    function acceptMerchantChange(uint256 id) external {
+        Subscription storage sub = subscriptions[id];
+        require(sub.pendingMerchant != address(0), "NoPendingChange");
+        require(msg.sender == sub.pendingMerchant, "NotPendingMerchant");
+        require(
+            IMerchantRegistry(merchantRegistry).isApproved(msg.sender),
+            "NewMerchantNotApproved"
+        );
+
+        address oldMerchant  = sub.merchant;
+        sub.merchant          = sub.pendingMerchant;
+        sub.pendingMerchant    = address(0);
+
+        emit MerchantChangeAccepted(id, oldMerchant, sub.merchant);
+    }
+
+    /// @notice Current merchant can cancel a pending, not-yet-accepted rotation.
+    function cancelMerchantChange(uint256 id) external {
+        Subscription storage sub = subscriptions[id];
+        require(msg.sender == sub.merchant,         "NotMerchant");
+        require(sub.pendingMerchant != address(0),  "NoPendingChange");
+        sub.pendingMerchant = address(0);
+        emit MerchantChangeCancelled(id, msg.sender);
     }
 
     // =========================================================================
@@ -1103,12 +1230,18 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
         //
         // Without this, revokeMerchant() and blacklistMerchant() in
         // MerchantRegistry had ZERO effect on subscriptions already
-        // running — `merchant` here is an immutable snapshot taken once
-        // at createSubscription(), never re-checked. A merchant admin
-        // blacklists for fraud/abuse would keep collecting recurring
-        // payments from every existing subscriber forever, with no
-        // protocol-level way to stop it. Blacklist is supposed to be a
-        // kill switch; it wasn't one for money already in motion.
+        // running — `merchant` here is a snapshot of sub.merchant taken at
+        // the top of THIS call, cached to a local for gas efficiency; it
+        // does not reflect changes made mid-call (there are none possible
+        // here) and is unrelated to whether sub.merchant itself can change
+        // between calls — see [SV-21] below, which added merchant payout
+        // rotation. Before SV-21 this comment additionally said sub.merchant
+        // was fixed forever at creation with no update path at all; that is
+        // no longer true, but the point of THIS check is unaffected either
+        // way: whatever sub.merchant currently is, its registry approval
+        // must be re-verified live on every pull, not trusted from
+        // whenever the subscription (or its most recent merchant rotation)
+        // was created.
         //
         // Deliberately does NOT set sub.status = Paused. Confirmed
         // product decision: if the merchant is later re-approved, its
