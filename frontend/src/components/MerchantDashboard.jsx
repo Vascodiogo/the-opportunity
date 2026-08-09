@@ -1314,9 +1314,20 @@ function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContr
   const [progress, setProgress]       = useState(null);
   const [done, setDone]               = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
+  // [FIX — Aug 2026] Snapshot the ids ONCE on mount, into local state — do
+  // not read subscriptionIds directly from props for the rest of this
+  // component's life. Real bug found via live testing: onSaved() (called
+  // right after a successful bulk propose) clears the parent's selection
+  // state, which re-renders this still-open modal with a NEW, now-empty
+  // subscriptionIds array — even though the actual on-chain transactions
+  // had already succeeded correctly. The success screen showed "Proposed
+  // for 0 subscriptions" instead of the real count, purely because it was
+  // reading a live prop that changed out from under it mid-flow, not
+  // because anything about the propose calls themselves was wrong.
+  const [idsSnapshot] = useState(() => subscriptionIds);
 
   const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(newMerchant.trim());
-  const count = subscriptionIds.length;
+  const count = idsSnapshot.length;
 
   const handlePropose = async () => {
     if (!isValidAddress) { setErrorMsg("Enter a valid wallet address (0x... 42 characters)."); return; }
@@ -1328,12 +1339,12 @@ function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContr
         await writeContractAsync({
           address: VAULT_ADDRESS, abi: VAULT_ABI,
           functionName: "proposeMerchantChange",
-          args: [BigInt(subscriptionIds[i]), newMerchant.trim()],
+          args: [BigInt(idsSnapshot[i]), newMerchant.trim()],
         });
         setProgress({ done: i + 1, total: count });
       } catch (err) {
         const msg = err.shortMessage || err.message || "Transaction failed";
-        setErrorMsg(`Failed on subscription #${subscriptionIds[i]} (${i + 1}/${count}): ` + (msg.includes("NewMerchantNotApproved")
+        setErrorMsg(`Failed on subscription #${idsSnapshot[i]} (${i + 1}/${count}): ` + (msg.includes("NewMerchantNotApproved")
           ? "that address isn't an approved AuthOnce merchant yet."
           : msg));
         setSaving(false);
@@ -1351,7 +1362,7 @@ function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContr
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }} onClick={onClose}>
       <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 14, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
-          Change Payout Wallet — {count === 1 ? `Subscription #${subscriptionIds[0]}` : `${count} subscriptions`}
+          Change Payout Wallet — {count === 1 ? `Subscription #${idsSnapshot[0]}` : `${count} subscriptions`}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
           This is a two-step change{count > 1 ? ", done once per subscription" : ""}. The new wallet must already be an approved AuthOnce merchant, and must separately accept before anything actually moves. Payments keep going to your current wallet until then.
@@ -1881,6 +1892,23 @@ export default function MerchantDashboard({ address }) {
     } catch (err) { console.error("[Dashboard] loadPendingChanges error:", err); }
   }, [address]);
 
+  // [FIX — Aug 2026] Real bug found via live testing: every call site below
+  // used to do a single setTimeout(loadPendingChanges, 3000) — but
+  // authonce-notifier only polls for new events every 30 SECONDS (confirmed
+  // in its own boot log). A 3-second reload can only ever catch an event
+  // notifier happened to already be mid-processing; it will reliably miss
+  // anything that landed just after the last poll cycle — exactly what
+  // happened with the second of two bulk-propose transactions in testing:
+  // the first showed "Pending" correctly, the second still said "Change
+  // wallet" because notifier simply hadn't looked yet. Reloading at both a
+  // quick 5s (fast feedback for the lucky/already-caught case) and a safe
+  // 35s (guaranteed to be past a full poll cycle) covers both without
+  // making every action feel sluggish by defaulting to the slow interval.
+  const reloadPendingChangesSoon = useCallback(() => {
+    setTimeout(loadPendingChanges, 5000);
+    setTimeout(loadPendingChanges, 35000);
+  }, [loadPendingChanges]);
+
   const fetchSubscribers = useCallback(async () => {
     if (!address) return;
     setLoading(true);
@@ -2033,14 +2061,29 @@ export default function MerchantDashboard({ address }) {
                         });
                       } catch (err) {
                         alert(`Failed on subscription #${req.subscription_id}: ${err.shortMessage || err.message}`);
-                        setAcceptingChange(prev => ({ ...prev, [req.id]: false }));
+                        // [FIX — Aug 2026] Real bug found via live testing:
+                        // both transactions in a 2-item bulk accept actually
+                        // succeeded on-chain, but the row buttons stayed
+                        // stuck on "Confirming..." forever afterward. Root
+                        // cause: acceptingAll was reset here, but
+                        // acceptingChange was only ever cleared for the ONE
+                        // request that failed — never for any that had
+                        // already succeeded earlier in the same loop, and
+                        // never at all on the full-success path below. Since
+                        // individual Accept buttons are already disabled
+                        // whenever acceptingAll is true, nothing else could
+                        // be genuinely in-flight — safe to just clear the
+                        // whole map here rather than track exactly which
+                        // ids need resetting.
+                        setAcceptingChange({});
                         setAcceptingAll(false);
-                        setTimeout(loadPendingChanges, 3000);
+                        reloadPendingChangesSoon();
                         return;
                       }
                     }
+                    setAcceptingChange({});
                     setAcceptingAll(false);
-                    setTimeout(loadPendingChanges, 3000);
+                    reloadPendingChangesSoon();
                   }}
                   style={{ ...S.btn.ghost, opacity: acceptingAll ? 0.6 : 1, fontSize: 12 }}
                 >
@@ -2063,7 +2106,15 @@ export default function MerchantDashboard({ address }) {
                         functionName: "acceptMerchantChange",
                         args: [BigInt(req.subscription_id)],
                       });
-                      setTimeout(loadPendingChanges, 3000);
+                      // [FIX — Aug 2026] Same bug class as the Accept All
+                      // button above — success path called
+                      // reloadPendingChangesSoon() but never reset this
+                      // request's acceptingChange flag, so the button stayed
+                      // on "Confirming..." until the row eventually
+                      // disappeared from a later reload, rather than
+                      // reflecting the real state immediately.
+                      setAcceptingChange(prev => ({ ...prev, [req.id]: false }));
+                      reloadPendingChangesSoon();
                     } catch (err) {
                       alert(`Could not accept: ${err.shortMessage || err.message}`);
                       setAcceptingChange(prev => ({ ...prev, [req.id]: false }));
@@ -2367,7 +2418,7 @@ export default function MerchantDashboard({ address }) {
                             onClick={async () => {
                               try {
                                 await writeContractAsync({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "cancelMerchantChange", args: [BigInt(sub.id)] });
-                                setTimeout(loadPendingChanges, 3000); // give notifier.js time to index the event
+                                reloadPendingChangesSoon(); // give notifier.js time to index the event
                               } catch (err) { alert(`Could not cancel: ${err.shortMessage || err.message}`); }
                             }}
                             style={{ display: "block", marginTop: 4, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: 0, textDecoration: "underline" }}
@@ -2708,7 +2759,7 @@ export default function MerchantDashboard({ address }) {
           subscriptionIds={bulkChangeOpen ? Object.keys(selectedSubs).filter(id => selectedSubs[id]) : [changePayoutSub]}
           writeContractAsync={writeContractAsync}
           onClose={() => { setChangePayoutSub(null); setBulkChangeOpen(false); }}
-          onSaved={() => { setSelectedSubs({}); setTimeout(loadPendingChanges, 3000); }}
+          onSaved={() => { setSelectedSubs({}); reloadPendingChangesSoon(); }}
         />
       )}
 
