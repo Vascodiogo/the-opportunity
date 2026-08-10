@@ -355,14 +355,15 @@ async function checkUpcomingPayments(vault) {
       }
 
       // Webhook to merchant
-      await dispatchWebhook(sub.merchant_address, "payment.upcoming", {
+      dispatchWebhook(sub.merchant_address, "payment.upcoming", {
         subscription_id: sub.id,
         vault_address:   sub.safe_vault || sub.owner_address,
         merchant_address: sub.merchant_address,
         amount_usdc:     amountUsdc,
         due_at:          new Date(nextPullAt * 1000).toISOString(),
         days_until:      daysUntil,
-      });
+      })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 
       // Log notification sent
       await db.query(
@@ -426,14 +427,15 @@ async function checkPriceChangeNotices(vault) {
       }
 
       // Webhook to merchant
-      await dispatchWebhook(sub.merchant_address, "subscription.expiring", {
+      dispatchWebhook(sub.merchant_address, "subscription.expiring", {
         subscription_id: sub.id,
         vault_address:   sub.safe_vault || sub.owner_address,
         merchant_address: sub.merchant_address,
         expires_at:      new Date(expiresAt * 1000).toISOString(),
         days_until:      daysUntil,
         current_amount_usdc: amountUsdc,
-      });
+      })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 
       // Log notification sent
       await db.query(
@@ -483,7 +485,7 @@ async function onSubscriptionCreated(log, iface, provider) {
     await sendEmail({ to: subscriber.email, subject: templates.subjects.subscriptionConfirmed(merchantName), ...confirmedTpl2 });
   }
 
-  await dispatchWebhook(merchant, "subscription.created", {
+  dispatchWebhook(merchant, "subscription.created", {
     subscription_id: id.toString(),
     vault_address: safeVault,
     owner_address: owner,
@@ -495,7 +497,8 @@ async function onSubscriptionCreated(log, iface, provider) {
     guardian: guardian === ethers.ZeroAddress ? null : guardian,
     tx_hash: log.transactionHash,
     status: "active",
-  });
+  })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onPaymentExecuted(log, iface, provider) {
@@ -594,7 +597,7 @@ async function onPaymentExecuted(log, iface, provider) {
   }
 
   // skipEmailFallback: merchantPaymentReceived email already sent above
-  await dispatchWebhook(sub.merchant_address, "payment.success", {
+  dispatchWebhook(sub.merchant_address, "payment.success", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault,
     merchant_address: sub.merchant_address,
@@ -607,7 +610,8 @@ async function onPaymentExecuted(log, iface, provider) {
     tx_hash: log.transactionHash,
     block_number: Number(log.blockNumber),
     executed_at: date,
-  }, { skipEmailFallback: true });
+  }, { skipEmailFallback: true })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onInsufficientFunds(log, iface, provider) {
@@ -655,7 +659,7 @@ async function onInsufficientFunds(log, iface, provider) {
   }
 
   // skipEmailFallback: merchantPaymentFailed email already sent above
-  await dispatchWebhook(sub.merchant_address, "payment.failed", {
+  dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     merchant_address: sub.merchant_address,
@@ -664,7 +668,8 @@ async function onInsufficientFunds(log, iface, provider) {
     available_usdc: await formatUsdc(available, token, provider),
     grace_period_ends_at: gracePeriodEndsAt,
     status: "paused",
-  }, { skipEmailFallback: true });
+  }, { skipEmailFallback: true })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onInsufficientAllowance(log, iface, provider) {
@@ -713,7 +718,7 @@ async function onInsufficientAllowance(log, iface, provider) {
   }
 
   // skipEmailFallback: merchantPaymentFailed email already sent above
-  await dispatchWebhook(sub.merchant_address, "payment.failed", {
+  dispatchWebhook(sub.merchant_address, "payment.failed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     merchant_address: sub.merchant_address,
@@ -721,7 +726,8 @@ async function onInsufficientAllowance(log, iface, provider) {
     required_usdc: await formatUsdc(required, token, provider),
     current_allowance_usdc: await formatUsdc(allowance, token, provider),
     status: "paused",
-  }, { skipEmailFallback: true });
+  }, { skipEmailFallback: true })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onSubscriptionPaused(log, iface) {
@@ -732,12 +738,13 @@ async function onSubscriptionPaused(log, iface) {
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
   await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
-  await dispatchWebhook(sub.merchant_address, "subscription.paused", {
+  dispatchWebhook(sub.merchant_address, "subscription.paused", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     paused_by: pausedBy,
     status: "paused",
-  });
+  })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onSubscriptionCancelled(log, iface) {
@@ -765,12 +772,13 @@ async function onSubscriptionCancelled(log, iface) {
     }); }
   }
 
-  await dispatchWebhook(sub.merchant_address, "subscription.cancelled", {
+  dispatchWebhook(sub.merchant_address, "subscription.cancelled", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     cancelled_by: cancelledBy,
     status: "cancelled",
-  });
+  })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onSubscriptionExpired(log, iface) {
@@ -809,12 +817,13 @@ async function onSubscriptionExpired(log, iface) {
   }
 
   // skipEmailFallback: merchantExpired email already sent above
-  await dispatchWebhook(sub.merchant_address, "subscription.expired", {
+  dispatchWebhook(sub.merchant_address, "subscription.expired", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     expired_at: date,
     status: "expired",
-  }, { skipEmailFallback: true });
+  }, { skipEmailFallback: true })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onSubscriptionResumed(log, iface) {
@@ -826,12 +835,13 @@ async function onSubscriptionResumed(log, iface) {
   const sub = await db.getSubscription(id.toString());
   if (!sub) return;
   await db.updateSubscriptionStatus(id.toString(), "active", { pausedAt: null });
-  await dispatchWebhook(sub.merchant_address, "subscription.resumed", {
+  dispatchWebhook(sub.merchant_address, "subscription.resumed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
     resumed_at: date,
     status: "active",
-  });
+  })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 // [v9 — SV-21] Merchant payout rotation event handlers.
@@ -884,10 +894,11 @@ async function onMerchantChangeProposed(log, iface, provider) {
     txHash: log.transactionHash,
   });
 
-  await dispatchWebhook(oldMerchant, "merchant_change.proposed", {
+  dispatchWebhook(oldMerchant, "merchant_change.proposed", {
     subscription_id: id.toString(),
     new_merchant: newMerchant,
-  });
+  })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onMerchantChangeAccepted(log, iface) {
@@ -911,10 +922,11 @@ async function onMerchantChangeAccepted(log, iface) {
     [newMerchant, id.toString()]
   );
 
-  await dispatchWebhook(newMerchant, "merchant_change.accepted", {
+  dispatchWebhook(newMerchant, "merchant_change.accepted", {
     subscription_id: id.toString(),
     old_merchant: oldMerchant,
-  });
+  })
+      .catch(err => console.error(`[NOTIFIER] Webhook dispatch failed:`, err.message));
 }
 
 async function onMerchantChangeCancelled(log, iface) {
