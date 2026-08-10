@@ -873,6 +873,7 @@ app.post("/api/subscriptions/link", async (req, res) => {
     const {
       tx_hash, product_slug, merchant_address,
       subscriber_email, subscriber_webhook_url, is_contract_vault,
+      external_ref,
     } = req.body;
 
     if (!tx_hash) return res.status(400).json({ error: "tx_hash required" });
@@ -897,6 +898,7 @@ app.post("/api/subscriptions/link", async (req, res) => {
         subscriber_email       = COALESCE($3, subscriber_email),
         subscriber_webhook_url = COALESCE($4, subscriber_webhook_url),
         is_contract_vault      = COALESCE($5, is_contract_vault),
+        external_ref            = COALESCE($6, external_ref),
         updated_at             = NOW()
       WHERE id = $1
     `, [
@@ -905,9 +907,10 @@ app.post("/api/subscriptions/link", async (req, res) => {
       subscriber_email || null,
       subscriber_webhook_url || null,
       is_contract_vault != null ? is_contract_vault : null,
+      external_ref || null,
     ]);
 
-    console.log(`[API] Linked subscription ${subId}: product_slug=${product_slug}, email=${subscriber_email ? "set" : "none"}, webhook=${subscriber_webhook_url ? "set" : "none"}, contract=${is_contract_vault}`);
+    console.log(`[API] Linked subscription ${subId}: product_slug=${product_slug}, email=${subscriber_email ? "set" : "none"}, webhook=${subscriber_webhook_url ? "set" : "none"}, contract=${is_contract_vault}, external_ref=${external_ref || "none"}`);
     res.json({ success: true, subscription_id: subId });
   } catch (err) {
     console.error("[API] subscriptions/link error:", err.message);

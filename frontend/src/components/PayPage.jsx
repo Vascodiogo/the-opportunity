@@ -196,6 +196,13 @@ export default function PayPage() {
 
   const [trialDays] = useState(() => getTrialDays());
 
+  // WooCommerce/plugin integration — optional external order reference + return URL
+  const [externalRef] = useState(() => new URLSearchParams(window.location.search).get("ref") || null);
+  const [successRedirectUrl] = useState(() => {
+    const raw = new URLSearchParams(window.location.search).get("success_redirect");
+    return raw ? decodeURIComponent(raw) : null;
+  });
+
   useEffect(() => {
     if (!merchantAddress || merchantAddress.startsWith("0x")) return;
     fetch(`${API_BASE}/api/handle/${merchantAddress}`)
@@ -346,10 +353,25 @@ export default function PayPage() {
             subscriber_email: subscriberEmail || null,
             subscriber_webhook_url: agentWebhookUrl || null,
             is_contract_vault: isContractAddress || false,
+            external_ref: externalRef,
           }),
         }).catch(err => console.warn("[PayPage] Could not link product_slug:", err));
       }
       setFlowStatus("success");
+
+      // One-time redirect back to the merchant's own confirmation page, if provided.
+      // Subscription creation is a single event — this never fires again for
+      // recurring pulls, which happen off-page via the keeper bot afterward.
+      if (successRedirectUrl) {
+        try {
+          const url = new URL(successRedirectUrl);
+          if (externalRef) url.searchParams.set("ref", externalRef);
+          if (subscribeTxHash) url.searchParams.set("tx", subscribeTxHash);
+          setTimeout(() => { window.location.href = url.toString(); }, 1500);
+        } catch {
+          console.warn("[PayPage] Invalid success_redirect URL, staying on success page.");
+        }
+      }
     }
   }, [subscribeConfirmed]);
 

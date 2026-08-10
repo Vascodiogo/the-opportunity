@@ -141,6 +141,9 @@ async function initSchema() {
   await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscriber_email TEXT`);
   await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscriber_webhook_url TEXT`);
   await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_contract_vault BOOLEAN DEFAULT FALSE`);
+  // External order reference — set by storefront plugins (e.g. WooCommerce) so
+  // an incoming webhook can be matched back to the exact originating order.
+  await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS external_ref TEXT`);
 
   // Payments — indexed from PaymentExecuted events
   await query(`
