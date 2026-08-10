@@ -948,6 +948,15 @@ const EVENT_HANDLERS = {
 // ─── Polling Loop ─────────────────────────────────────────────────────────────
 
 async function pollEvents(provider, iface, topicMap, lastBlock) {
+  // Declared outside try/catch so a mid-loop error can still return whatever
+  // forward progress was made. Previously this was declared inside try{},
+  // so any single failed getLogs() call — network blip, transient RPC error —
+  // discarded the entire cycle's progress and reset to the original lastBlock.
+  // With a large backlog (thousands of chunks), this meant a single hiccup
+  // anywhere in the loop caused every subsequent poll to restart the whole
+  // catch-up from scratch, forever — the checkpoint could get permanently
+  // stuck. See CLAUDE-CORE.md for the incident this was found from.
+  let processed = lastBlock;
   try {
     const currentBlock = await provider.getBlockNumber();
     const toBlock      = currentBlock - BLOCK_LAG;
@@ -955,7 +964,6 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
 
     const CHUNK_SIZE = 9; // Stay under Alchemy free tier 10-block limit
     let fromBlock    = lastBlock + 1;
-    let processed    = lastBlock;
 
     while (fromBlock <= toBlock) {
       const chunkTo = Math.min(fromBlock + CHUNK_SIZE - 1, toBlock);
@@ -987,7 +995,10 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
     return processed;
   } catch (err) {
     console.error(`[NOTIFIER] Poll error:`, err.message);
-    return lastBlock;
+    // Return the furthest point successfully reached, not the original
+    // lastBlock — guarantees forward progress every cycle even when a
+    // later chunk in a large backlog fails.
+    return processed;
   }
 }
 
