@@ -222,10 +222,15 @@ async function getSubscriptionIds(vault) {
   // ── DB path (preferred) ──────────────────────────────────────────────────
   if (db) {
     try {
+      // Scoped by vault_address — subscription ids are not unique across
+      // vault deployments (same numeric id can exist on an old, superseded
+      // vault too). An unscoped scan could hand the keeper a stale id left
+      // over from a prior deployment. See CLAUDE-CORE.md, Aug 11 2026.
       const result = await db.query(
         `SELECT id FROM subscriptions
-         WHERE status IN ('active', 'paused')
-         ORDER BY id ASC`
+         WHERE status IN ('active', 'paused') AND vault_address = $1
+         ORDER BY id ASC`,
+        [VAULT_ADDRESS]
       );
       const ids = result.rows.map(r => Number(r.id));
       console.log(`  DB scan: ${ids.length} active/paused subscription(s).`);

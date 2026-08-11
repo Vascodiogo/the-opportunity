@@ -878,21 +878,13 @@ app.post("/api/subscriptions/link", async (req, res) => {
 
     if (!tx_hash) return res.status(400).json({ error: "tx_hash required" });
 
-    // Find subscription by tx_hash
-    const result = await db.query(
-      "SELECT id FROM subscriptions WHERE tx_hash = $1 LIMIT 1",
-      [tx_hash.toLowerCase()]
-    );
-
-    if (!result.rows.length) {
-      // Subscription may not be indexed yet — return 202 and let notifier index it
-      return res.status(202).json({ message: "subscription not yet indexed" });
-    }
-
-    const subId = result.rows[0].id;
-
-    // Update product_slug and notification prefs
-    await db.query(`
+    // Update directly by tx_hash rather than looking up id first and updating
+    // by id separately. tx_hash is globally unique on-chain, so this is safe
+    // even though subscription `id` alone is no longer unique across vault
+    // deployments (see vault_address scoping — CLAUDE-CORE.md, Aug 11 2026).
+    // A prior two-step id lookup would have matched every vault's row sharing
+    // that id once id stopped being unique, silently updating the wrong one.
+    const result = await db.query(`
       UPDATE subscriptions SET
         product_slug           = COALESCE($2, product_slug),
         subscriber_email       = COALESCE($3, subscriber_email),
@@ -900,15 +892,23 @@ app.post("/api/subscriptions/link", async (req, res) => {
         is_contract_vault      = COALESCE($5, is_contract_vault),
         external_ref            = COALESCE($6, external_ref),
         updated_at             = NOW()
-      WHERE id = $1
+      WHERE tx_hash = $1
+      RETURNING id
     `, [
-      subId,
+      tx_hash.toLowerCase(),
       product_slug || null,
       subscriber_email || null,
       subscriber_webhook_url || null,
       is_contract_vault != null ? is_contract_vault : null,
       external_ref || null,
     ]);
+
+    if (!result.rows.length) {
+      // Subscription may not be indexed yet — return 202 and let notifier index it
+      return res.status(202).json({ message: "subscription not yet indexed" });
+    }
+
+    const subId = result.rows[0].id;
 
     console.log(`[API] Linked subscription ${subId}: product_slug=${product_slug}, email=${subscriber_email ? "set" : "none"}, webhook=${subscriber_webhook_url ? "set" : "none"}, contract=${is_contract_vault}, external_ref=${external_ref || "none"}`);
     res.json({ success: true, subscription_id: subId });

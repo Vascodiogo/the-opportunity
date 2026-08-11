@@ -465,6 +465,7 @@ async function onSubscriptionCreated(log, iface, provider) {
   // notifier preserves existing product_slug if already set (COALESCE in upsertSubscription)
   await db.upsertSubscription({
     id: id.toString(),
+    vaultAddress: VAULT_ADDRESS,
     ownerAddress: owner,
     merchantAddress: merchant,
     safeVault,
@@ -511,7 +512,7 @@ async function onPaymentExecuted(log, iface, provider) {
   console.log(`  Merchant: ${await formatUsdc(merchantReceived, token, provider)} USDC`);
   console.log(`  Fee:      ${await formatUsdc(fee, token, provider)} USDC`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) { console.warn(`[NOTIFIER] No subscription found for id ${id} — skipping`); return; }
 
   // Fetch all fiat rates in one call — used for tax records
@@ -566,7 +567,7 @@ async function onPaymentExecuted(log, iface, provider) {
     protocolFeeChf:     protocolFeeChf,
   });
 
-  await db.updateSubscriptionStatus(id.toString(), "active", {
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "active", {
     lastPulledAt: new Date(Number(timestamp) * 1000),
   });
 
@@ -629,10 +630,10 @@ async function onInsufficientFunds(log, iface, provider) {
   console.log(`  Required:  ${await formatUsdc(required, token, provider)} USDC`);
   console.log(`  Available: ${await formatUsdc(available, token, provider)} USDC`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) return;
 
-  await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "paused", { pausedAt: new Date() });
 
   // Notify subscriber — smart routing (AI agent webhook → email → Push Protocol)
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
@@ -680,10 +681,10 @@ async function onInsufficientAllowance(log, iface, provider) {
   console.log(`  Required:  ${await formatUsdc(required, token, provider)} USDC`);
   console.log(`  Allowance: ${await formatUsdc(allowance, token, provider)} USDC`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) return;
 
-  await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "paused", { pausedAt: new Date() });
 
   // Email subscriber
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
@@ -735,9 +736,9 @@ async function onSubscriptionPaused(log, iface) {
   const { id, pausedBy } = parsed.args;
   console.log(`\n[EVENT] SubscriptionPaused #${id} by ${pausedBy}`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) return;
-  await db.updateSubscriptionStatus(id.toString(), "paused", { pausedAt: new Date() });
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "paused", { pausedAt: new Date() });
   dispatchWebhook(sub.merchant_address, "subscription.paused", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,
@@ -752,9 +753,9 @@ async function onSubscriptionCancelled(log, iface) {
   const { id, cancelledBy } = parsed.args;
   console.log(`\n[EVENT] SubscriptionCancelled #${id} by ${cancelledBy}`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) return;
-  await db.updateSubscriptionStatus(id.toString(), "cancelled");
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "cancelled");
 
   // Email subscriber confirmation
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
@@ -790,9 +791,9 @@ async function onSubscriptionExpired(log, iface) {
   const date = new Date(Number(timestamp) * 1000).toISOString();
   console.log(`\n[EVENT] SubscriptionExpired #${id} at ${date}`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) return;
-  await db.updateSubscriptionStatus(id.toString(), "expired");
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "expired");
 
   // Notify subscriber — smart routing (AI agent webhook → email → Push Protocol)
   const subscriber = await getSubscriberEmail(sub.safe_vault || sub.owner_address);
@@ -832,9 +833,9 @@ async function onSubscriptionResumed(log, iface) {
   const date = new Date(Number(timestamp) * 1000).toISOString();
   console.log(`\n[EVENT] SubscriptionResumed #${id} at ${date}`);
 
-  const sub = await db.getSubscription(id.toString());
+  const sub = await db.getSubscription(id.toString(), VAULT_ADDRESS);
   if (!sub) return;
-  await db.updateSubscriptionStatus(id.toString(), "active", { pausedAt: null });
+  await db.updateSubscriptionStatus(id.toString(), VAULT_ADDRESS, "active", { pausedAt: null });
   dispatchWebhook(sub.merchant_address, "subscription.resumed", {
     subscription_id: id.toString(),
     vault_address: sub.safe_vault || sub.owner_address,

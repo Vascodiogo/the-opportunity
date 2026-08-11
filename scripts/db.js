@@ -145,6 +145,43 @@ async function initSchema() {
   // an incoming webhook can be matched back to the exact originating order.
   await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS external_ref TEXT`);
 
+  // vault_address scoping — subscription IDs are assigned sequentially by each
+  // vault deployment's own internal counter, so the same numeric id can (and
+  // has) collided across different deployments (v7/v8/v9/etc). Previously `id`
+  // alone was the primary key, so a genuinely new subscription on the current
+  // vault could silently overwrite/be-blocked-by an unrelated old subscription
+  // that happened to share the same id. Found via a real data-loss incident
+  // Aug 10 2026 — see CLAUDE-CORE.md. Fix is forward-only: existing rows are
+  // backfilled with the CURRENT vault address as a best-effort label (their
+  // true origin vault was never recorded and can't be recovered), but going
+  // forward every read/write is scoped by vault_address so this collision
+  // class cannot happen again for new data.
+  await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS vault_address TEXT`);
+  if (process.env.VAULT_ADDRESS) {
+    await query(
+      `UPDATE subscriptions SET vault_address = $1 WHERE vault_address IS NULL`,
+      [process.env.VAULT_ADDRESS.trim()]
+    );
+  } else {
+    const { rows } = await query(
+      `SELECT COUNT(*)::int AS n FROM subscriptions WHERE vault_address IS NULL`
+    );
+    if (rows[0].n > 0) {
+      throw new Error(
+        `[DB] Cannot migrate subscriptions.vault_address: ${rows[0].n} existing row(s) ` +
+        `have no vault_address and VAULT_ADDRESS is not set in this service's environment. ` +
+        `Set VAULT_ADDRESS before starting this service, or backfill vault_address manually.`
+      );
+    }
+  }
+  await query(`ALTER TABLE subscriptions ALTER COLUMN vault_address SET NOT NULL`);
+  // Existing ids were already unique among themselves (old single-column PK
+  // enforced that), so backfilling them all with one shared vault_address
+  // value cannot introduce a duplicate (id, vault_address) pair — this
+  // upgrade is safe to run against live data with no manual cleanup needed.
+  await query(`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_pkey`);
+  await query(`ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id, vault_address)`);
+
   // Payments — indexed from PaymentExecuted events
   await query(`
     CREATE TABLE IF NOT EXISTS payments (
@@ -559,45 +596,51 @@ async function getSystemHealth() {
 
 async function upsertSubscription(data) {
   const {
-    id, ownerAddress, merchantAddress, safeVault, amount,
+    id, vaultAddress, ownerAddress, merchantAddress, safeVault, amount,
     interval, status, txHash, blockNumber, guardianAddress, productSlug,
     subscriberEmail, subscriberWebhookUrl, isContractVault
   } = data;
 
+  if (!vaultAddress) {
+    throw new Error("upsertSubscription: vaultAddress is required — subscription ids are not globally unique across vault deployments");
+  }
+
   await query(`
     INSERT INTO subscriptions
-      (id, owner_address, merchant_address, safe_vault, amount, interval,
+      (id, vault_address, owner_address, merchant_address, safe_vault, amount, interval,
        status, tx_hash, block_number, guardian_address, product_slug,
        subscriber_email, subscriber_webhook_url, is_contract_vault,
        created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW())
-    ON CONFLICT (id) DO UPDATE SET
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+    ON CONFLICT (id, vault_address) DO UPDATE SET
       status                 = EXCLUDED.status,
       product_slug           = COALESCE(EXCLUDED.product_slug, subscriptions.product_slug),
       subscriber_email       = COALESCE(EXCLUDED.subscriber_email, subscriptions.subscriber_email),
       subscriber_webhook_url = COALESCE(EXCLUDED.subscriber_webhook_url, subscriptions.subscriber_webhook_url),
       is_contract_vault      = COALESCE(EXCLUDED.is_contract_vault, subscriptions.is_contract_vault),
       updated_at             = NOW()
-  `, [id, ownerAddress, merchantAddress, safeVault, amount, interval,
+  `, [id, vaultAddress, ownerAddress, merchantAddress, safeVault, amount, interval,
       status, txHash, blockNumber, guardianAddress || null, productSlug || null,
       subscriberEmail || null, subscriberWebhookUrl || null, isContractVault || false]);
 }
 
 // Update subscriber notification preferences post-subscription
-async function updateSubscriberNotificationPrefs(subscriptionId, { subscriberEmail, subscriberWebhookUrl } = {}) {
+async function updateSubscriberNotificationPrefs(subscriptionId, vaultAddress, { subscriberEmail, subscriberWebhookUrl } = {}) {
+  if (!vaultAddress) throw new Error("updateSubscriberNotificationPrefs: vaultAddress is required");
   await query(`
     UPDATE subscriptions SET
-      subscriber_email       = COALESCE($2, subscriber_email),
-      subscriber_webhook_url = COALESCE($3, subscriber_webhook_url),
+      subscriber_email       = COALESCE($3, subscriber_email),
+      subscriber_webhook_url = COALESCE($4, subscriber_webhook_url),
       updated_at             = NOW()
-    WHERE id = $1
-  `, [subscriptionId, subscriberEmail || null, subscriberWebhookUrl || null]);
+    WHERE id = $1 AND vault_address = $2
+  `, [subscriptionId, vaultAddress, subscriberEmail || null, subscriberWebhookUrl || null]);
 }
 
-async function updateSubscriptionStatus(id, status, extra = {}) {
-  const updates = ["status = $2", "updated_at = NOW()"];
-  const values = [id, status];
-  let i = 3;
+async function updateSubscriptionStatus(id, vaultAddress, status, extra = {}) {
+  if (!vaultAddress) throw new Error("updateSubscriptionStatus: vaultAddress is required");
+  const updates = ["status = $3", "updated_at = NOW()"];
+  const values = [id, vaultAddress, status];
+  let i = 4;
 
   if (extra.pausedAt !== undefined) {
     updates.push(`paused_at = $${i++}`);
@@ -609,13 +652,14 @@ async function updateSubscriptionStatus(id, status, extra = {}) {
   }
 
   await query(
-    `UPDATE subscriptions SET ${updates.join(", ")} WHERE id = $1`,
+    `UPDATE subscriptions SET ${updates.join(", ")} WHERE id = $1 AND vault_address = $2`,
     values
   );
 }
 
-async function getSubscription(id) {
-  const res = await query("SELECT * FROM subscriptions WHERE id = $1", [id]);
+async function getSubscription(id, vaultAddress) {
+  if (!vaultAddress) throw new Error("getSubscription: vaultAddress is required");
+  const res = await query("SELECT * FROM subscriptions WHERE id = $1 AND vault_address = $2", [id, vaultAddress]);
   return res.rows[0] || null;
 }
 
