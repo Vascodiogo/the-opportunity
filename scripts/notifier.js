@@ -541,6 +541,7 @@ async function onPaymentExecuted(log, iface, provider) {
 
   await db.insertPayment({
     subscriptionId:     id.toString(),
+    vaultAddress:       VAULT_ADDRESS,
     merchantAddress:    sub.merchant_address,
     ownerAddress:       sub.owner_address,
     amount:             amount.toString(),

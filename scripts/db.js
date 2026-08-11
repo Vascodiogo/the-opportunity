@@ -145,6 +145,35 @@ async function initSchema() {
   // an incoming webhook can be matched back to the exact originating order.
   await query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS external_ref TEXT`);
 
+  // Payments — indexed from PaymentExecuted events. Created here, before the
+  // vault_address migration below, so the table is guaranteed to exist by the
+  // time that migration needs to ALTER it — matters for a genuinely fresh
+  // database, where payments wouldn't exist yet if this were left in its
+  // original position further down the file.
+  // subscription_id has no inline REFERENCES here — a plain single-column FK
+  // can't target subscriptions.id once it's part of a composite primary key
+  // (id, vault_address). The real FK is added further below, once both
+  // tables have vault_address, as a proper composite constraint.
+  await query(`
+    CREATE TABLE IF NOT EXISTS payments (
+      id                    SERIAL PRIMARY KEY,
+      subscription_id       BIGINT NOT NULL,
+      merchant_address      TEXT NOT NULL,
+      owner_address         TEXT NOT NULL,
+      amount                TEXT NOT NULL,
+      merchant_received     TEXT NOT NULL,
+      fee                   TEXT NOT NULL,
+      tx_hash               TEXT NOT NULL UNIQUE,
+      block_number          BIGINT,
+      eur_rate              TEXT,
+      merchant_received_eur TEXT,
+      executed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  // Add EUR columns to existing payments table if upgrading
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS eur_rate TEXT`);
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS merchant_received_eur TEXT`);
+
   // vault_address scoping — subscription IDs are assigned sequentially by each
   // vault deployment's own internal counter, so the same numeric id can (and
   // has) collided across different deployments (v7/v8/v9/etc). Previously `id`
@@ -175,6 +204,16 @@ async function initSchema() {
     }
   }
   await query(`ALTER TABLE subscriptions ALTER COLUMN vault_address SET NOT NULL`);
+  // payments.subscription_id carries a foreign key into subscriptions(id) —
+  // that FK must be dropped before subscriptions_pkey can be rebuilt as a
+  // composite key. It's recreated further below, once both tables have
+  // vault_address, as a proper composite FK so this same collision class
+  // can't happen in payments either. Found the hard way: this migration
+  // crash-looped the AuthOnce main service on first deploy (Aug 11 2026)
+  // because this drop was missing — see CLAUDE-CORE.md. payments is created
+  // above, before this line, specifically so this ALTER TABLE never runs
+  // against a table that doesn't exist yet on a fresh database.
+  await query(`ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_subscription_id_fkey`);
   // Existing ids were already unique among themselves (old single-column PK
   // enforced that), so backfilling them all with one shared vault_address
   // value cannot introduce a duplicate (id, vault_address) pair — this
@@ -182,26 +221,34 @@ async function initSchema() {
   await query(`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_pkey`);
   await query(`ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id, vault_address)`);
 
-  // Payments — indexed from PaymentExecuted events
-  await query(`
-    CREATE TABLE IF NOT EXISTS payments (
-      id                    SERIAL PRIMARY KEY,
-      subscription_id       BIGINT NOT NULL REFERENCES subscriptions(id),
-      merchant_address      TEXT NOT NULL,
-      owner_address         TEXT NOT NULL,
-      amount                TEXT NOT NULL,
-      merchant_received     TEXT NOT NULL,
-      fee                   TEXT NOT NULL,
-      tx_hash               TEXT NOT NULL UNIQUE,
-      block_number          BIGINT,
-      eur_rate              TEXT,
-      merchant_received_eur TEXT,
-      executed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  // Add EUR columns to existing payments table if upgrading
-  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS eur_rate TEXT`);
-  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS merchant_received_eur TEXT`);
+  // Same vault_address scoping as subscriptions, and for the same reason —
+  // subscription_id alone is not globally unique across vault deployments,
+  // so payments needs the same scoping to correctly reference the right
+  // subscription row.
+  await query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS vault_address TEXT`);
+  if (process.env.VAULT_ADDRESS) {
+    await query(
+      `UPDATE payments SET vault_address = $1 WHERE vault_address IS NULL`,
+      [process.env.VAULT_ADDRESS.trim()]
+    );
+  } else {
+    const { rows: payRows } = await query(
+      `SELECT COUNT(*)::int AS n FROM payments WHERE vault_address IS NULL`
+    );
+    if (payRows[0].n > 0) {
+      throw new Error(
+        `[DB] Cannot migrate payments.vault_address: ${payRows[0].n} existing row(s) ` +
+        `have no vault_address and VAULT_ADDRESS is not set in this service's environment.`
+      );
+    }
+  }
+  await query(`ALTER TABLE payments ALTER COLUMN vault_address SET NOT NULL`);
+  // Drop-then-add so this is safe to run on every boot, same idiom as
+  // subscriptions_pkey above. Composite FK requires the composite unique/PK
+  // on subscriptions to already exist, which it does by this point.
+  await query(`ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_subscription_id_fkey`);
+  await query(`ALTER TABLE payments ADD CONSTRAINT payments_subscription_id_fkey
+    FOREIGN KEY (subscription_id, vault_address) REFERENCES subscriptions(id, vault_address)`);
 
   // Webhook delivery log
   await query(`
@@ -677,7 +724,7 @@ async function getSubscriptionsByMerchant(merchantAddress) {
 
 async function insertPayment(data) {
   const {
-    subscriptionId, merchantAddress, ownerAddress,
+    subscriptionId, vaultAddress, merchantAddress, ownerAddress,
     amount, merchantReceived, fee, txHash, blockNumber,
     // v5 multi-token + multi-currency fiat
     tokenAddress    = null,
@@ -694,9 +741,13 @@ async function insertPayment(data) {
     protocolFeeChf  = null,
   } = data;
 
+  if (!vaultAddress) {
+    throw new Error("insertPayment: vaultAddress is required — must exactly match subscriptions.vault_address for the foreign key to validate");
+  }
+
   await query(`
     INSERT INTO payments
-      (subscription_id, merchant_address, owner_address, amount,
+      (subscription_id, vault_address, merchant_address, owner_address, amount,
        merchant_received, fee, tx_hash, block_number,
        token_address, token_symbol,
        eur_rate, merchant_received_eur,
@@ -704,10 +755,12 @@ async function insertPayment(data) {
        fiat_currency, fiat_rate, fiat_amount,
        protocol_fee_usdc, protocol_fee_eur, protocol_fee_chf,
        executed_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW())
     ON CONFLICT (tx_hash) DO NOTHING
   `, [
-    subscriptionId, merchantAddress?.toLowerCase(), ownerAddress?.toLowerCase(),
+    // vaultAddress deliberately NOT lowercased — must exactly match
+    // subscriptions.vault_address (stored checksummed) for the composite FK.
+    subscriptionId, vaultAddress, merchantAddress?.toLowerCase(), ownerAddress?.toLowerCase(),
     amount, merchantReceived, fee, txHash, blockNumber,
     tokenAddress?.toLowerCase(), tokenSymbol,
     eurRate || null, merchantReceivedEur || null,
