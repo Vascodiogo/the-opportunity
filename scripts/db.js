@@ -243,10 +243,62 @@ async function initSchema() {
     }
   }
   await query(`ALTER TABLE payments ALTER COLUMN vault_address SET NOT NULL`);
-  // Drop-then-add so this is safe to run on every boot, same idiom as
-  // subscriptions_pkey above. Composite FK requires the composite unique/PK
-  // on subscriptions to already exist, which it does by this point.
+  // Drop the FK now, before the corrective re-labeling below — Postgres
+  // enforces FK integrity on UPDATEs to the referenced table too, not just
+  // inserts, so relabeling subscriptions.vault_address while the FK is
+  // still active would fail (or relabeling payments first would equally
+  // fail, since the sentinel value wouldn't exist as a matching parent key
+  // yet). Re-added further below, once both tables are already consistent.
   await query(`ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_subscription_id_fkey`);
+
+  // Corrective re-labeling — found Aug 11 2026, the day after the fix above
+  // first shipped. The original backfill labeled every pre-existing,
+  // origin-unknown row with the CURRENT vault address as a best-effort
+  // guess. That was itself a mistake: it meant an old, unrelated row could
+  // still collide with a genuinely new subscription that later reused the
+  // same id on the current vault — exactly the bug this whole migration
+  // exists to prevent, just reintroduced through the backfill choice. A
+  // real example: id=6 was stale June 2026 data, silently swallowed a
+  // genuine new subscription's data today.
+  //
+  // Fix: the v9 vault (current VAULT_ADDRESS) did not exist before
+  // 2026-08-09. Any row created before that date cannot possibly be a real
+  // subscription on it, however it was labeled. Re-tag those with a
+  // sentinel that can never equal a real vault address, permanently
+  // removing them from the collision surface — not another guess, a hard
+  // fact about when the contract came into existence. Safe to leave running
+  // on every boot: once a row is re-tagged, its vault_address no longer
+  // matches the current VAULT_ADDRESS, so this never touches it again, and
+  // genuinely new rows always have a created_at far after the cutoff.
+  // Both tables are relabeled here, before the FK below is re-added, so
+  // they're already consistent with each other by the time it validates.
+  if (process.env.VAULT_ADDRESS) {
+    await query(
+      `UPDATE subscriptions SET vault_address = 'legacy-unknown-pre-v9'
+       WHERE vault_address = $1 AND created_at < '2026-08-09'::timestamptz`,
+      [process.env.VAULT_ADDRESS.trim()]
+    );
+    // Relabeled based on the PARENT subscription's own relabeling, not an
+    // independent date check on the payment itself — a payment's
+    // executed_at doesn't necessarily track its subscription's created_at
+    // (e.g. a stale old subscription could in principle have a payment
+    // recorded later). Matching on the parent guarantees payments stay
+    // consistent with subscriptions no matter what, so the FK below always
+    // validates cleanly.
+    await query(
+      `UPDATE payments p SET vault_address = 'legacy-unknown-pre-v9'
+       FROM subscriptions s
+       WHERE p.subscription_id = s.id
+         AND s.vault_address = 'legacy-unknown-pre-v9'
+         AND p.vault_address = $1`,
+      [process.env.VAULT_ADDRESS.trim()]
+    );
+  }
+
+  // Drop-then-add so this is safe to run on every boot, same idiom as
+  // subscriptions_pkey above. Both tables are already consistent with each
+  // other by this point (corrective re-labeling above ran first), so this
+  // validates cleanly.
   await query(`ALTER TABLE payments ADD CONSTRAINT payments_subscription_id_fkey
     FOREIGN KEY (subscription_id, vault_address) REFERENCES subscriptions(id, vault_address)`);
 
