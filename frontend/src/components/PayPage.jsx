@@ -341,36 +341,90 @@ export default function PayPage() {
 
   useEffect(() => {
     if (subscribeConfirmed && flowStatus === "subscribing") {
-      // Link product_slug to subscription by tx_hash
-      if (subscribeTxHash && productSlug && resolvedAddress) {
-        fetch(`${API_BASE}/api/subscriptions/link`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tx_hash: subscribeTxHash,
-            product_slug: productSlug,
-            merchant_address: resolvedAddress,
-            subscriber_email: subscriberEmail || null,
-            subscriber_webhook_url: agentWebhookUrl || null,
-            is_contract_vault: isContractAddress || false,
-            external_ref: externalRef,
-          }),
-        }).catch(err => console.warn("[PayPage] Could not link product_slug:", err));
-      }
       setFlowStatus("success");
 
-      // One-time redirect back to the merchant's own confirmation page, if provided.
-      // Subscription creation is a single event — this never fires again for
-      // recurring pulls, which happen off-page via the keeper bot afterward.
-      if (successRedirectUrl) {
+      const doRedirect = () => {
+        if (!successRedirectUrl) return;
         try {
           const url = new URL(successRedirectUrl);
           if (externalRef) url.searchParams.set("ref", externalRef);
           if (subscribeTxHash) url.searchParams.set("tx", subscribeTxHash);
-          setTimeout(() => { window.location.href = url.toString(); }, 1500);
+          window.location.href = url.toString();
         } catch {
           console.warn("[PayPage] Invalid success_redirect URL, staying on success page.");
         }
+      };
+
+      // Link product_slug to subscription by tx_hash — retried, because the
+      // notifier indexes new subscriptions on its own ~30s poll cycle, and a
+      // single immediate attempt right after the tx confirms can easily land
+      // before that indexing happens. Previously this failed silently with
+      // no retry, permanently losing external_ref — the field integrations
+      // like the WooCommerce plugin rely on to match this subscription back
+      // to their own order.
+      //
+      // r.ok is checked explicitly. fetch() only rejects on a network-level
+      // failure, not on a non-2xx response — the old .catch()-only version
+      // would have silently treated a 404 "not indexed yet" response as a
+      // success, without even logging the warning it looks like it has.
+      if (subscribeTxHash && productSlug && resolvedAddress) {
+        const linkPayload = {
+          tx_hash: subscribeTxHash,
+          product_slug: productSlug,
+          merchant_address: resolvedAddress,
+          subscriber_email: subscriberEmail || null,
+          subscriber_webhook_url: agentWebhookUrl || null,
+          is_contract_vault: isContractAddress || false,
+          external_ref: externalRef,
+        };
+
+        const LINK_MAX_ATTEMPTS = 5;
+        const LINK_RETRY_DELAY_MS = 12000; // 5 attempts × 12s ≈ 48-60s coverage — comfortably past one ~30s notifier poll cycle.
+
+        const linkWithRetry = async (attempt = 1) => {
+          try {
+            const r = await fetch(`${API_BASE}/api/subscriptions/link`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(linkPayload),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return true;
+          } catch (err) {
+            console.warn(`[PayPage] /link attempt ${attempt}/${LINK_MAX_ATTEMPTS} failed:`, err);
+            if (attempt >= LINK_MAX_ATTEMPTS) return false;
+            await new Promise(res => setTimeout(res, LINK_RETRY_DELAY_MS));
+            return linkWithRetry(attempt + 1);
+          }
+        };
+
+        if (successRedirectUrl) {
+          // Navigating away (window.location.href) unloads the page and
+          // kills any pending fetch/timers — so redirecting on the old
+          // fixed 1.5s timer, independent of this call, meant the retry
+          // loop above only ever got its first attempt in practice for
+          // exactly the integrations that need it most (anything passing
+          // success_redirect). Redirect now waits for linkWithRetry to
+          // settle (success or all retries exhausted) instead.
+          //
+          // ASSUMPTION, flagging explicitly rather than deciding silently:
+          // worst case (all 5 attempts fail) this holds the customer on
+          // the success screen for ~55-60s before redirecting anyway — the
+          // on-chain subscription already succeeded independent of this
+          // metadata call, so we never block the redirect forever, only
+          // up to this cap. If that worst-case wait is unacceptable UX,
+          // the trade is fewer/faster retries vs. more reliably capturing
+          // external_ref — tell me and I'll adjust the constants above.
+          linkWithRetry().finally(doRedirect);
+        } else {
+          // No redirect to coordinate with — safe to let this retry in the
+          // background without blocking anything on the page.
+          linkWithRetry();
+        }
+      } else {
+        // Nothing to link (missing tx/product/merchant) — redirect
+        // immediately as before, no retry to wait on.
+        doRedirect();
       }
     }
   }, [subscribeConfirmed]);
