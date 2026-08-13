@@ -919,6 +919,185 @@ app.post("/api/subscriptions/link", async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// Merchant API Key Authentication — for server-to-server integrations
+// (WooCommerce plugin, future PrestaShop plugin, etc.) that have no wallet
+// or browser in the loop, so the wallet-signature JWT flow (requireMerchantAuth
+// above) doesn't apply. A long-lived, revocable API key instead.
+//
+// Only the SHA-256 hash is ever stored (see merchant_api_keys table) — the
+// raw key is returned exactly once, at generation time, in the response body
+// of POST /api/merchant/api-key. It cannot be recovered after that; only
+// regenerated (which revokes the old one).
+//
+// This is a DIFFERENT secret from the webhook signing secret on purpose —
+// reusing one secret for two different trust boundaries (inbound webhook
+// verification vs. this endpoint's inbound auth) means a compromise of
+// either channel compromises both, and makes rotating one without breaking
+// the other impossible.
+// -----------------------------------------------------------------------------
+
+function hashApiKey(rawKey) {
+  return crypto.createHash("sha256").update(rawKey).digest("hex");
+}
+
+async function requireApiKeyAuth(req, res, next) {
+  const ip = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.ip || "unknown";
+
+  // Reuses the existing login rate limiter as a second layer, keyed
+  // separately from merchant/admin login so the buckets don't share state.
+  const rateCheck = checkLoginRateLimit(`apikey:${ip}`);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({
+      error: "too_many_attempts",
+      message: `Too many requests. Try again in ${rateCheck.retryAfter} minute(s).`,
+    });
+  }
+
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "unauthorized", message: "API key required." });
+  }
+
+  const rawKey = auth.slice(7).trim();
+  if (!rawKey) {
+    return res.status(401).json({ error: "unauthorized", message: "API key required." });
+  }
+
+  try {
+    const keyHash = hashApiKey(rawKey);
+    const result = await db.query(
+      `SELECT merchant_address FROM merchant_api_keys WHERE key_hash = $1 AND revoked_at IS NULL`,
+      [keyHash]
+    );
+
+    if (!result.rows.length) {
+      // Generic message — deliberately identical to the "missing header"
+      // case above, so a caller can't distinguish "wrong key" from
+      // "malformed request" by response shape.
+      return res.status(401).json({ error: "unauthorized", message: "Invalid API key." });
+    }
+
+    req.apiKeyMerchantAddress = result.rows[0].merchant_address.toLowerCase();
+
+    // Best-effort usage tracking, not on the critical auth path — a failure
+    // here should never block the actual request.
+    db.query(`UPDATE merchant_api_keys SET last_used_at = NOW() WHERE key_hash = $1`, [keyHash])
+      .catch(err => console.warn("[API] api-key last_used_at update failed:", err.message));
+
+    return next();
+  } catch (err) {
+    console.error("[API] requireApiKeyAuth error:", err.message);
+    return res.status(500).json({ error: "server_error" });
+  }
+}
+
+// POST /api/merchant/api-key
+// Generates (or regenerates) this merchant's server-to-server API key.
+// Requires the normal wallet-signature merchant session (requireMerchantAuth)
+// — issuing a new long-lived key is itself a sensitive action, gated behind
+// the same auth as everything else in the dashboard, not behind the key
+// system it's creating.
+//
+// Regenerating immediately revokes the previous key for this merchant+label
+// (WHERE clause below) rather than allowing multiple live keys to
+// accumulate silently — a merchant who thinks they revoked their old key
+// should be able to trust that it's actually dead.
+app.post("/api/merchant/api-key", requireMerchantAuth, async (req, res) => {
+  try {
+    const label = (req.body?.label || "default").slice(0, 64);
+    const rawKey = "ao_" + crypto.randomBytes(32).toString("hex");
+    const keyHash = hashApiKey(rawKey);
+
+    await db.query(
+      `UPDATE merchant_api_keys SET revoked_at = NOW()
+       WHERE merchant_address = $1 AND label = $2 AND revoked_at IS NULL`,
+      [req.merchantAddress, label]
+    );
+    await db.query(
+      `INSERT INTO merchant_api_keys (merchant_address, key_hash, label) VALUES ($1, $2, $3)`,
+      [req.merchantAddress, keyHash, label]
+    );
+
+    console.log(`[API] API key generated for merchant ${req.merchantAddress} (label: ${label})`);
+    res.json({
+      api_key: rawKey,
+      label,
+      message: "Save this key now — it will not be shown again. Regenerating replaces it.",
+    });
+  } catch (err) {
+    console.error("[API] Generate API key error:", err.message);
+    res.status(500).json({ error: "server_error", message: "Failed to generate API key." });
+  }
+});
+
+// GET /api/merchant/api-key/status
+// Tells the dashboard whether a key already exists (and when it was last
+// used) WITHOUT ever exposing the key itself — the raw key only ever
+// appears once, in the POST response above.
+app.get("/api/merchant/api-key/status", requireMerchantAuth, async (req, res) => {
+  try {
+    const label = (req.query?.label || "default").toString().slice(0, 64);
+    const result = await db.query(
+      `SELECT created_at, last_used_at FROM merchant_api_keys
+       WHERE merchant_address = $1 AND label = $2 AND revoked_at IS NULL`,
+      [req.merchantAddress, label]
+    );
+    if (!result.rows.length) return res.json({ exists: false });
+    res.json({ exists: true, created_at: result.rows[0].created_at, last_used_at: result.rows[0].last_used_at });
+  } catch (err) {
+    console.error("[API] API key status error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// GET /api/subscriptions/by-ref/:ref
+// Polled by external integrations (WooCommerce plugin, etc.) to check
+// whether a subscription linked to their own external_ref has been created
+// and confirmed on-chain — this is what lets the plugin mark an order paid
+// automatically instead of a merchant doing it by hand.
+//
+// SECURITY: scoped by BOTH the ref AND req.apiKeyMerchantAddress (from the
+// API key, not from anything the caller can set in the request) together.
+// external_ref values like "wc_38" are low-entropy and guessable across
+// different stores using this same plugin — without merchant-scoping, one
+// merchant could enumerate another merchant's subscriptions just by
+// guessing sequential order numbers. Never query by ref alone.
+//
+// Response is intentionally minimal: no subscriber wallet address, no
+// amount — a WooCommerce order only needs to know "is this paid" and the
+// tx hash for its own records, nothing else is any external caller's
+// business to see via this route.
+// -----------------------------------------------------------------------------
+app.get("/api/subscriptions/by-ref/:ref", requireApiKeyAuth, async (req, res) => {
+  try {
+    const ref = req.params.ref;
+    const result = await db.query(
+      `SELECT id, status, tx_hash FROM subscriptions
+       WHERE external_ref = $1 AND LOWER(merchant_address) = $2`,
+      [ref, req.apiKeyMerchantAddress]
+    );
+
+    if (!result.rows.length) {
+      // Same 404 whether the ref doesn't exist at all or belongs to a
+      // different merchant — don't let response shape leak which.
+      return res.status(404).json({ found: false });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      found: true,
+      subscription_id: row.id,
+      status: row.status,
+      tx_hash: row.tx_hash,
+    });
+  } catch (err) {
+    console.error("[API] subscriptions/by-ref error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // GET /api/merchants/:address/subscriptions
 // -----------------------------------------------------------------------------
 app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req, res) => {

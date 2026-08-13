@@ -598,6 +598,32 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_kpa_status   ON keeper_pull_attempts(status)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_kpa_attempted ON keeper_pull_attempts(attempted_at)`);
 
+  // Merchant API keys — server-to-server auth for integrations with no
+  // wallet/browser in the loop (WooCommerce plugin, etc.). Only the SHA-256
+  // hash is ever stored; the raw key is shown once at generation time in
+  // api.js's POST /api/merchant/api-key response and cannot be recovered
+  // after that. Deliberately a separate secret from the webhook signing
+  // secret — see api.js for why reusing one secret for both would be wrong.
+  await query(`
+    CREATE TABLE IF NOT EXISTS merchant_api_keys (
+      id                SERIAL PRIMARY KEY,
+      merchant_address  TEXT NOT NULL,
+      key_hash          TEXT NOT NULL UNIQUE,
+      label             TEXT NOT NULL DEFAULT 'default',
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at      TIMESTAMPTZ,
+      revoked_at        TIMESTAMPTZ
+    )
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_merchant_api_keys_hash
+    ON merchant_api_keys (key_hash) WHERE revoked_at IS NULL
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_merchant_api_keys_merchant
+    ON merchant_api_keys (merchant_address) WHERE revoked_at IS NULL
+  `);
+
   console.log("[DB] Schema ready ✓");
 }
 

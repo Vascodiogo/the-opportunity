@@ -1793,6 +1793,18 @@ export default function MerchantDashboard({ address }) {
   const [handleSaving, setHandleSaving]             = useState(false);
   const [handleMsg, setHandleMsg]                   = useState(null);
 
+  // Integration API key (WooCommerce plugin, etc.) — separate from wallet
+  // auth entirely; see requireApiKeyAuth in api.js for why. The raw key is
+  // never stored client-side beyond this session's memory — apiKeyValue
+  // only ever holds it immediately after generation, for the one-time
+  // "copy it now" display, and is cleared on unmount/navigation like any
+  // other page state.
+  const [apiKeyStatus, setApiKeyStatus]             = useState(null); // { exists, created_at, last_used_at } | null while loading
+  const [apiKeyValue, setApiKeyValue]               = useState(null); // raw key, only set right after (re)generation
+  const [apiKeyGenerating, setApiKeyGenerating]     = useState(false);
+  const [apiKeyMsg, setApiKeyMsg]                   = useState(null);
+  const [apiKeyCopied, setApiKeyCopied]             = useState(false);
+
   // [SECURITY FIX] Merchant session — replaces the old X-Merchant-Address
   // header trust with a signed-message login, matching the backend fix in
   // scripts/api.js (requireMerchantAuth now requires a JWT, not a
@@ -1959,6 +1971,9 @@ export default function MerchantDashboard({ address }) {
     merchantFetch(`${API_BASE}/api/merchant/handle`)
       .then(r => r.json()).then(d => { if (d.handle) { setHandle(d.handle); setHandleInput(d.handle); } })
       .catch(() => {});
+    merchantFetch(`${API_BASE}/api/merchant/api-key/status`)
+      .then(r => r.json()).then(d => setApiKeyStatus(d))
+      .catch(() => setApiKeyStatus({ exists: false }));
   }, [merchantAuthReady, loadWebhooks, loadPayments, loadPendingChanges]);
 
   const copyLink = (text, id) => {
@@ -2718,6 +2733,85 @@ export default function MerchantDashboard({ address }) {
                   </button>
                 </div>
                 {handleMsg && <div style={{ fontSize: 12, marginTop: 8, color: handleMsg.ok ? "var(--green)" : "var(--red)" }}>{handleMsg.text}</div>}
+              </div>
+
+              {/* Integration API key — WooCommerce plugin, future PrestaShop
+                  plugin, etc. Separate from the vanity handle and separate
+                  from the webhook signing secret on purpose (see api.js). */}
+              <div style={S.card}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>🔑 Integration API Key</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+                  For server-side integrations that check order status without a wallet — like the WooCommerce plugin. Paste this into the plugin's settings.
+                </div>
+
+                {apiKeyValue ? (
+                  <div>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      background: "var(--bg-input)", border: "0.5px solid var(--border)",
+                      borderRadius: 6, padding: "10px 12px", marginBottom: 8,
+                    }}>
+                      <code style={{ flex: 1, fontSize: 12, color: "var(--text-primary)", wordBreak: "break-all" }}>{apiKeyValue}</code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(apiKeyValue);
+                          setApiKeyCopied(true);
+                          setTimeout(() => setApiKeyCopied(false), 2000);
+                        }}
+                        style={{ ...S.btn.ghost, flexShrink: 0, padding: "6px 10px", fontSize: 11 }}
+                      >
+                        {apiKeyCopied ? "✓ Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--red)", fontWeight: 600 }}>
+                      ⚠ Save this now — it will not be shown again. Regenerating replaces it immediately.
+                    </div>
+                  </div>
+                ) : apiKeyStatus?.exists ? (
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    ✓ Active key created {new Date(apiKeyStatus.created_at).toLocaleDateString()}
+                    {apiKeyStatus.last_used_at
+                      ? ` · last used ${new Date(apiKeyStatus.last_used_at).toLocaleDateString()}`
+                      : " · never used yet"}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>No API key generated yet.</div>
+                )}
+
+                <button
+                  disabled={apiKeyGenerating}
+                  onClick={async () => {
+                    if (apiKeyStatus?.exists && !apiKeyValue) {
+                      const ok = window.confirm(
+                        "This replaces your existing key immediately. Anything still using the old key (e.g. a live WooCommerce store) will stop working until updated. Continue?"
+                      );
+                      if (!ok) return;
+                    }
+                    setApiKeyGenerating(true); setApiKeyMsg(null);
+                    try {
+                      const res = await merchantFetch(`${API_BASE}/api/merchant/api-key`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({}),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setApiKeyValue(data.api_key);
+                        setApiKeyStatus({ exists: true, created_at: new Date().toISOString(), last_used_at: null });
+                      } else {
+                        setApiKeyMsg({ ok: false, text: data.message || "Could not generate API key." });
+                      }
+                    } catch {
+                      setApiKeyMsg({ ok: false, text: "Could not reach server." });
+                    } finally {
+                      setApiKeyGenerating(false);
+                    }
+                  }}
+                  style={{ ...S.btn.primary, marginTop: 12, opacity: apiKeyGenerating ? 0.5 : 1 }}
+                >
+                  {apiKeyGenerating ? "Generating..." : apiKeyStatus?.exists ? "Regenerate Key" : "Generate Key"}
+                </button>
+                {apiKeyMsg && <div style={{ fontSize: 12, marginTop: 8, color: apiKeyMsg.ok ? "var(--green)" : "var(--red)" }}>{apiKeyMsg.text}</div>}
               </div>
 
               <button
