@@ -388,6 +388,14 @@ export default function PayPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(linkPayload),
             });
+            // 202 is the backend's deliberate "not indexed yet, try again"
+            // signal (see api.js /api/subscriptions/link) — NOT success.
+            // It's still in the 200-299 range, so r.ok alone is true for it;
+            // checking r.ok was the actual bug in the first version of this
+            // fix, not the retry loop itself. A plain non-2xx (4xx/5xx) is
+            // treated as retry-worthy too, same as before — only a real 200
+            // counts as done.
+            if (r.status === 202) throw new Error("not indexed yet (202)");
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return true;
           } catch (err) {
