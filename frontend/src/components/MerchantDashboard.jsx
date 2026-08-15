@@ -1,6 +1,6 @@
 // src/components/MerchantDashboard.jsx — Visual redesign May 2026
 // Logic: unchanged. Visual: full overhaul — sidebar nav, consistent tokens, both themes.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -21,13 +21,6 @@ import {
 // ─── Token-aware amount formatting ───────────────────────────────────────────
 const _NETWORK        = import.meta.env.VITE_NETWORK || "base-sepolia";
 const _NETWORK_TOKENS = TOKEN_ADDRESSES[_NETWORK] || TOKEN_ADDRESSES["base-sepolia"];
-// A token is only real if this network actually has a deployed address for
-// it (e.g. no Sepolia USDT deployment exists as of this writing) — checking
-// the real config here means this fixes itself automatically the moment a
-// token is added to TOKEN_ADDRESSES, no second place to remember to update.
-function isTokenAvailableOnNetwork(id) {
-  return Boolean(_NETWORK_TOKENS[id]);
-}
 const _TOKEN_DECIMALS = Object.fromEntries(
   Object.entries(_NETWORK_TOKENS).map(([id, addr]) => [
     addr.toLowerCase(), 6, // all supported tokens (USDC, USDT, EURC) use 6 decimals
@@ -931,23 +924,14 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                   { id: "usdt", label: "USDT" },
                   { id: "eurc", label: "EURC" },
                 ].map(({ id, label }) => {
-                  const isEnabled   = cryptoTokens.includes(id);
-                  const isLast      = cryptoTokens.length === 1 && isEnabled;
-                  const isAvailable = isTokenAvailableOnNetwork(id);
-                  const isLocked    = isLast || !isAvailable;
+                  const isEnabled = cryptoTokens.includes(id);
+                  const isLast    = cryptoTokens.length === 1 && isEnabled;
                   return (
-                    <div
-                      key={id}
-                      onClick={() => !isLocked && toggleCryptoToken(id)}
-                      title={!isAvailable ? "Not available on this network" : undefined}
-                      style={{ ...TOKEN_ROW(isEnabled, isLast), ...(!isAvailable ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
-                    >
+                    <div key={id} onClick={() => !isLast && toggleCryptoToken(id)} style={TOKEN_ROW(isEnabled, isLast)}>
                       <div style={CHECKBOX(isEnabled)}>
                         {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
                       </div>
-                      <span style={{ fontSize: 13, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>
-                        {label}{!isAvailable ? " (unavailable)" : ""}
-                      </span>
+                      <span style={{ fontSize: 13, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
                     </div>
                   );
                 })}
@@ -1181,29 +1165,20 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
                 { id: "usdt", label: "₮ USDT" },
                 { id: "eurc", label: "€ EURC" },
               ].map(({ id, label }) => {
-                const isEnabled   = cryptoTokens.includes(id);
-                const isLast      = cryptoTokens.length === 1 && isEnabled;
-                const isAvailable = isTokenAvailableOnNetwork(id);
-                const isLocked    = isLast || !isAvailable;
+                const isEnabled = cryptoTokens.includes(id);
+                const isLast = cryptoTokens.length === 1 && isEnabled;
                 return (
-                  <div
-                    key={id}
-                    onClick={() => !isLocked && toggleMethod(id)}
-                    title={!isAvailable ? "Not available on this network" : undefined}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
-                      cursor: isLocked ? (isAvailable ? "default" : "not-allowed") : "pointer",
-                      border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
-                      background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                      opacity: !isAvailable ? 0.4 : (isLast ? 0.7 : 1),
-                    }}
-                  >
+                  <div key={id} onClick={() => !isLast && toggleMethod(id)} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
+                    cursor: isLast ? "default" : "pointer",
+                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
+                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
+                    opacity: isLast ? 0.7 : 1,
+                  }}>
                     <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`, background: isEnabled ? "var(--green)" : "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
                     </div>
-                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>
-                      {label}{!isAvailable ? " (unavailable)" : ""}
-                    </span>
+                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
                   </div>
                 );
               })}
@@ -1788,6 +1763,35 @@ export default function MerchantDashboard({ address }) {
   const [products, setProducts]                     = useState([]);
   const [webhooks, setWebhooks]                     = useState([]);
   const [payments, setPayments]                     = useState([]);
+  // Newest-first by default — the API returns payments in insertion order
+  // (oldest first), which silently made the Overview's "Recent activity"
+  // widget show the OLDEST payments, not the recent ones, once a merchant
+  // had more than 6. Sorting here fixes both that widget and the Payments
+  // tab's default order without touching the backend.
+  const [paymentSortDir, setPaymentSortDir]          = useState("desc"); // "desc" = newest first
+  const sortedPayments = useMemo(() => {
+    const list = [...payments];
+    list.sort((a, b) => {
+      const aTime = new Date(a.executed_at).getTime();
+      const bTime = new Date(b.executed_at).getTime();
+      return paymentSortDir === "desc" ? bTime - aTime : aTime - bTime;
+    });
+    return list;
+  }, [payments, paymentSortDir]);
+  // Date-range filter for the Payments tab — applied on top of the sort
+  // above, not instead of it. Empty string means "no bound" on that side.
+  const [paymentDateFrom, setPaymentDateFrom]        = useState("");
+  const [paymentDateTo, setPaymentDateTo]            = useState("");
+  const filteredPayments = useMemo(() => {
+    if (!paymentDateFrom && !paymentDateTo) return sortedPayments;
+    const fromTime = paymentDateFrom ? new Date(paymentDateFrom + "T00:00:00").getTime() : -Infinity;
+    // "To" is inclusive of the whole day, not just midnight.
+    const toTime   = paymentDateTo   ? new Date(paymentDateTo + "T23:59:59").getTime()   : Infinity;
+    return sortedPayments.filter(p => {
+      const t = new Date(p.executed_at).getTime();
+      return t >= fromTime && t <= toTime;
+    });
+  }, [sortedPayments, paymentDateFrom, paymentDateTo]);
   const [loading, setLoading]                       = useState(false);
   const [paymentsLoading, setPaymentsLoading]       = useState(false);
   const [isApproved, setIsApproved]                 = useState(null);
@@ -2248,7 +2252,7 @@ export default function MerchantDashboard({ address }) {
                 <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No payments yet</div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  {payments.slice(0, 6).map(p => (
+                  {sortedPayments.slice(0, 6).map(p => (
                     <div key={p.payment_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "0.5px solid var(--border)" }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)", flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -2485,23 +2489,59 @@ export default function MerchantDashboard({ address }) {
         {/* ── Payments ── */}
         {tab === "payments" && (
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{payments.length} payment{payments.length !== 1 ? "s" : ""} recorded</span>
-              {payments.length > 0 && (
-                <button onClick={() => exportPaymentsCSV(payments, address)} style={S.btn.ghost}>⬇ Export CSV</button>
-              )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                {filteredPayments.length} payment{filteredPayments.length !== 1 ? "s" : ""}
+                {(paymentDateFrom || paymentDateTo) ? ` of ${payments.length} total` : " recorded"}
+              </span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  type="date"
+                  value={paymentDateFrom}
+                  onChange={e => setPaymentDateFrom(e.target.value)}
+                  max={paymentDateTo || undefined}
+                  style={{ padding: "7px 10px", fontSize: 12, width: 140 }}
+                  title="From date"
+                />
+                <span style={{ color: "var(--text-muted)", fontSize: 12 }}>–</span>
+                <input
+                  type="date"
+                  value={paymentDateTo}
+                  onChange={e => setPaymentDateTo(e.target.value)}
+                  min={paymentDateFrom || undefined}
+                  style={{ padding: "7px 10px", fontSize: 12, width: 140 }}
+                  title="To date"
+                />
+                {(paymentDateFrom || paymentDateTo) && (
+                  <button onClick={() => { setPaymentDateFrom(""); setPaymentDateTo(""); }} style={S.btn.ghost} title="Clear date filter">
+                    ✕ Clear
+                  </button>
+                )}
+                <button
+                  onClick={() => setPaymentSortDir(d => d === "desc" ? "asc" : "desc")}
+                  style={S.btn.ghost}
+                  title="Toggle sort order"
+                >
+                  {paymentSortDir === "desc" ? "↓ Newest first" : "↑ Oldest first"}
+                </button>
+                {filteredPayments.length > 0 && (
+                  <button onClick={() => exportPaymentsCSV(filteredPayments, address)} style={S.btn.ghost}>⬇ Export CSV</button>
+                )}
+              </div>
             </div>
             {paymentsLoading ? (
               <EmptyState message="Loading payments..." />
             ) : payments.length === 0 ? (
               <EmptyState message="No payments yet" sub="Payments will appear here after the first keeper pull." />
+            ) : filteredPayments.length === 0 ? (
+              <EmptyState message="No payments in this date range" sub="Try clearing or widening the date filter." />
             ) : (
               <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)" }}>
                   <span>Date</span><span>Amount</span><span>You Received</span><span>Fee</span><span>Transaction</span>
                 </div>
-                {payments.map((p, i) => (
-                  <div key={p.payment_id} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < payments.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                {filteredPayments.map((p, i) => (
+                  <div key={p.payment_id} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < filteredPayments.length - 1 ? "0.5px solid var(--border)" : "none" }}>
                     <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                     <span style={{ color: "var(--text-primary)", fontFamily: "monospace", fontWeight: 600 }}>${p.amount_usdc}</span>
                     <span style={{ color: "var(--green)", fontFamily: "monospace", fontWeight: 600 }}>${p.merchant_received_usdc}</span>
