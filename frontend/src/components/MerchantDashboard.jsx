@@ -21,6 +21,13 @@ import {
 // ─── Token-aware amount formatting ───────────────────────────────────────────
 const _NETWORK        = import.meta.env.VITE_NETWORK || "base-sepolia";
 const _NETWORK_TOKENS = TOKEN_ADDRESSES[_NETWORK] || TOKEN_ADDRESSES["base-sepolia"];
+// A token is only real if this network actually has a deployed address for
+// it (e.g. no Sepolia USDT deployment exists as of this writing) — checking
+// the real config here means this fixes itself automatically the moment a
+// token is added to TOKEN_ADDRESSES, no second place to remember to update.
+function isTokenAvailableOnNetwork(id) {
+  return Boolean(_NETWORK_TOKENS[id]);
+}
 const _TOKEN_DECIMALS = Object.fromEntries(
   Object.entries(_NETWORK_TOKENS).map(([id, addr]) => [
     addr.toLowerCase(), 6, // all supported tokens (USDC, USDT, EURC) use 6 decimals
@@ -924,14 +931,23 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                   { id: "usdt", label: "USDT" },
                   { id: "eurc", label: "EURC" },
                 ].map(({ id, label }) => {
-                  const isEnabled = cryptoTokens.includes(id);
-                  const isLast    = cryptoTokens.length === 1 && isEnabled;
+                  const isEnabled   = cryptoTokens.includes(id);
+                  const isLast      = cryptoTokens.length === 1 && isEnabled;
+                  const isAvailable = isTokenAvailableOnNetwork(id);
+                  const isLocked    = isLast || !isAvailable;
                   return (
-                    <div key={id} onClick={() => !isLast && toggleCryptoToken(id)} style={TOKEN_ROW(isEnabled, isLast)}>
+                    <div
+                      key={id}
+                      onClick={() => !isLocked && toggleCryptoToken(id)}
+                      title={!isAvailable ? "Not available on this network" : undefined}
+                      style={{ ...TOKEN_ROW(isEnabled, isLast), ...(!isAvailable ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
+                    >
                       <div style={CHECKBOX(isEnabled)}>
                         {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
                       </div>
-                      <span style={{ fontSize: 13, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                      <span style={{ fontSize: 13, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>
+                        {label}{!isAvailable ? " (unavailable)" : ""}
+                      </span>
                     </div>
                   );
                 })}
@@ -1165,20 +1181,29 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
                 { id: "usdt", label: "₮ USDT" },
                 { id: "eurc", label: "€ EURC" },
               ].map(({ id, label }) => {
-                const isEnabled = cryptoTokens.includes(id);
-                const isLast = cryptoTokens.length === 1 && isEnabled;
+                const isEnabled   = cryptoTokens.includes(id);
+                const isLast      = cryptoTokens.length === 1 && isEnabled;
+                const isAvailable = isTokenAvailableOnNetwork(id);
+                const isLocked    = isLast || !isAvailable;
                 return (
-                  <div key={id} onClick={() => !isLast && toggleMethod(id)} style={{
-                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
-                    cursor: isLast ? "default" : "pointer",
-                    border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
-                    background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
-                    opacity: isLast ? 0.7 : 1,
-                  }}>
+                  <div
+                    key={id}
+                    onClick={() => !isLocked && toggleMethod(id)}
+                    title={!isAvailable ? "Not available on this network" : undefined}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
+                      cursor: isLocked ? (isAvailable ? "default" : "not-allowed") : "pointer",
+                      border: `0.5px solid ${isEnabled ? "rgba(29,158,117,0.3)" : "var(--border)"}`,
+                      background: isEnabled ? "rgba(29,158,117,0.06)" : "var(--bg-tag)",
+                      opacity: !isAvailable ? 0.4 : (isLast ? 0.7 : 1),
+                    }}
+                  >
                     <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `1.5px solid ${isEnabled ? "var(--green)" : "var(--border)"}`, background: isEnabled ? "var(--green)" : "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {isEnabled && <span style={{ color: "var(--bg-primary)", fontSize: 9, fontWeight: 700 }}>✓</span>}
                     </div>
-                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>{label}</span>
+                    <span style={{ fontSize: 11, color: isEnabled ? "var(--text-primary)" : "var(--text-muted)" }}>
+                      {label}{!isAvailable ? " (unavailable)" : ""}
+                    </span>
                   </div>
                 );
               })}
