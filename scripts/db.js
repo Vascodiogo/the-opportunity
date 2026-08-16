@@ -631,26 +631,22 @@ async function initSchema() {
 // Keeper pull attempt logging
 // -----------------------------------------------------------------------------
 
-async function logKeeperPullAttempt({ subscriptionId, wallet, merchant, amountUsdc, status, txHash = null, blockNumber = null, error = null }) {
-  try {
-    await query(`
-      INSERT INTO keeper_pull_attempts
-        (subscription_id, wallet, merchant, amount_usdc, status, tx_hash, block_number, error, attempted_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-    `, [
-      subscriptionId,
-      wallet?.toLowerCase(),
-      merchant?.toLowerCase(),
-      amountUsdc,
-      status,
-      txHash || null,
-      blockNumber || null,
-      error || null,
-    ]);
-  } catch (err) {
-    // Never let logging failure break the keeper
-    console.error(`[DB] logKeeperPullAttempt failed: ${err.message}`);
-  }
+// Disabled as of 2026-08-16 — confirmed via pg_stat_user_tables (seq_scan=0,
+// idx_scan=0, checked twice three weeks apart) that nothing has ever read
+// keeper_pull_attempts. It grew to 221MB/428k rows of write-only logging
+// and was truncated. Every real diagnostic signal this fed already exists
+// in the keeper's own console output (captured by Railway logs) right next
+// to each of these call sites in keeper.js — this table added disk usage
+// without adding any actual observability. Table/indexes deliberately left
+// in the schema above (not dropped) so a future anomaly-monitoring feature
+// can resume writing here deliberately, rather than this being silently
+// gone if someone assumes it still works.
+//
+// keeper.js's 5 call sites and its own try/catch wrapper are untouched —
+// this no-op keeps the exact same function name and parameters, so nothing
+// else needs to change.
+async function logKeeperPullAttempt() {
+  // Intentionally a no-op. See comment above.
 }
 
 // -----------------------------------------------------------------------------
