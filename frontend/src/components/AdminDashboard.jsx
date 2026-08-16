@@ -229,6 +229,9 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
 
   const busy = isWriting || isConfirming;
 
+  // TEMP DEBUG — remove after diagnosing the silent connect no-op.
+  console.log("DEBUG connectors:", connectors.map(c => ({ id: c.id, name: c.name })));
+
   return (
     <div style={{ ...S.card, padding: "16px 20px", marginBottom: 16 }}>
       <span style={S.label}>Merchant access — MerchantRegistry</span>
