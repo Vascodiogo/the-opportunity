@@ -2,6 +2,8 @@
 // AuthOnce Admin Dashboard — v2
 // Tabs: Overview · Merchants · Subscriptions · Subscribers · Payments · Webhooks · Analytics · Tax · Audit · Contracts
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useAccount, useConnect, useDisconnect, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { REGISTRY_ADDRESS, REGISTRY_ABI } from "../config.js";
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { VAULT_ADDRESS as VAULT_ADDRESS_TESTNET, REGISTRY_ADDRESS as REGISTRY_ADDRESS_TESTNET } from "../config.js";
 
@@ -173,70 +175,137 @@ function EmptyState({ message }) {
 // ─── Manual Approve ───────────────────────────────────────────────────────────
 function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
   const [address, setAddress] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg]         = useState(null);
+  const [saveMsg, setSaveMsg] = useState(null);
+  const [savingNote, setSavingNote] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // "approve" | "revoke" | null
 
   const isValid = address.startsWith("0x") && address.length === 42;
 
-  // [FIX — Aug 2026] This used to call a backend endpoint that only ever
-  // updated a database flag — it never touched the real on-chain
-  // MerchantRegistry contract. The merchant-facing "✓ Approved" badge
-  // (their own dashboard) reads the REAL on-chain status, so clicking the
-  // old "Approve Merchant" button would show "✓ Approved" here while the
-  // merchant still couldn't actually receive any subscriptions — a
-  // confusing, silent mismatch between two disconnected systems. Now this
-  // just keeps a simple internal note (so the merchant shows up in this
-  // list at all) — the actual approval happens separately, on Basescan,
-  // same as every other admin action in this project.
-  const handleSaveNote = async () => {
-    if (!isValid) { setMsg({ ok: false, text: "Invalid address." }); return; }
-    setLoading(true); setMsg(null);
-    try {
-      await fetch(`${API_BASE}/api/merchants/register`, {
+  const { address: connectedAddress, isConnected } = useAccount();
+  const { connect, connectors, isPending: isConnecting } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  const {
+    writeContract, data: txHash, isPending: isWriting,
+    error: writeError, reset: resetWrite,
+  } = useWriteContract();
+
+  const {
+    isLoading: isConfirming, isSuccess: isConfirmed, isError: receiptFailed,
+  } = useWaitForTransactionReceipt({ hash: txHash });
+
+  // Once a write actually confirms on-chain (not just submitted — real
+  // confirmation), refresh the merchant list and, for approvals only,
+  // save the local note too so the merchant shows up in this dashboard's
+  // list without a separate manual step.
+  useEffect(() => {
+    if (!isConfirmed) return;
+    onRefresh();
+    if (pendingAction === "approve" && isValid) {
+      fetch(`${API_BASE}/api/merchants/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet_address: address.toLowerCase() }),
-      });
-      setMsg({ ok: true, text: `Saved. Now approve on Basescan below — that's the step that actually matters.` });
-      onRefresh();
-    } catch { setMsg({ ok: false, text: "Could not reach server." }); }
-    finally { setLoading(false); }
+      }).catch(() => {}); // best-effort — on-chain approval already succeeded regardless
+    }
+    setPendingAction(null);
+  }, [isConfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleConnect = () => {
+    const connector = connectors.find(c => c.id === "metaMask") || connectors[0];
+    if (connector) connect({ connector });
   };
 
-  const handleApproveOnChain = () => {
-    if (!isValid) { setMsg({ ok: false, text: "Enter the merchant's address first." }); return; }
-    copyToClipboard(address);
-    window.open(`${basescanBase}/address/${registryAddress}#writeContract`, "_blank", "noopener,noreferrer");
-    setMsg({ ok: true, text: `Address copied. On the new tab: Connect Wallet → find "approveMerchant" → paste the address → Write.` });
+  const runWrite = (functionName) => {
+    if (!isValid) { return; }
+    resetWrite();
+    setPendingAction(functionName === "approveMerchant" ? "approve" : "revoke");
+    writeContract({
+      address: registryAddress,
+      abi: REGISTRY_ABI,
+      functionName,
+      args: [address],
+    });
   };
+
+  const busy = isWriting || isConfirming;
 
   return (
     <div style={{ ...S.card, padding: "16px 20px", marginBottom: 16 }}>
-      <span style={S.label}>Add a merchant</span>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input value={address} onChange={e => setAddress(e.target.value.trim())}
+      <span style={S.label}>Merchant access — MerchantRegistry</span>
+
+      {!isConnected ? (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={handleConnect} disabled={isConnecting} style={S.btn.primary}>
+            {isConnecting ? "Connecting..." : "Connect wallet to approve/revoke"}
+          </button>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+            Connect the wallet with admin rights on MerchantRegistry. If the wrong wallet
+            is connected, the contract itself will reject the transaction — that check
+            happens on-chain, not in this UI.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-secondary)" }}>
+            Connected: {shortAddr(connectedAddress)}
+          </span>
+          <button onClick={() => disconnect()} style={{ ...S.btn.ghost, fontSize: 11, padding: "4px 10px" }}>
+            Disconnect
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <input value={address} onChange={e => { setAddress(e.target.value.trim()); resetWrite(); }}
           placeholder="0x merchant wallet address"
           style={{ flex: 1, fontFamily: "monospace" }}
         />
-        <button onClick={handleSaveNote} disabled={loading || !address}
-          style={{ ...S.btn.ghost, opacity: loading || !address ? 0.5 : 1 }}>
-          {loading ? "Saving..." : "Save note"}
-        </button>
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-        This just adds them to the list below — it does NOT let them receive payments yet.
       </div>
 
-      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "0.5px solid var(--border)" }}>
-        <button onClick={handleApproveOnChain} disabled={!address}
-          style={{ ...S.btn.primary, opacity: !address ? 0.5 : 1, width: "100%" }}>
-          Approve on Basescan (required) →
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button
+          onClick={() => runWrite("approveMerchant")}
+          disabled={!isConnected || !isValid || busy}
+          style={{ ...S.btn.primary, flex: 1, opacity: (!isConnected || !isValid || busy) ? 0.5 : 1 }}
+        >
+          {busy && pendingAction === "approve" ? "Confirm in wallet / waiting..." : "Approve"}
         </button>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-          This is the real approval. Opens Basescan and copies the address for you — connect your wallet there and click "Write" to finish.
+        <button
+          onClick={() => runWrite("revokeMerchant")}
+          disabled={!isConnected || !isValid || busy}
+          style={{ ...S.btn.ghost, flex: 1, opacity: (!isConnected || !isValid || busy) ? 0.5 : 1 }}
+        >
+          {busy && pendingAction === "revoke" ? "Confirm in wallet / waiting..." : "Revoke"}
+        </button>
+      </div>
+
+      {/* Honest status reporting — never a fake "success" before the chain
+          actually confirms. Same reasoning as the webhook-test fix: a wrong
+          "done" here would be worse than no message at all. */}
+      {isWriting && !isConfirming && (
+        <div style={{ fontSize: 12, marginTop: 10, color: "var(--text-muted)" }}>Waiting for wallet confirmation...</div>
+      )}
+      {isConfirming && (
+        <div style={{ fontSize: 12, marginTop: 10, color: "var(--text-muted)" }}>
+          Transaction submitted, waiting for on-chain confirmation...
+          {txHash && basescanBase && (
+            <> <a href={`${basescanBase}/tx/${txHash}`} target="_blank" rel="noopener noreferrer">View on Basescan ↗</a></>
+          )}
         </div>
-      </div>
-
-      {msg && <div style={{ fontSize: 12, marginTop: 10, color: msg.ok ? "var(--green)" : "var(--red)" }}>{msg.text}</div>}
+      )}
+      {isConfirmed && (
+        <div style={{ fontSize: 12, marginTop: 10, color: "var(--green)" }}>
+          Confirmed on-chain.
+          {txHash && basescanBase && (
+            <> <a href={`${basescanBase}/tx/${txHash}`} target="_blank" rel="noopener noreferrer">View on Basescan ↗</a></>
+          )}
+        </div>
+      )}
+      {(writeError || receiptFailed) && (
+        <div style={{ fontSize: 12, marginTop: 10, color: "var(--red)" }}>
+          {writeError?.shortMessage || writeError?.message || "Transaction failed or was rejected."}
+        </div>
+      )}
     </div>
   );
 }
