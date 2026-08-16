@@ -320,39 +320,21 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
 }
 
 // ─── Merchant Row ─────────────────────────────────────────────────────────────
-function MerchantRow({ merchant, token, onRefresh, isLast, onViewMerchant }) {
-  const [loading, setLoading] = useState(false);
-  const isPending  = !merchant.approved_at;
-  const isApproved = !!merchant.approved_at;
-
-  const handleApprove = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/merchants/${merchant.wallet_address}/approve`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) onRefresh();
-      else alert("Could not approve merchant.");
-    } catch { alert("Could not reach server."); }
-    finally { setLoading(false); }
-  };
-
-  const handleReject = async () => {
-    if (!window.confirm(`Remove approval for ${merchant.business_name || merchant.wallet_address}?`)) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/merchants/${merchant.wallet_address}/reject`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) onRefresh();
-      else alert("Could not reject merchant.");
-    } catch { alert("Could not reach server."); }
-    finally { setLoading(false); }
-  };
+function MerchantRow({ merchant, isLast, onViewMerchant }) {
+  // NOTE: approve/revoke removed from this row (Aug 2026) — they previously
+  // called DB-only endpoints (/api/admin/merchants/:wallet/approve|reject)
+  // with no on-chain interaction at all. That let this badge and the real
+  // MerchantRegistry.isApproved() state silently disagree. The single
+  // source of truth for approve/revoke is now the on-chain "Merchant
+  // access — MerchantRegistry" card above (wallet-signed writeContract
+  // calls, verified via Basescan event logs). This row is read-only.
+  // merchant.approved_at still reflects DB state only, not a live
+  // isApproved() read — treat this badge as informational, not authoritative.
+  const isPending = !merchant.approved_at;
 
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr auto",
+      display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr auto",
       alignItems: "center", padding: "12px 20px",
       borderBottom: isLast ? "none" : "0.5px solid var(--border)",
     }}>
@@ -368,18 +350,6 @@ function MerchantRow({ merchant, token, onRefresh, isLast, onViewMerchant }) {
       <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{merchant.email || "—"}</div>
       <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{formatDate(merchant.created_at)}</div>
       <div><Badge status={isPending ? "pending" : "approved"} /></div>
-      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-        {isPending && (
-          <button onClick={handleApprove} disabled={loading} style={{ ...S.btn.approve, opacity: loading ? 0.6 : 1 }}>
-            {loading ? "..." : "Approve"}
-          </button>
-        )}
-        {isApproved && (
-          <button onClick={handleReject} disabled={loading} style={{ ...S.btn.revoke, opacity: loading ? 0.6 : 1 }}>
-            {loading ? "..." : "Revoke"}
-          </button>
-        )}
-      </div>
       <button onClick={() => onViewMerchant(merchant)} style={{ ...S.btn.ghost, fontSize: 11, padding: "4px 10px", marginLeft: 4 }}>
         View →
       </button>
@@ -935,13 +905,13 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
             </div>
             <ManualApprove token={token} onRefresh={fetchMerchants} registryAddress={REGISTRY_ADDRESS} basescanBase={basescanBase} />
             <div style={{ ...S.card, overflow: "hidden" }}>
-              <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr auto" }}>
-                <span>Merchant</span><span>Email</span><span>Registered</span><span>Status</span><span /><span />
+              <div style={{ ...S.tableHeader, display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr auto" }}>
+                <span>Merchant</span><span>Email</span><span>Registered</span><span>Status</span><span />
               </div>
               {filteredMerchants.length === 0 ? <EmptyState message="No merchants found." /> :
                 filteredMerchants.map((m, i) => (
-                  <MerchantRow key={m.wallet_address} merchant={m} token={token}
-                    onRefresh={fetchMerchants} isLast={i === filteredMerchants.length - 1}
+                  <MerchantRow key={m.wallet_address} merchant={m}
+                    isLast={i === filteredMerchants.length - 1}
                     onViewMerchant={setSelectedMerchant}
                   />
                 ))
