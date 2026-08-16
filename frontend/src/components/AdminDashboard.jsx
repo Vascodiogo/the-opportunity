@@ -211,7 +211,16 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
   }, [isConfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConnect = () => {
-    const connector = connectors.find(c => c.id === "metaMask") || connectors[0];
+    // RainbowKit's MetaMask connector id is "metaMaskSDK" in this build, not
+    // the plain wagmi "metaMask" id — checking both keeps this resilient if
+    // that naming shifts again on a future dependency bump. Without this,
+    // find() silently returned undefined and fell through to connectors[0]
+    // (Safe), which no-ops outside a Safe multisig iframe — no error, no
+    // modal, no MetaMask popup. Confirmed via console.log of `connectors`.
+    const connector =
+      connectors.find(c => c.id === "metaMaskSDK") ||
+      connectors.find(c => c.id === "metaMask") ||
+      connectors[0];
     if (connector) connect({ connector });
   };
 
@@ -228,9 +237,6 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
   };
 
   const busy = isWriting || isConfirming;
-
-  // TEMP DEBUG — remove after diagnosing the silent connect no-op.
-  console.log("DEBUG connectors:", connectors.map(c => ({ id: c.id, name: c.name })));
 
   return (
     <div style={{ ...S.card, padding: "16px 20px", marginBottom: 16 }}>
