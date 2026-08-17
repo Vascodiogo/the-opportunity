@@ -1,25 +1,9 @@
-import { http, fallback, createConfig } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
-import { injected, metaMask, coinbaseWallet, walletConnect } from "wagmi/connectors";
-
-const projectId = "ef9eec0d711f2f3100ef8c4ae8336b31";
-
-export const wagmiConfig = createConfig({
-  chains: [baseSepolia],
-  connectors: [
-    metaMask(),
-    coinbaseWallet({ appName: "AuthOnce" }),
-    walletConnect({ projectId }),
-    injected(),
-  ],
-  transports: {
-    [baseSepolia.id]: fallback([
-      http(`https://base-sepolia.g.alchemy.com/v2/${import.meta.env.VITE_ALCHEMY_KEY}`), // Alchemy — primary
-      http("https://sepolia.base.org"),                                      // Base public — fallback
-      http("https://84532.rpc.thirdweb.com"),                               // Thirdweb — tertiary
-    ]),
-  },
-});
+// NOTE (Aug 2026 cleanup): this file used to also export a `wagmiConfig`
+// built with wagmi's createConfig(). It was dead code — main.jsx never
+// imported it; the app's actual wagmi config is built there via RainbowKit's
+// getDefaultConfig(). Removed to keep a single source of truth for wagmi
+// config, same class of fix as the merchant-list DB/on-chain mismatch found
+// the same session (see CLAUDE-CORE.md §39).
 
 // ─── RPC URLs — used by createPublicClient in components ─────────────────────
 // Alchemy primary, public fallback, Thirdweb tertiary
