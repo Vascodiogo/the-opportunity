@@ -1,5 +1,30 @@
 // scripts/keeper.js
-// AuthOnce Keeper Bot — v6
+// AuthOnce Keeper Bot — v7
+//
+// Changes from v6 (v7 — Aug 21 2026):
+//   - [T1] getSubscriptionIds: Active subscriptions are now pre-filtered in
+//       the DB query itself to a rolling due-date window (DUE_WINDOW_HOURS),
+//       instead of every active subscription hitting subscriptions()+isDue()
+//       on-chain every cycle regardless of how far from due it is. This is
+//       what exhausted the Alchemy free tier (confirmed via usage dashboard,
+//       eth_call dominating). Paused subscriptions are NOT filtered — same
+//       reasoning as before, small set, needs frequent grace-period checks.
+//       A subscription with last_pulled_at IS NULL (never pulled, OR in
+//       trial — DB can't tell the two apart, see contract's SV-17 anchor)
+//       is always included, never filtered out — the safe default.
+//   - [T2] run(): setInterval(tick, RUN_INTERVAL_MS) replaced with a
+//       self-rescheduling setTimeout, matching notifier.js's own poll()
+//       pattern. A cycle that overran RUN_INTERVAL_MS could previously
+//       stack with the next one; now each cycle starts RUN_INTERVAL_MS
+//       after the previous one finished, never overlapping.
+//   - expireGracePeriodSubscriptions removed as a separate pass. It made
+//       its own subscriptions() call per id every cycle, duplicating the
+//       read processOneSubscription already made for the same id — for
+//       every id in the list, not just Paused ones, before filtering
+//       internally. Expiry now runs inline inside processOneSubscription's
+//       existing Paused branch, reusing the struct already fetched there,
+//       and gets the same CONCURRENCY batching pulls already use instead
+//       of running sequentially.
 //
 // Changes from v5:
 //   - ABI updated for SubscriptionVault v6:
@@ -29,6 +54,7 @@ const VAULT_ADDRESS   = ethers.getAddress(process.env.VAULT_ADDRESS.trim());
 const RPC_URL         = (process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org").trim();
 const KEEPER_PRIVKEY  = (process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || "").trim();
 const RUN_INTERVAL_MS = 20_000; // reduced from 60s for faster detection of due subscriptions
+const DUE_WINDOW_HOURS = 4; // [T1] Active subscriptions are DB-pre-filtered to this rolling window
 
 // ─── DB pool (optional — falls back to on-chain scan if DATABASE_URL not set) ─
 const db = process.env.DATABASE_URL
@@ -226,14 +252,41 @@ async function getSubscriptionIds(vault) {
       // vault deployments (same numeric id can exist on an old, superseded
       // vault too). An unscoped scan could hand the keeper a stale id left
       // over from a prior deployment. See CLAUDE-CORE.md, Aug 11 2026.
+      //
+      // [T1] Active subscriptions are pre-filtered to a rolling due-date
+      // window computed from last_pulled_at — previously every active
+      // subscription got a full subscriptions()+isDue() on-chain check
+      // every cycle regardless of how far from due it was. Interval-to-
+      // seconds matches the contract's own WEEKLY/MONTHLY/YEARLY constants
+      // exactly (contracts/SubscriptionVault.sol). last_pulled_at IS NULL
+      // is always included (never filtered) — DB can't distinguish
+      // "genuinely never pulled" from "in trial, real due date is
+      // trialEndsAt" (DB doesn't store trialEndsAt), so the safe default
+      // is to keep checking these every cycle. Paused subscriptions are
+      // never filtered — same reasoning as before.
       const result = await db.query(
         `SELECT id FROM subscriptions
-         WHERE status IN ('active', 'paused') AND vault_address = $1
+         WHERE vault_address = $1
+           AND (
+             status = 'paused'
+             OR (
+               status = 'active' AND (
+                 last_pulled_at IS NULL
+                 OR last_pulled_at + (
+                   CASE interval
+                     WHEN 'weekly'  THEN INTERVAL '7 days'
+                     WHEN 'monthly' THEN INTERVAL '30 days'
+                     WHEN 'yearly'  THEN INTERVAL '365 days'
+                   END
+                 ) <= NOW() + $2::interval
+               )
+             )
+           )
          ORDER BY id ASC`,
-        [VAULT_ADDRESS]
+        [VAULT_ADDRESS, `${DUE_WINDOW_HOURS} hours`]
       );
       const ids = result.rows.map(r => Number(r.id));
-      console.log(`  DB scan: ${ids.length} active/paused subscription(s).`);
+      console.log(`  DB scan: ${ids.length} active/paused subscription(s) (active pre-filtered to next ${DUE_WINDOW_HOURS}h due window).`);
       return ids;
     } catch (err) {
       console.error(`  DB scan failed (${err.message}) — falling back to on-chain scan.`);
@@ -292,7 +345,7 @@ async function processOneSubscription(vault, wallet, id) {
         const hoursLeft = Math.ceil((billingPausedUntil - now) / 3600);
         console.log(`  Subscription #${id} billing paused by merchant for ${hoursLeft}h more.`);
       }
-      return { pulled: 0, skipped: 1 };
+      return { pulled: 0, skipped: 1, expired: 0 };
     }
 
     const pullAmount     = await vault.nextPullAmount(id);
@@ -318,14 +371,14 @@ async function processOneSubscription(vault, wallet, id) {
         status:   "skipped",
         error:    "contract-vault: ERC-1271 not yet implemented",
       });
-      return { pulled: 0, skipped: 1 };
+      return { pulled: 0, skipped: 1, expired: 0 };
     }
 
     const backoffState = notApprovedBackoff.get(id);
     if (backoffState && Date.now() < backoffState.skipUntil) {
       const minsLeft = Math.ceil((backoffState.skipUntil - Date.now()) / 60000);
       console.log(`  Subscription #${id} in MerchantNotApproved backoff — ${minsLeft}min remaining, skipping.`);
-      return { pulled: 0, skipped: 1 };
+      return { pulled: 0, skipped: 1, expired: 0 };
     }
 
     try {
@@ -356,7 +409,7 @@ async function processOneSubscription(vault, wallet, id) {
           status: "success", txHash: tx.hash, blockNumber: receipt.blockNumber,
         });
         console.log("");
-        return { pulled: 1, skipped: 0 };
+        return { pulled: 1, skipped: 0, expired: 0 };
       }
 
       if (outcome === "MerchantNotApproved") {
@@ -375,7 +428,7 @@ async function processOneSubscription(vault, wallet, id) {
           status: "skipped", error: "merchant_not_approved",
         });
         console.log("");
-        return { pulled: 0, skipped: 1 };
+        return { pulled: 0, skipped: 1, expired: 0 };
       }
 
       // MerchantTransferFailed, SubscriptionPaused, SubscriptionExpired,
@@ -388,7 +441,7 @@ async function processOneSubscription(vault, wallet, id) {
         status: "skipped", error: outcome,
       });
       console.log("");
-      return { pulled: 0, skipped: 1 };
+      return { pulled: 0, skipped: 1, expired: 0 };
     } catch (err) {
       console.error(`     executePull failed: ${err.message}`);
       await logPullAttempt({
@@ -400,81 +453,26 @@ async function processOneSubscription(vault, wallet, id) {
         error:    err.message?.slice(0, 500),
       });
       console.log("");
-      return { pulled: 0, skipped: 0 };
+      return { pulled: 0, skipped: 0, expired: 0 };
     }
   }
 
-  // ── Paused: retry if vault topped up within grace period ────────────────
+  // ── Paused: retry if vault topped up within grace period, else expire ───
+  // [T1/expiry-merge] Previously grace-period expiry was a separate pass
+  // (expireGracePeriodSubscriptions) that re-fetched subscriptions(id) for
+  // every id, every cycle — duplicating the read already done above for
+  // this same id. Folded in here to reuse `sub`, and gets the same
+  // CONCURRENCY batching pulls already use instead of running sequentially.
   if (status === STATUS.Paused) {
     const pausedAt       = Number(sub.pausedAt);
     const graceSecs      = Number(sub.gracePeriodDays) * 86_400;
     const now            = Math.floor(Date.now() / 1000);
     const gracePeriodEnd = pausedAt + graceSecs;
 
-    if (now > gracePeriodEnd) return { pulled: 0, skipped: 0 }; // will be expired by expiry loop
-
-    const balance   = await vault.vaultBalance(id);
-    const allowance = await vault.vaultAllowance(id);
-    const required  = await vault.nextPullAmount(id);
-
-    if (balance >= required && allowance >= required) {
-      console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
-      console.log(`     Balance: ${ethers.formatUnits(balance, 6)} USDC, Required: ${ethers.formatUnits(required, 6)} USDC`);
-      console.log(`     Subscriber must call resumeSubscription to reactivate.`);
-      return { pulled: 0, skipped: 1 };
-    } else {
-      const balFmt         = ethers.formatUnits(balance, 6);
-      const reqFmt         = ethers.formatUnits(required, 6);
-      const alwFmt         = ethers.formatUnits(allowance, 6);
-      const graceRemaining = Math.floor((gracePeriodEnd - now) / 3600);
-      console.log(`  Subscription #${id} in grace (${graceRemaining}h left) — balance: ${balFmt} USDC, allowance: ${alwFmt} USDC, required: ${reqFmt} USDC`);
-      return { pulled: 0, skipped: 1 };
-    }
-  }
-
-  return { pulled: 0, skipped: 0 };
-}
-
-async function processDueSubscriptions(vault, wallet, ids) {
-  let pulled  = 0;
-  let skipped = 0;
-
-  // Process in batches of CONCURRENCY, parallel within each batch.
-  // Sequential pulls were the bottleneck — each await blocked on RPC
-  // round-trip even when nothing depends on the previous result.
-  for (let i = 0; i < ids.length; i += CONCURRENCY) {
-    const batch = ids.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map(id => processOneSubscription(vault, wallet, id).catch(err => {
-        console.error(`  Subscription #${id} processing error: ${err.message}`);
-        return { pulled: 0, skipped: 0 };
-      }))
-    );
-    for (const r of results) {
-      pulled  += r.pulled;
-      skipped += r.skipped;
-    }
-  }
-
-  return { pulled, skipped };
-}
-
-// ─── Expire subscriptions past grace period ───────────────────────────────────
-async function expireGracePeriodSubscriptions(vault, ids) {
-  let expired = 0;
-  const now   = Math.floor(Date.now() / 1000);
-
-  for (const id of ids) {
-    const sub    = await vault.subscriptions(id);
-    const status = Number(sub.status);
-
-    if (status !== STATUS.Paused) continue;
-
-    const pausedAt = Number(sub.pausedAt);
-    if (pausedAt === 0) continue;
-
-    const graceSecs      = Number(sub.gracePeriodDays) * 86_400;
-    const gracePeriodEnd = pausedAt + graceSecs;
+    // Defensive guard carried over from the old expire loop: pausedAt === 0
+    // should not happen for a genuinely Paused subscription, but treating
+    // it as "grace ended at graceSecs" would be wrong — skip, don't guess.
+    if (pausedAt === 0) return { pulled: 0, skipped: 0, expired: 0 };
 
     if (now > gracePeriodEnd) {
       const hoursOver = Math.floor((now - gracePeriodEnd) / 3600);
@@ -484,15 +482,65 @@ async function expireGracePeriodSubscriptions(vault, ids) {
         console.log(`     TX sent:  ${tx.hash}`);
         const receipt = await tx.wait();
         console.log(`     Expired in block ${receipt.blockNumber}`);
-        expired++;
+        console.log("");
+        return { pulled: 0, skipped: 0, expired: 1 };
       } catch (err) {
         console.error(`     expireSubscription failed: ${err.message}`);
+        console.log("");
+        return { pulled: 0, skipped: 0, expired: 0 };
       }
-      console.log("");
+    }
+
+    const balance   = await vault.vaultBalance(id);
+    const allowance = await vault.vaultAllowance(id);
+    const required  = await vault.nextPullAmount(id);
+
+    if (balance >= required && allowance >= required) {
+      console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
+      console.log(`     Balance: ${ethers.formatUnits(balance, 6)} USDC, Required: ${ethers.formatUnits(required, 6)} USDC`);
+      console.log(`     Subscriber must call resumeSubscription to reactivate.`);
+      return { pulled: 0, skipped: 1, expired: 0 };
+    } else {
+      const balFmt         = ethers.formatUnits(balance, 6);
+      const reqFmt         = ethers.formatUnits(required, 6);
+      const alwFmt         = ethers.formatUnits(allowance, 6);
+      const graceRemaining = Math.floor((gracePeriodEnd - now) / 3600);
+      console.log(`  Subscription #${id} in grace (${graceRemaining}h left) — balance: ${balFmt} USDC, allowance: ${alwFmt} USDC, required: ${reqFmt} USDC`);
+      return { pulled: 0, skipped: 1, expired: 0 };
     }
   }
 
-  return expired;
+  return { pulled: 0, skipped: 0, expired: 0 };
+}
+
+async function processDueSubscriptions(vault, wallet, ids) {
+  let pulled  = 0;
+  let skipped = 0;
+  let expired = 0;
+
+  // Process in batches of CONCURRENCY, parallel within each batch.
+  // Sequential pulls were the bottleneck — each await blocked on RPC
+  // round-trip even when nothing depends on the previous result.
+  // [T1/expiry-merge] Also now handles grace-period expiry inline (see
+  // processOneSubscription's Paused branch) — previously a separate
+  // sequential expireGracePeriodSubscriptions pass duplicated the
+  // subscriptions() read this loop already makes for every id.
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const batch = ids.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(id => processOneSubscription(vault, wallet, id).catch(err => {
+        console.error(`  Subscription #${id} processing error: ${err.message}`);
+        return { pulled: 0, skipped: 0, expired: 0 };
+      }))
+    );
+    for (const r of results) {
+      pulled  += r.pulled;
+      skipped += r.skipped;
+      expired += r.expired;
+    }
+  }
+
+  return { pulled, skipped, expired };
 }
 
 // ─── Main loop ────────────────────────────────────────────────────────────────
@@ -500,12 +548,13 @@ async function run() {
   const { provider, wallet, vault } = setup();
 
   console.log("=".repeat(60));
-  console.log("  AuthOnce — Keeper Bot v6");
+  console.log("  AuthOnce — Keeper Bot v7");
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  Keeper:   ${wallet.address}`);
   console.log(`  RPC:      ${RPC_URL}`);
-  console.log(`  Interval: every ${RUN_INTERVAL_MS / 1000}s`);
+  console.log(`  Interval: ${RUN_INTERVAL_MS / 1000}s after each cycle completes (self-rescheduling)`);
+  console.log(`  Due window: ${DUE_WINDOW_HOURS}h (active subscriptions pre-filtered)`);
   console.log(`  Concurrency: ${CONCURRENCY} parallel pulls per batch`);
   console.log("=".repeat(60));
   console.log("");
@@ -626,8 +675,7 @@ async function run() {
         console.log("  Nothing to do.");
         console.log("");
       } else {
-        ({ pulled, skipped } = await processDueSubscriptions(vault, wallet, ids));
-        expired = await expireGracePeriodSubscriptions(vault, ids);
+        ({ pulled, skipped, expired } = await processDueSubscriptions(vault, wallet, ids));
         console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due / skipped.`);
       }
     } catch (err) {
@@ -647,8 +695,16 @@ async function run() {
     }
   }
 
-  await tick();
-  setInterval(tick, RUN_INTERVAL_MS);
+  // [T2] Self-rescheduling setTimeout instead of setInterval — matches
+  // notifier.js's own poll() pattern. A cycle that overruns RUN_INTERVAL_MS
+  // can no longer stack with the next one; the next cycle starts
+  // RUN_INTERVAL_MS after the previous one finished, not on a fixed clock
+  // regardless of how long the previous cycle took.
+  async function loop() {
+    await tick();
+    setTimeout(loop, RUN_INTERVAL_MS);
+  }
+  await loop();
 }
 
 run().catch(err => {

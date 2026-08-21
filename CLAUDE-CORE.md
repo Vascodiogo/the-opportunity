@@ -7,7 +7,7 @@
 ## 1. Project Overview
 **AuthOnce** — Non-custodial multi-token subscription protocol on Base Network.
 **Tagline:** Authorize once. Pay forever. Stay in control.
-**Domain:** authonce.io · **Target mainnet:** September 2026
+**Domain:** authonce.io · **Mainnet target:** not yet set — pending audit completion
 **Founder:** Vasco (solo, Swiss/PT). Full-time employment in Switzerland (Hinti GmbH / Assa Abloy partner). Employer unaware of AuthOnce. Public builder identity: @VascoBuilds on X.
 **Exit target:** €3–10M, retire at 54–55.
 **Local project:** `C:\The-Opportunity\` (frontend: `C:\The-Opportunity\frontend`) — paste files, not synced here.
@@ -43,11 +43,16 @@
 
 ## 2a. Contract Addresses
 
-**Base Sepolia testnet — CURRENT (vault-only redeploy July 5 2026, adds agent pull cap):**
-- SubscriptionVault: `0x0C8668dE16BDaF4FC6aAddc5Ac24954e5EFBb95d` — ✅ **verified on Basescan July 5** via Standard-JSON-Input, `input` object extracted from build-info wrapper (same method as July 4). Adds `maxAgentPullAmount` / `setAgentPullCap()` — see §Agent Pull Cap below. Confirmed via keeper set correctly (`check-keeper.js` ✅ MATCH) and on-chain test: subscription id 0 (50 USDC) and id 1 (199 USDC, exact cap) both succeeded; two attempts at 250 USDC never reached the chain (consistent with cap rejection, though the exact revert string was never directly captured — MetaMask smart-account wrapper transactions blocked inspection of the failed calls specifically).
-- MerchantRegistry:  `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` — ✅ **verified on Basescan July 22 2026, Exact Match** — unchanged since July 4, reused as-is by the vault-only redeploy (not redeployed itself). See §24
+**Base Sepolia testnet — CURRENT (v9, deployed + verified Aug 9 2026):**
+- SubscriptionVault: `0xDd41E5C83d000ff63d3e9E8cBBD79609b7029d3C` — ✅ **verified on Basescan, Exact Match**, v0.8.24+commit.e11b9ed9, optimizer 200 runs, paris. Adds [SV-21] two-step merchant payout rotation (`proposeMerchantChange`/`acceptMerchantChange`/`cancelMerchantChange`, requires new address already MerchantRegistry-approved at both steps) and a permit front-running fix (`createSubscriptionWithPermit`'s catch block no longer hard-reverts on a stale/front-run permit signature — falls through to the existing allowance check instead). Both fixes tested live end-to-end on-chain: permit fix proven via nonce evidence (front-run simulation script), merchant rotation proven via a real propose→accept cycle between two test merchant wallets, confirmed via direct contract-state reads.
+- MerchantRegistry:  `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` — ✅ **verified on Basescan July 22 2026, Exact Match** — unchanged, reused as-is by v9 (not redeployed). See §24
 - USDC Sepolia:      `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
-- Keeper wallet:     `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151`
+- Keeper wallet:     `0x6F76FF4f2d759620eDC3870f286823Eb0A7E0536` — **note: this is a DIFFERENT address than the `0xdCEa737e...C151` keeper documented elsewhere in older sections of this file.** The keeper wallet was legitimately rotated at some point between sessions; confirmed correct via a live on-chain `keeper()` read against the v8 vault before the v9 deploy. If `0xdCEa737e...C151` appears anywhere else in this doc, it's stale.
+- Full cutover confirmed live Aug 9 2026: `config.js` (frontend), `authonce-keeper`, and `authonce-notifier` Railway env vars all updated to the v9 address, all confirmed via fresh boot logs. Keeper's first post-cutover cycle correctly pulled a payment to a rotated merchant, confirming the whole pipeline reads live on-chain state correctly.
+- **Admin (as of Aug 9 2026):** Treasury Safe `0x737D4EeAEF67f776724482a29367615703A2DEB1` — transferred from deployer wallet via two-step propose/accept (`proposeAdminTransfer`/`acceptAdminTransfer`), verified via direct `admin()` read on Basescan, not trusted from any UI. See §36 for full detail. MerchantRegistry admin unchanged — still the deployer wallet (`0xbb6d960b...EE7782`), deliberately deferred to mainnet, not testnet-rehearsed.
+
+⚠️ **Superseded Aug 9 2026 — do not use for new subscriptions, do not reference in docs/blog/deck:**
+- SubscriptionVault (v8, vault-only redeploy July 5 2026, agent pull cap): `0xd6377Fa4809C4b745F5F1801193e5a90cD4AAE26` — was "CURRENT" from July 5 through Aug 9. ✅ verified on Basescan July 5, Exact Match. Adds `maxAgentPullAmount` / `setAgentPullCap()` — see §Agent Pull Cap below (mechanism unchanged in v9, this section still applies). Confirmed via keeper set correctly (`check-keeper.js` ✅ MATCH) and on-chain test: subscription id 0 (50 USDC) and id 1 (199 USDC, exact cap) both succeeded; two attempts at 250 USDC never reached the chain (consistent with cap rejection, though the exact revert string was never directly captured — MetaMask smart-account wrapper transactions blocked inspection of the failed calls specifically).
 
 ⚠️ **Superseded July 5 — do not use for new subscriptions, do not reference in docs/blog/deck:**
 - SubscriptionVault: `0x483f59367b2e5BEbbF33a6A110B1F1C42C706564` (July 4 — verified, but predates agent pull cap)
@@ -76,7 +81,7 @@
 
 **Wallets:**
 - Deployer:  `0xbb6d960b8671713bb92be92d03BE8d8165EE7782` — ⚠️ MetaMask smart account active, acts as contract-wallet on-chain. Use Rabby for subscriber testing.
-- Keeper:    `0xdCEa737ec293DFF0B18C315CA90f494F8CB2C151`
+- Keeper:    `0x6F76FF4f2d759620eDC3870f286823Eb0A7E0536` (rotated at some point since the June 30 deploy — the `0xdCEa737e...C151` value below/elsewhere is stale; see v9 note in §2a for how this was confirmed)
 - Subscriber test (Rabby): `0x128cE652e31Ef886376696Adf92ce6E36057c832`
 - Push Channel: `0xd3350...2fd0e` (AuthOnce Push Channel, MetaMask)
 - Protocol Treasury (Safe 2/2): `0x737D4EeAEF67f776724482a29367615703A2DEB1`
@@ -244,6 +249,8 @@ frontend/src/
 
 ## 8. Audit Status (June 30)
 
+**STATUS AS OF LATEST CHECK: still the accurate, current state — see also the correction to §38's audit-vendor claim, which was wrong.**
+
 **Platform:** Areta Market — 6 proposals received
 
 | Firm | Cost | Completion | Notes |
@@ -270,8 +277,9 @@ frontend/src/
 
 ## 9. Investment & Fundraising Status
 
-**Raising:** €150,000 pre-seed · 10-15% equity
-**Use of funds:** 40% audit (€60K) · 35% business co-founder (€52.5K) · 15% legal (€22.5K) · 10% operations (€15K)
+**Raising:** $150,000 pre-seed · 10-15% equity
+**Use of funds:** 15% audit ($22.5K) · 50% business co-founder ($75K) · 20% legal ($30K) · 15% operations ($22.5K)
+**Note:** corrected to match the later, verified figure (§38, Aug 16 2026) — this section was previously stale.
 **Status: ZERO active conversations. This is the real blocker.**
 
 | Channel | Status |
@@ -1011,3 +1019,407 @@ Later the same day, the `/` and `/pt` canonical (lang-aware `<Helmet>` in `Landi
 2. `blog-site/sitemap.xml`'s matching hreflang pair on the main site's homepage entry was flagged mid-session as a related finding — resolved same day as part of §31's PT-removal work, not left open.
 
 *Last updated: 2026-07-30*
+
+---
+
+## 33. Session Summary — August 6 2026 (Merchant auth polish, webhook race-condition fixes)
+
+**Merchant auth fix from the prior session (`requireMerchantAuth` JWT rewrite) went live and was verified working** — confirmed via a real webhook test delivering an actual `200` response.
+
+**Real bug found and fixed: auth-race 401s.** `loadWebhooks`/`loadPayments`/handle-fetch/`AnalyticsPanel` all fired on component mount, racing the async wallet-signature login (`attemptMerchantLogin`) — any call landing before the signature resolved got a 401 with no retry. Root cause of "Could not load analytics: HTTP 401" and webhooks silently failing to save. Fixed: these now wait for `merchantAuthReady` and re-fire the moment it flips true, instead of only trying once at mount.
+
+**Two more real bugs found via live testing on the actual "Add Webhook" flow:**
+- Webhook save silently swallowed the real failure reason behind a generic alert. Fixed to surface the actual status/message, with a specific "session expired, sign in again" message for 401s.
+- A stray leading space in a pasted URL (`https:// promerchant.com`) passed validation but broke real delivery — invisible because the test button was separately broken (see §34). No trim/validation existed on save.
+
+**README.md corrected** — was live-published with dead June 30 contract addresses, dead Stripe references (removed in the July 5 pivot but never scrubbed from the README), and EIP-712 domain shown as `version: "5"` instead of the real `"7"`. Fixed all three; no other content changed.
+
+**Contract v8 + `AdminDashboard.jsx` committed to git** — these had been deployed and live-tested back on Aug 4 but the source diff was never actually committed; repo didn't match what was live on-chain. Fixed, byte-verified against the deployed bytecode before committing (immutable-slot-adjusted diff, 100% match on everything else).
+
+**Stuck-funds warning shipped** — dashboard copy (next to the merchant's wallet address in the sidebar) + a draft ToS clause (needs Tiago Monteiro/Fio Legal review before publishing, not yet sent).
+
+**Git hygiene pass** — six stale one-off scratch scripts from past verification sessions deleted (`compare-bytecode.js`, `extract-input.js`, `merchant-registry-input.json`, `verify-input.json`, `check-keeper-key-address.js`, an earlier `find-correct-build-info.js` — the last was recreated by Claude by mistake, then correctly restored from Vasco's own original copy from Downloads). Confirmed-useful tooling (`extract-input.js`, `find-correct-build-info.js`) kept and properly committed. `test/SubscriptionVaultV8.test.js` + `contracts/mocks/*.sol` (a real local test suite from the Aug 3 v8 deployment, previously untracked) also committed.
+
+**Talent Protocol profile set up** (personal builder reputation, separate from AuthOnce's own accounts) — domain ownership verified via a `talentapp:project_verification` meta tag (unrelated to and non-conflicting with the existing `base:app_id` tag). Base App Store listing confirmed already correctly registered under the `vasco@authonce.io`-linked org (app id `6a2adea10cfd412b2ab2bb46`) — a second "Add Domain" screen seen mid-session was Talent Protocol's own flow, not a duplicate Base registration; no conflict.
+
+**Demo video recorded and uploaded** (Unlisted on YouTube: `https://youtu.be/DALHFJfysD4`) — unblocks the Base Builder Grant nomination, which had been sitting incomplete since May with no video. Resubmission drafted, not yet confirmed submitted this session.
+
+**LinkedIn:** AuthOnce company page post published (video-led). Personal profile fields deliberately left generic/unrelated to AuthOnce — employer is still unaware of the project, confirmed this remains intentional.
+
+**Real, deferred architectural finding — NOT fixed this session, fixed Aug 8 (see §34):** the entire multi-endpoint "Add Webhook" UI (per-event subscriptions, HMAC secret, "Recent Deliveries" panel) was discovered to be completely disconnected from the actual live event-dispatch pipeline. Real events (`payment.success` etc.) only ever checked a legacy `merchants.webhook_url` single field that nothing in the product had any UI to set — meaning every real event, for every merchant, had always silently fallen back to email regardless of what was configured in the dashboard. `webhook_endpoints` table itself also had no `CREATE TABLE` in the schema bootstrap at all (existed live only via an undocumented manual creation).
+
+*Last updated: 2026-08-06*
+
+---
+
+## 34. Session Summary — August 8 2026 (Full webhook system rebuild)
+
+**Fixed the disconnect found Aug 6, in full — four layered bugs, not one:**
+
+1. **`webhook_endpoints` table now properly created in `db.js`'s schema bootstrap** (was previously live only via an undocumented manual creation — a fresh database would have silently broken every webhook-management API route).
+2. **`dispatchWebhook()` in `webhook.js` rewritten** to query `webhook_endpoints` for every active endpoint subscribed to the firing event, dispatch to all of them in parallel (each with independent retry/backoff), and only fall back to email if every endpoint fails or none are configured. Legacy `merchants.webhook_url` kept as an additional fallback target for backward compatibility, deduped by URL.
+3. **The dashboard's "Test" button was separately broken even after fix #2** — `test.ping` isn't a real subscribable event type, so testing via the generic dispatcher would still always find zero matches. Added `testWebhookOnce()` — fires directly at the specific endpoint under test, single attempt, returns the real HTTP status. `POST /api/webhooks/test` rewritten to use it (previously ignored the specific webhook row it had already fetched and returned a hardcoded `{success:true, status:200}` regardless of what actually happened).
+4. **Frontend was checking `res.ok`** (whether the API call itself succeeded — always true) **instead of `data.success`** (whether the webhook delivery actually succeeded) — would have kept showing false "Delivered" even with 1–3 fixed.
+
+**Also added, found missing during this same pass:**
+- `DELETE /api/webhooks/:id` — didn't exist at all; a merchant with a typo'd/dead webhook URL had no way to remove or fix it.
+- URL trim-on-save — closes the exact stray-space bug from Aug 6.
+
+**Fully live-tested, both directions:** a real working URL (`x.com`) correctly showed `Delivered — 200`; a deliberately broken one (initially `httpstat.us/500`, then the original bad `promerchant.com` with its stray space) correctly showed an honest failure — proving the fix reports both outcomes truthfully, not just the happy path that fooled the old code.
+
+*Last updated: 2026-08-08*
+
+---
+
+## 35. Session Summary — August 9 2026 (v9 deploy, full cutover, batch merchant rotation)
+
+**v9 deployed and verified** — see updated §2a above. Both fixes (SV-21 merchant rotation, permit front-run fix) proven live on-chain before any cutover decision was made.
+
+**Full cutover to v9 performed** — `config.js` (frontend), `authonce-keeper`, `authonce-notifier` all repointed. Confirmed via fresh boot logs on all three. **Real proof of correctness, not just "no errors on boot":** the keeper's very first cycle after cutover correctly pulled a payment to the *rotated* merchant (Merchant B, not the original Merchant A) — confirming the whole pipeline reads live on-chain state correctly, not cached/stale data.
+
+**Real bug found and fixed while wiring the new UI: Subscribers tab was showing wrong data for every row.** Field-name mismatches (`sub.vault_address` vs. the real `sub.safeVault`, `sub.amount_usdc` vs. real `sub.amount`, string-keyed `interval`/`status` lookups against values that were already the numeric enums directly) — every subscriber row showed blank addresses, "$undefined" amounts, and broken status badges. Unrelated to today's actual task, found only because it was the exact code being touched to add the rotation UI. Fixed.
+
+**Merchant payout wallet rotation UI built — the actual point of the day's work.** Two-step propose/accept, matching the contract's design exactly:
+- Dashboard-native propose flow (per subscription), no Basescan needed.
+- Prominent incoming-request banner, shown above all tabs, when another merchant proposes moving a subscription's payouts to the current wallet.
+- Backend (`db.js` new `merchant_change_requests` table + indexes, `notifier.js` event listeners for `MerchantChangeProposed`/`Accepted`/`Cancelled`, `api.js` two new endpoints) was — surprisingly — already fully built and correct by the time this session picked it up (present in the uploaded `config.js`/`db.js`/`api.js`/`notifier.js` from the start of the session, verified line-by-line rather than trusted blindly). Only the frontend UI was genuinely missing.
+
+**Real bug found and fixed post-build: merchant-change banner showed the wrong "who proposed this" label** (a defunct deployer wallet from a much earlier deployment, instead of the real proposing merchant). Root cause: the `subscriptions` table has no `vault_address` scoping at all — its primary key is just the raw numeric `id`, which collides across every contract redeploy. Subscription ID `0` already existed from an early self-testing deployment; since `notifier.js` was still pointed at v8 when v9's real subscription #0 was created, it never overwrote that stale row. Fixed by reading the old merchant live from the contract itself at index time (always correctly scoped to `VAULT_ADDRESS`) rather than trusting the local DB. **The underlying `vault_address`-scoping gap itself was NOT fixed — flagged as a separate, larger architectural item; every table keyed by subscription ID alone has this same latent risk, not just this one banner.**
+
+**Batch/bulk rotation built** — deliberate scope decision, discussed explicitly: built as a frontend-only loop through the existing single-subscription contract functions (checkbox selection + "select all", progress-bar UI matching the existing `PriceChangeModal` pattern for both propose and accept), NOT a new on-chain batch function. Reasoning: a real batch contract function would expand audit scope before Hashlock has even priced the current v9 engagement; the frontend-loop approach ships against already-tested code with zero new audit surface. **Explicitly flagged that this doesn't remove the underlying signature/gas cost — N subscriptions still need N wallet signatures and N transactions, just triggered from one place instead of reopening a modal N times.** A real on-chain batch function (`proposeMerchantChangeBatch`/`acceptMerchantChangeBatch`) was discussed as a likely eventual need once real post-mainnet subscriber volume exists, deferred deliberately, not built.
+
+**Three more real bugs found via actually clicking through the batch flow live (not just deploying and assuming):**
+1. Bulk-propose success screen said "Proposed for 0 subscriptions" despite both real transactions succeeding on-chain — the modal was reading a live prop (`subscriptionIds`) that the very success callback (`onSaved` → clears the parent's selection state) changed out from under it mid-flow. Fixed by snapshotting the ids once on mount into local state.
+2. Only one of two proposed subscriptions showed as "Pending" after a bulk propose — the dashboard's reload was scheduled for 3 seconds, but `authonce-notifier` only polls for new events every 30 seconds (confirmed in its own boot log). Fixed everywhere this pattern appeared (5 separate call sites, not just bulk propose) — now reloads at both 5s (fast path) and 35s (guaranteed-correct path).
+3. Both individual and bulk Accept buttons stayed stuck on "Confirming..." forever even after the underlying transactions genuinely succeeded on-chain — the success path reset the overall "in progress" flag but never the per-request "confirming" flag. Fixed on both the single-accept and accept-all code paths.
+
+**Fully live-tested end to end, every on-chain path exercised, not just deployed:** propose (single + bulk), accept (single + bulk), cancel — all confirmed via direct contract-state reads and/or clean dashboard state after the real 30–35s reload window, using two real test merchant wallets rotating a subscription back and forth multiple times over the session.
+
+**Pending items, carried:**
+1. `vault_address` scoping gap in the database schema — real, flagged, not fixed (see above).
+2. Real on-chain batch propose/accept contract functions — deferred to post-mainnet, revisit when real subscriber volume makes single-subscription rotation genuinely painful; flag to Hashlock as a *possible* future scope item even if not built yet, to avoid it landing as a surprise addition later.
+3. Cosmetic: bulk-select header checkbox shows checked even when zero rows are actually eligible/selected underneath it (edge case: all visible subscriptions already have a pending change). Not fixed, very minor.
+4. Hashlock audit scope email — drafted (flags both v9 fixes), still not sent, holding until audit funding is actually confirmed.
+5. Base Builder Grant — video now attached, resubmission drafted, send-confirmation status unclear across sessions — worth explicitly confirming next time whether it was actually submitted.
+6. Everything else already open from §26–§32 (WooCommerce/PrestaShop status, Safe 2/3 upgrade blocked on a third signer, `keeper_pull_attempts` investigation, autovacuum tuning) — untouched, still open.
+
+*Last updated: 2026-08-09*
+
+---
+
+## 36. Session Summary — August 9 2026 (continued) — Vault admin → Safe transfer, WooCommerce plugin environment setup
+
+**SubscriptionVault v9 admin transferred from deployer wallet to Treasury Safe — Base Sepolia, verified on-chain.**
+
+- Two-step propose/accept pattern executed: `proposeAdminTransfer(newAdmin)` called by deployer wallet (`0xbb6d960b...EE7782`), then `acceptAdminTransfer()` called by the Safe, requiring both signers (Ledger + MetaMask).
+- **Real finding: the AuthOnce Treasury Safe (`0x737D4EeAEF67f776724482a29367615703A2DEB1`) had never been deployed on Base Sepolia** — it existed only on Base Mainnet (funded, 0.089 ETH). The Sepolia address was a counterfactual placeholder only. Activated this session via Safe's "Activate account" flow (real on-chain deployment tx, confirmed via `eth_getCode`).
+- Ledger hit a `DeviceLockedError` mid-signing, then a second "Failed to sign" error even with blind signing enabled — resolved by fully disconnecting the Ledger, physically unplugging/replugging, and reconnecting fresh. Worth remembering for mainnet: the Ledger browser connection can drop mid-session and needs a hard reconnect, not just a retry.
+- **Confirmed via direct `admin()` read on Basescan (not trusted from any UI):** vault admin is now `0x737D4EeAEF67f776724482a29367615703A2DEB1`. Genuine on-chain proof.
+- **MerchantRegistry admin transfer NOT done** — deliberately deferred. Registry still has the deployer wallet as admin. Decision: full admin-transfer rehearsal will be redone properly at mainnet deployment time; this Sepolia exercise was Vault-only.
+
+**AuthOnce Lda. incorporation status — confirmed NOT yet incorporated.** Resolves the open unknown from prior session close-outs (target was July 2026, never confirmed either way until now).
+
+**WooCommerce/PrestaShop plugin status — confirmed via repo-wide search (`findstr /s /i /m`), definitively closed as an open question:**
+- Zero plugin code exists for either platform. All matches were blog copy (`blog-site/*.html`) and this doc's own checklist entries mentioning them as planned features.
+- Resolves the "unconfirmed against codebase" status this had carried since July.
+
+**WooCommerce plugin — environment setup started (code not yet written):**
+- Local (WP Engine's local WordPress tool) installed on Vasco's Windows machine.
+- Test site created: `authonce-woo-test`.
+- Hit a port-80 router conflict on first boot (something else on the machine — likely IIS — already listening on port 80). Fixed by switching Local's Router Mode to `localhost` (Preferences → Advanced → Router Mode). Site now runs at `localhost:10004`.
+- WooCommerce plugin installed and activated (official, by Automattic).
+- One test product created ("Test Product 1", CHF 5.00/4.50, Simple/Virtual product type) — confirms working cart + checkout pages.
+- **Not yet started:** actual AuthOnce payment gateway plugin code (PHP). Scope agreed: build WooCommerce integration first (larger market), PrestaShop later. MVP plan — merchant enters AuthOnce credentials, "Pay with AuthOnce" checkout option redirects to existing `authonce.io/pay/...` link, webhook marks WooCommerce order paid on successful subscription. No crypto/private key handling inside the plugin itself.
+
+**Pending items, carried and new:**
+1. WooCommerce plugin — actual PHP code, next session. Environment is ready.
+2. MerchantRegistry admin transfer to Safe — deliberately deferred to mainnet, not testnet-rehearsed.
+3. AuthOnce Lda. incorporation — still not done, no longer an "unknown," now a known open task.
+4. Everything else carried from §35 (vault_address scoping gap, batch propose/accept functions, Safe 2/3 upgrade still blocked on a third signer, Hashlock audit-scope email, Base Builder Grant submission-confirmation status, Merchant ToS, autovacuum tuning, keeper_pull_attempts investigation).
+
+*Last updated: 2026-08-09*
+
+---
+
+## 37. Session Summary — August 11 2026 — vault_address scoping: the real fix, two real incidents, and a correction to yesterday's fix
+
+**Goal:** finish verifying yesterday's vault_address scoping fix (§36 area) by testing a real new subscription end-to-end. Turned into a much larger, multi-incident debugging session — all resolved, all verified directly against the database, not just logs.
+
+**Incident 1 — deploy crash-loop on first attempt.** Yesterday's migration didn't account for `payments.subscription_id` carrying a foreign key into `subscriptions(id)`. Postgres correctly refused to drop the old single-column primary key while that FK depended on it — `AuthOnce` main crash-looped safely (no data corruption) but was down until fixed.
+
+**Real fix, not a workaround:** extended `payments` with the same `vault_address` scoping as `subscriptions`, and rebuilt the FK as a proper composite `(subscription_id, vault_address) REFERENCES subscriptions(id, vault_address)` — closing the same collision class in `payments` that was just fixed in `subscriptions`, rather than just dropping the constraint and losing that integrity check. `insertPayment()` in `db.js` and its one call site in `notifier.js` updated to pass `vaultAddress` through. Confirmed via direct query against `pg_constraint` — not trusted from logs — that both the composite primary key and composite foreign key are live.
+
+**Two more issues found and fixed while re-verifying, before either ever reached production:**
+- The `payments` table needed to be created *before* the vault_address migration tries to `ALTER` it — original ordering would have broken any genuinely fresh database (e.g. a new dev/test environment), not just this live one.
+- A copy-paste duplication in one of Claude's own edits (the same drop-then-add FK statement pair ran twice in a row) — harmless but sloppy, cleaned up.
+
+**Incident 2 — yesterday's backfill choice itself was flawed, found via a real second data-loss event.** Yesterday's fix backfilled every pre-existing, origin-unknown row with the *current* vault address as a best-effort label. That reasoning was incomplete: it meant an old, unrelated row could still collide with a genuinely new subscription that later reused the same numeric id — the exact bug the whole fix was supposed to prevent, reintroduced through the backfill itself. Confirmed directly: `id=6` was stale June 20 2026 test data; a real new subscription created today collided with it and its data was silently lost, identically to the original `id=5` incident from Aug 10.
+
+**Real, permanent fix:** the v9 vault did not exist before Aug 9 2026 — a hard, verifiable fact, not a guess. Any row created before that date cannot possibly be a real v9 subscription, however it was labeled. Added a corrective re-labeling step to `initSchema()`: any row still carrying the current `VAULT_ADDRESS` but created before `2026-08-09` gets re-tagged with a sentinel value (`legacy-unknown-pre-v9`) that can never collide with a real vault address again. Payments are relabeled based on their *parent subscription's* relabeling (a join), not an independent date check on the payment itself — a payment's `executed_at` doesn't necessarily track its subscription's `created_at`, so matching on the parent avoids a possible FK mismatch. The relabeling runs *before* the FK is re-added each boot, since Postgres enforces FK integrity on UPDATEs to the referenced table too, not just inserts — got this ordering wrong on the first attempt within this same fix, caught and corrected before shipping.
+
+**Deliberately not done:** no attempt to repair the two known lost rows (`id=5`, `id=6`) — per Vasco's explicit call, testnet data has no real value, so the priority was a permanent fix over a data repair. Confirmed working with a fresh end-to-end test afterward instead.
+
+**Final verification, direct from the database, not inferred from logs:**
+- `pg_constraint` query confirmed both composite keys live and correct.
+- `id=6` confirmed re-labeled to `legacy-unknown-pre-v9`.
+- A genuinely new test subscription today landed as a **second, independent row at `id=7`** — sitting alongside an old `id=7` row now correctly labeled `legacy-unknown-pre-v9`. This is the exact collision scenario that used to destroy data, now proven to work correctly, not just theoretically fixed.
+
+**New, separate bug found in the same final test — not related to vault_address, flagged for next session:** the new row's `external_ref` came back `NULL` despite `?ref=vaultfix-final-test` being in the pay link. Root cause: a real race condition, present since the `external_ref` feature was first built (§36) — `PayPage.jsx`'s `/link` call fires the instant the transaction confirms in-browser, but the notifier only creates the row on its own ~30s polling cycle. If `/link` arrives first, it gets a "not indexed yet" response and never retries, silently losing the ref. Not a vault_address issue — would have shown up on the very first test regardless, just happened to land the other way at the time.
+
+**Recommended fix, not yet built:** make `PayPage.jsx` retry the `/link` call a few times with a short delay instead of giving up after one attempt, now that the notifier is confirmed to catch up quickly under normal conditions.
+
+**Pending items, carried and new:**
+1. `PayPage.jsx` `/link` retry logic — next session, closes the original WooCommerce `external_ref` task properly.
+2. WooCommerce plugin PHP code itself — still not started, environment from Aug 9 (§36) is ready and unaffected by any of today's backend work.
+3. Everything else carried from §36 (MerchantRegistry admin transfer to Safe still deferred to mainnet, AuthOnce Lda. incorporation, Safe 2/3 upgrade blocked on a third signer, Hashlock audit-scope email, Base Builder Grant submission-confirmation status, Merchant ToS, autovacuum tuning, `keeper_pull_attempts` investigation).
+4. Two pre-existing bugs found but deliberately not fixed today (flagged during the vault_address work, unrelated to it): a broken subscriber-cancellation code path referencing a `cancelled_at` column that doesn't exist anywhere in the schema, and `getSubscriptionsByMerchant` being called with 4 arguments in `api.js` while the real function only accepts 1 — pagination/status filtering on that endpoint is silently a no-op.
+
+*Last updated: 2026-08-11*
+
+---
+
+## 38. Session Summary — August 16 2026 (Admin merchant approval UI, Base Ecosystem Fund resubmission, pitch deck corrections)
+
+**Admin dashboard — real on-chain merchant approve/revoke UI built and deployed.** Replaced the old `ManualApprove` component (which only copied the address and handed off to Basescan Write Contract) with a genuine wallet-connected write UI in `AdminDashboard.jsx`, using `wagmi` hooks already present in the stack (`useAccount`, `useConnect`, `useWriteContract`, `useWaitForTransactionReceipt`) against `REGISTRY_ADDRESS`/`REGISTRY_ABI` from `config.js`. Honest status reporting throughout (waiting → confirming → confirmed, or a real error) — no fake success states. Deliberately does **not** hardcode an "is this the right wallet" check client-side, since `MerchantRegistry`'s `onlyAdmin` check is the real authority and the deployer wallet (not the Safe) is still registry admin. Committed `9a5c9bd`, pushed, build verified clean, deployed live.
+
+**Real security proof obtained during testing (not just theoretical):** used a genuinely unapproved test merchant + a real pay link (`authonce.io/pay/.../non-approved-merch-`) and attempted a real subscribe from a separate test wallet (Edge browser, isolated from the admin session in Chrome). The transaction failed with a misleading RPC gas-limit error (`eth_sendRawTransaction: exceeds max transaction gas limit`) rather than a clean `MerchantNotApproved` revert — but **confirmed via Network tab and no on-chain subscription created that the actual security held**: an unapproved merchant genuinely cannot receive a subscription. The misleading error message itself is a new, low-priority backlog item — `PayPage.jsx` should pre-check `isApproved()` before attempting the transaction so an unapproved-merchant pay link shows a clear message instead of a cryptic gas error.
+
+**MetaMask connect-button bug — root-caused, not a code bug.** After the merchant-approve UI shipped, "Connect wallet to approve/revoke" appeared to do nothing. Root cause chain, confirmed via console: (1) initial cause was two wallet extensions (MetaMask + Rabby) both injecting `window.ethereum`, throwing `"another Ethereum wallet extension also setting the global Ethereum provider"` — fixed by disabling Rabby; (2) after that, a **separate, second issue** surfaced — a stuck MetaMask `wallet_requestPermissions` request already pending for `authonce.io` (error code `-32002`), left over from earlier troubleshooting clicks, silently blocking any new connection attempt with zero visible error. Confirmed the wallet↔page bridge itself was fine the whole time via a direct `window.ethereum.request({method:'eth_requestAccounts'})` console call, which surfaced the real `-32002` error. Fix: full browser restart (clears MetaMask's in-memory pending-request state). **Not independently re-confirmed after the fix** — the actual "approve merchant → retest the previously-blocked pay link → confirm it now succeeds" end-to-end loop was never completed this session; picked up other work instead. First task next session: finish that loop for real, and independently verify via `isApproved()` on Basescan, not just the UI's own "Confirmed on-chain" message.
+
+**Also flagged, not yet checked:** the existing per-row "Revoke" button already present elsewhere in `AdminDashboard.jsx`'s merchant list (separate from the new card) — unknown whether it's a real on-chain write or the same kind of database-only action the old `ManualApprove` used to be. Needs verification before being trusted.
+
+**Base Ecosystem Fund — application resubmitted.** Follow-up to the unanswered April 2026 submission, prompted by a live @buildonbase post confirming the fund is still actively soliciting applications. All 5 sections (Company / Team / Idea / Funding / Why Base) filled and reviewed for accuracy against actual project state, not aspirational copy:
+- **Funding ask:** $150K pre-seed. Use of funds: 15% audit / 50% business co-founder / 20% legal / 15% operations — deliberately corrected from an earlier stale 40/35/15/10 split once the real audit quote ($20–25K, not $60K) was clarified.
+- **No equity % stated** — deliberate, to avoid anchoring a negotiating position before any real conversation, especially since BEF may itself invest directly.
+- **Traction answer kept deliberately unflashy and accurate:** pre-revenue, testnet-only, named the real blocker (audit, no funding secured yet) rather than inflating anything — same discipline as the landing-page fabricated-metrics cleanup from July.
+- **AI-agent framing scoped carefully:** mentioned only in the Idea section, stated precisely — ERC-1271 proven on-chain with one real Safe wallet pull, keeper-side production automation explicitly flagged as not yet built. Did not oversell this to match BEF's "Agentic Commerce" focus area.
+
+**Pitch deck — full accuracy and tone pass, v4 → v9, all changes grounded in actual project history:**
+1. **DAI removed** from all token lists (was dropped from the project in July, actively blocked on-chain).
+2. **AI-agent claim corrected** — "autonomous agents... without human intervention" (the exact overclaim already caught and removed from the live site once before, per the July 24/26 sessions) replaced with the accurate per-cycle-signing description. Competitive-table cell softened from an unqualified ✓ to `~` with an explanatory footnote.
+3. **Audit status corrected** — removed a fabricated-looking firm list (Cyfrin, Hashlock, Hacken, Guardian, "in progress") that matches no real audit history; replaced with the true state: Audit vendor undecided — six competing offers received via Areta Market (June 30): Softstack $4,600, Hashlock $5,000, Beosin $8,000, Nethermind $9,000, Composable $11,000, Statemind $15,000. No firm engaged or accepted. Decision was pending an Areta EF subsidy reply — status of that reply needs confirming with Vasco.
+4. **Verification status corrected** — MerchantRegistry is actually verified now; the deck understated this.
+5. **Budget breakdown corrected** to match the live application (15/50/20/15%), including fixing the *visual progress-bar widths* (separate hardcoded shapes that don't auto-update with the text — silently still showed the old 40/35/15/10 proportions after the numbers were edited).
+6. **Currency standardized to USD ($)** throughout the fundraising slide, matching the live application's "$150K" wording — SaaS tier product pricing (slide 6, $49/$199-equivalent) deliberately left as real, separate product pricing, then also converted to USDC on user's own request for internal consistency with "Billed in USDC" copy on the same slide.
+7. **"Target exit: $3–10M acquisition" line removed entirely** — judged as an unhelpful, self-limiting signal to send an investor/fund unprompted (caps their own upside thinking, contradicts the deck's own "standard subscription primitive for Base" framing).
+8. **SaaS tier billing marked "(in development)"** — confirmed via full session-history review that tier billing-to-access linkage was never actually built (tier enforcement is off-chain per locked business rules, and no listener exists connecting a successful USDC payment to a merchant's tier flag in Postgres). This is a **real, unbuilt gap**, not just a hedge phrase — flagged as a backlog item, not started.
+9. **Tone/readability pass** — removed stiff, jargon-heavy phrasing that read as written-for-a-deck rather than said-by-a-person: "structurally," "no custodial code path," "primitive," "agentic economy," "atomically" (→ "same transaction, no separate step," applied consistently across slides 4 and 6), "bridging EU regulatory awareness with Swiss precision" (cliché), "100% commitment to the mission" (vague) → replaced with a concrete, accurate line about building solo alongside full-time employment (also fixes a consistency gap with the Team section, which already discloses the Hinti employment).
+10. **Deliberately left untouched, user's call:** slide 11's "20+ years in technology... hardware, software" founder-bio claim — unverifiable from project history, conflicts with what was told to Claude when drafting the Team section minutes earlier ("nothing relevant to put there, I just work at Hinti"). Not resolved either direction.
+11. Final version hosted as `AuthOnce-PitchDeck-2026.pdf` on Google Drive (public "anyone with the link"), confirmed via screenshot to be the correct final content, linked in the submitted application.
+
+**Real, unbuilt gap identified and discussed, not started:** SaaS tier access is completely disconnected from tier billing. Even once USDC tier billing works, nothing currently grants/revokes dashboard tier access based on payment success or failure. Would need: a listener on `PaymentExecuted` events where AuthOnce itself is the merchant, tier matching by payment amount, a DB flag update — plus an undecided product question (does tier access hold through the grace period on a missed payment, or drop immediately?).
+
+**Pending items, carried and new:**
+1. **Finish and independently verify the merchant approve/revoke end-to-end loop** — approve the test merchant via the new UI, confirm via direct `isApproved()` Basescan read (not just the UI message), then retest the previously-blocked pay link to confirm a real subscription now succeeds.
+2. Verify whether the pre-existing per-row "Revoke" button (separate from today's new card) is a real on-chain write or a stale database-only action.
+3. `PayPage.jsx` pre-flight `isApproved()` check — low priority, but would fix the misleading gas-error message an unapproved merchant's subscriber currently sees.
+4. SaaS tier billing → tier access linkage — not started. Needs the listener design above plus the grace-period product decision.
+5. Slide 11 founder bio claim — still unresolved, left as-is per explicit instruction.
+6. Everything else already open from §37 (MerchantRegistry admin transfer to Safe deferred to mainnet, AuthOnce Lda. incorporation, Safe 2/3 upgrade blocked on a third signer, Hashlock audit-scope email still unsent, autovacuum tuning, `keeper_pull_attempts` investigation, WooCommerce cart/checkout `external_ref` `/link` retry logic) — untouched this session.
+7. Awaiting reply from the resubmitted Base Ecosystem Fund application.
+
+*Last updated: 2026-08-16*
+
+---
+
+## 39. Session Summary — August 16 2026, continued (Connect-button real root cause found and fixed; approve/revoke loop verified on-chain both directions; second real bug found and fixed — DB-only fake approve/revoke buttons in merchant list)
+
+**Correction to §38:** the browser restart described in §38 did *not* actually fix the connect issue — it only cleared the stuck MetaMask permission request from the *previous* bug (two wallet extensions conflicting). A second, separate, code-level bug remained and was still silently blocking the connect button after the restart. §38's "not independently re-confirmed" caveat was correct to include.
+
+### Bug 1 — silent connect no-op (FIXED, confirmed working end-to-end)
+
+**Root cause:** `AdminDashboard.jsx`'s `handleConnect()` looked up the MetaMask connector via `connectors.find(c => c.id === "metaMask")`. In this app's actual RainbowKit build, the MetaMask connector's real id is `"metaMaskSDK"`, not `"metaMask"`. The `find()` silently returned `undefined`, so the code fell through to `connectors[0]` — which is the **Safe** connector in this app's connector order. Safe's connector only functions inside a Safe multisig iframe context; called elsewhere it fails to open anything, with no thrown error. That's why clicking the button produced no MetaMask popup, no modal, and no console error.
+
+**Diagnosis method:** evidence-first, not guesswork. Added a temporary `console.log(connectors)` right before render, rebuilt, deployed, and read the actual printed connector array in the browser console. It showed `[{id:'safe',...}, {id:'walletConnect',...}, {id:'baseAccount',...}, {id:'metaMaskSDK',...}, {id:'walletConnect',...}, {id:'walletConnect',...}]` — proving the id mismatch directly rather than assuming it. (Also confirmed along the way that `config.js`'s separately-exported `wagmiConfig` is unused dead code — `main.jsx` builds its own config via RainbowKit's `getDefaultConfig` instead. Not fixed tonight; flagged below.)
+
+**Fix:** `handleConnect()` now checks both `"metaMaskSDK"` and `"metaMask"` before falling back to `connectors[0]`, so a future RainbowKit/wagmi version bump that renames the id again won't silently reintroduce this bug.
+
+**File:** `frontend/src/components/AdminDashboard.jsx`
+**Commits:** `401aaaa` (temp debug log, since removed) → `66dc224` (real fix, debug log stripped)
+
+**Verified on-chain, end-to-end, in both directions:**
+- Connected the **Deployer wallet** (`0xbb6d960b8671713bb92be92d03BE8d8165EE7782`) via the fixed button — MetaMask popped up correctly.
+- Approved test merchant `0xF6CcD9524964B9433773f77C270F724339B9B9E5` ("merch test") on `MerchantRegistry` (`0x393BA721aB45f4d4DaAC1B914e7F6377508C0299`).
+- Confirmed via **Basescan transaction logs** (not the UI's own success message): real `MerchantApproved` event, `merchant = 0xF6CcD...B9B9E5`, `approvedBy = 0xbb6d960b...EE7782`.
+- Retested the previously-blocked pay link for that merchant — subscription completed successfully on-chain ("You're subscribed!", Basescan link shown). A revert would have occurred if `isApproved()` were still false, so this is functional proof, not just a UI read.
+- Then tested **Revoke** the same way: `MerchantRevoked` event confirmed on Basescan, `merchant = 0xF6CcD...B9B9E5`, `revokedBy = 0xbb6d960b...EE7782`.
+- One transient error during revoke testing: `revokeMerchant` reverted with a confusing `"exceeds max transaction gas limit"` RPC message. Root cause was unrelated to gas — the wallet connected at that moment was the **Subscriber test wallet**, not the Deployer/admin, so the real cause was an admin-only access-control revert; Alchemy's RPC surfaced it as a gas-estimation error instead of a clean revert reason. Reconnecting the Deployer wallet resolved it immediately. Worth remembering this misleading error string if it recurs elsewhere in the app.
+- Also observed and confirmed as expected behavior, not a bug: a product created *before* its merchant was approved automatically became usable the moment approval landed on-chain — no separate activation step needed.
+
+### Bug 2 — merchant list's per-row Approve/Revoke buttons were DB-only, no blockchain interaction (FOUND and FIXED — buttons removed)
+
+**Found while retesting Bug 1's fix.** Below the on-chain card, the merchant list table had its own, separate, pre-existing Approve/Revoke buttons per row (the ones §38 flagged as "needs verification"). These called `POST /api/admin/merchants/:wallet/approve` and `.../reject` — plain backend API calls with a Bearer token. **No `writeContract`, no wagmi, no MetaMask, no on-chain interaction whatsoever.** The row's status badge was driven entirely by the database column `merchant.approved_at`, not a live `isApproved()` read.
+
+**Confirmed as a real, live inconsistency, not hypothetical:** after revoking the test merchant on-chain via the working card, the list row still showed "Approved" with a Revoke button — because nothing had told the database anything happened. Clicking that stale "Revoke" button then flipped the DB flag to "Pending" — coincidentally landing on the correct-looking state, but only because the on-chain revoke had already happened separately moments earlier via the real button. Had the DB-only "Approve" been clicked instead at any point, the dashboard would have shown "Approved" for a merchant that was still blocked on-chain (subscriber pulls would keep reverting) — or vice versa, shown "Pending" for an actually-approved, live merchant.
+
+Notably, the **merchant-facing portal** (`authonce.io`, merchant's own view) correctly showed "⚠ Pending" for the revoked wallet throughout — so this divergence was isolated to the admin dashboard's list table, not systemic.
+
+**Fix:** removed the DB-only `handleApprove`/`handleReject` functions and their buttons from `MerchantRow` entirely. The row is now read-only (Merchant / Email / Registered / Status / View), with the on-chain card as the single control surface for approve/revoke. Table header and grid columns adjusted to match (5 columns instead of 6). Checked `MerchantDetail` (the "View →" modal) too — it only displays the approval date, no similar fake action buttons there.
+
+**File:** `frontend/src/components/AdminDashboard.jsx`
+**Commit:** `aa8430e`
+
+**Known residual limitation, not fixed tonight, flagged for later:** the list row's Status badge still reads `merchant.approved_at` from the database — it's informational only, not a live `isApproved()` read. It can still lag or diverge from real on-chain state (e.g. the register-on-approve `fetch` in `ManualApprove` is explicitly best-effort with a swallowed `.catch(() => {})`, so a failed DB write there wouldn't surface anywhere). Options for later: (a) wire the badge to a live per-row `isApproved()` read via `useReadContract`, or (b) accept the DB lag as informational-only and label it as such in the UI. Not urgent now that it's no longer paired with an actionable, misleading button — but worth closing before mainnet.
+
+### Updated pre-mainnet checklist status
+
+- ~~Finish and independently verify the merchant approve/revoke end-to-end loop~~ — **DONE**, verified on-chain both directions with Basescan event-log evidence, not UI messages.
+- ~~Verify whether the pre-existing per-row "Revoke" button is a real on-chain write or a stale database-only action~~ — **DONE**. It was DB-only. Removed, along with its matching fake "Approve."
+- **New follow-up, low urgency:** decide whether to wire the merchant list's status badge to a live `isApproved()` read, or leave it clearly labeled as DB-derived/informational.
+- **New follow-up, low urgency:** `config.js`'s exported `wagmiConfig` is dead code — `main.jsx` never imports it, using RainbowKit's `getDefaultConfig` instead. Same class of "unused/duplicate config" issue as §2a and §19. Not investigated further tonight; worth a cleanup pass so there's only one wagmi config in the codebase.
+- **New, not yet started — flagged this session, not investigated further:** no load/volume testing has been done at any point in this project. Everything verified so far has been single-digit manual test transactions on Base Sepolia. Before mainnet, need to run a real volume test — **at least 1,000 transactions** — to find actual throughput limits across: the keeper bot's pull-execution loop (sequential vs. parallel/batched — `keeper.js` not yet reviewed for this), RPC provider rate limits at the current Alchemy tier, and Postgres behavior under load (ties into the already-open `autovacuum tuning` item). Also need to calculate real ETH (gas)/USDC/EURC required to fund that test, and check whether the current RPC tier can sustain it or whether a paid tier is needed for the test month. Vasco has a faucet script for generating test funds — needs review to determine which wallets and how many are usable/available before this test can run.
+- Unchanged from before this session: `PayPage.jsx` pre-flight `isApproved()` check (misleading gas-error message), SaaS tier billing → tier access linkage, slide 11 founder bio claim, MerchantRegistry admin transfer to the Safe (deferred to mainnet), AuthOnce Lda. incorporation, Safe 2-of-3 signer, Hashlock audit-scope email still unsent, autovacuum tuning, `keeper_pull_attempts` investigation, WooCommerce `external_ref` `/link` retry logic.
+- Awaiting reply from the resubmitted Base Ecosystem Fund application (submitted this session, per §38 — not yet confirmed received).
+
+*Last updated: 2026-08-16*
+
+---
+
+## 40. Session Summary — August 18 2026 (config.js cleanup deployed; live on-chain merchant-status badge built; keeper/notifier load-test review; EURC approval — full saga including a Safe multisig admin discovery; merchant re-approval; session paused on a public RPC outage)
+
+### config.js dead-code cleanup — DONE, deployed
+
+Removed the unused `wagmiConfig` export from §39's cleanup list. Confirmed via `Select-String -Pattern "wagmiConfig"` across the whole `frontend/src` that nothing imported it. Removed it along with its now-unused imports (`http`, `fallback`, `createConfig` from wagmi, `baseSepolia`, the four wallet connector imports, `projectId`). `RPC_URLS` and everything else in the file untouched — confirmed still used elsewhere (`createPublicClient` calls).
+**File:** `frontend/src/config.js`
+**Commit:** `c79e32b`
+
+### Merchant list status badge — wired to a live on-chain read, BUILT but NOT YET DEPLOYED
+
+Addressed the residual limitation flagged at the end of §39 (badge was DB-derived only). Added a single batched `useReadContracts` call (one multicall for the whole visible merchant list, not one RPC call per row) that reads `isApproved()` live from `MerchantRegistry` for every merchant currently loaded. A new `isMerchantApprovedLive()` helper prefers the live result and falls back to the DB `approved_at` flag only while the read is still loading. This same helper now drives **all three** previously-DB-only surfaces consistently — the per-row badge, the "Pending"/"Approved" filter tabs, and the `pendingCount`/`approvedCount` numbers shown in the stat cards and the "Merchants · N ⚠" tab label — so none of them can disagree with each other or with the chain anymore.
+**File:** `frontend/src/components/AdminDashboard.jsx` (not yet committed/pushed — sitting as a local diff only, per the file exchanged this session)
+**Status:** written and syntax-checked, but **not yet built, deployed, or tested live**. Next session: `npm run build`, deploy, then verify by loading `/admin` and confirming the badge now matches Basescan's `isApproved()` read directly (which we exercised heavily later this same session, so a good live merchant to test against already exists).
+
+### keeper.js / notifier.js reviewed for real throughput risk (prompted by Vasco asking whether the system has been evaluated at volume — it had not)
+
+No load testing has ever been done on this project before tonight. Reviewing the actual keeper/notifier code (not guessing) surfaced three real structural risks, all evidence-based:
+
+1. **Keeper re-checks every active subscription every cycle, not just due ones.** `processDueSubscriptions` loops all active/paused IDs every 20 seconds (`RUN_INTERVAL_MS`), calling `isDue()` on each to find out if it's due — no server-side pre-filter. At meaningful volume (hundreds+ of active subscriptions) this means hundreds of RPC calls every cycle just to check status, batched 5-at-a-time (`CONCURRENCY = 5`).
+2. **Keeper's scheduler doesn't wait for the previous cycle to finish** — plain `setInterval(tick, RUN_INTERVAL_MS)`. If a cycle overruns the interval (plausible per #1 at volume), the next cycle fires anyway and cycles can stack. `notifier.js` does this correctly (self-rescheduling `setTimeout` inside its own poll function) — keeper doesn't have that safety.
+3. **Notifier's proactive-notification loop (3-day reminders, price-change notices) is fully sequential**, one subscription at a time — on-chain read, DB dedup check, email, webhook, DB insert, no batching. Runs every 5th poll cycle (~2.5 min budget).
+
+These are risks found in code, not measured results — the actual numbers only come from running the real test.
+
+### The volume test plan settled on: 100 transactions first, not 1,000
+
+Real contract facts, found by reading `SubscriptionVault.sol` directly, that reshaped the plan:
+
+- **Funding model is direct wallet balance + allowance/permit** — no separate pre-funded "vault" per subscription. One subscriber wallet can create many subscription IDs; confirmed no owner/product uniqueness restriction in `createSubscription`/`createSubscriptionWithPermit`.
+- **`isDue()` only returns true immediately after creation (`lastPulledAt == 0`) or after a full interval has elapsed** — shortest interval is `Weekly` (7 days), no test-only short interval, no admin override. **This means N real `executePull()` successes in one session requires N distinct subscriptions** — you cannot get repeat same-day pulls from fewer subscriptions.
+- **Permit only needs signing once per wallet+token** — per SV-13, `permit()`'s `value` is `type(uint256).max` (a standing allowance), not the per-cycle amount. Once set, later subscriptions for that same wallet+token can use the plain `createSubscription()` call, no signature needed.
+- `require(amount > 0)` is the only floor on subscription amount; `MAX_SUBSCRIPTION_AMOUNT` is far above anything relevant here.
+
+**Faucet constraint that actually drives the numbers:** Vasco has a **manual USDC/EURC faucet limited to 20 of each per wallet per day** — confirmed per-wallet, not account-wide. ETH is not the constraint (see gas estimate below).
+
+**Wallets chosen for the test — no new wallets needed:**
+- Subscriber 1 = existing **Subscriber** wallet (`0xBE6a5cFFd807e85602E2434e6EAa9BDb866E9e35`)
+- Subscriber 2 = existing **Account 7** (`0xA7C03E93545dF9Df3e006E13E4aF993C208Dc1aB`)
+- Subscriber 3 = existing **Account 8** (`0x35B5a617a91C0ABC400D6e704A259Add551BdD07`)
+- Merchant target: already-approved **"merch test"** (`0xF6CcD9524964B9433773f77C270F724339B9B9E5`) — no need for merchant diversity in this test.
+- Explicitly NOT used: Merchant A/B/C (kept merchant-role-only), Deployer/Push Channel/Vasco Builds/PK Signer 2 Multi-Sig (protocol-level roles, kept out of subscriber testing to avoid contaminating admin/treasury testing later).
+
+**Real bug caught before it went into any script:** Vasco supplied an EURC address (`0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4`) that turned out to be **Ethereum Sepolia's** EURC contract, not Base Sepolia's — confirmed against Circle's official contract list. Correct Base Sepolia EURC: `0x808456652fdb597867f38412077A9182bf77359F`. Would have caused every EURC transaction in the test to fail or hit an unrelated contract. Always cross-check token addresses against the official source per network — a plausible-looking address from the person is not sufecient confirmation.
+
+**Gas estimate methodology (a real number, not fabricated):** read a real `approveMerchant` transaction on Basescan (`106,320 gas @ 0.00597 Gwei = 0.000000634678571575 ETH`) to get the current real Base Sepolia gas price, then estimated generously (200,000 gas) for `executePull()`. Conclusion: **ETH is not the bottleneck for this test** — even 100 pulls costs roughly one single faucet claim's worth of ETH. USDC/EURC's daily cap is the real constraint.
+
+**`fund-test-wallet-multi.js` reviewed (not modified):** only funds ETH (not USDC/EURC) for three wallets — Safe multisig, Deployer, Keeper. Found a real bug in its own numbers: `MAX_CLAIMS_TOTAL = 750` claims (`0.075 ETH` budget) is less than the combined `targetEth` of those three wallets (`0.16 ETH`) — the shared daily budget can't reach its own configured targets in one run. Not fixed tonight; flagged for whoever next touches that script. Doesn't block anything since ETH isn't the constraint for this test.
+
+### `create-test-subscriptions.js` — new script, written this session
+
+Creates a configurable number of test subscriptions (`TOTAL_SUBSCRIPTIONS`, deliberately starts at `6` — same "prove it small first" pattern as everything else this project does) split across the 3 subscriber wallets above, alternating USDC/EURC, all against `merch test`. Safety checks built in, run before spending any gas: refuses to run on the wrong chain id, confirms both tokens are `approvedTokens` on the vault, confirms each wallet's actual token balance covers what it's about to commit, confirms each `.env` private key actually resolves to the expected wallet address. Uses the permit-once-per-wallet-per-token optimization described above. Loaded via `require("dotenv").config({ path: ... "..", ".env" })` pointed explicitly at the project root, since the script lives in `scripts/` and `.env` lives at `C:\The-Opportunity\.env` — a real, found-and-fixed bug (`dotenv` only looks in the CWD by default, and the script is run from `scripts/`).
+**File:** `scripts/create-test-subscriptions.js`
+
+### EURC approval — the actual saga
+
+Running the script for the first time correctly caught, before spending any gas, that **EURC was not an approved token on the vault at all** (`approvedTokens(EURC) == false`; USDC was already `true`). Fixing this required `SubscriptionVault.approveToken(address)`, `onlyAdmin`-gated — which led to a real, previously-unknown discovery:
+
+**The Vault's admin is not the Deployer wallet — it's the Safe multisig treasury** (`0x737D4EeAEF67f776724482a29367615703A2DEB1`), confirmed via `admin()` read directly on Basescan. This is a *different* fact from the already-documented "MerchantRegistry admin transfer to the Safe — deferred to mainnet": that's a separate contract, and evidently the **Vault's** admin was already the Safe, even on testnet. Worth keeping these two facts distinct going forward.
+
+Three consecutive `approveToken` attempts via Basescan's Write Contract tab (using the Deployer wallet) failed with a misleading `"RPC 0x14a34 ... exceeds max transaction gas limit"` error — same misleading-error pattern as the Revoke test in §39, twice compounding: once because the Deployer isn't the Vault's admin at all, and a second time because the "Self" autofill button had put the **connected wallet's own address** into the `token` field instead of EURC's address (a real, human, easy-to-make mistake worth remembering: always re-check autofill/"Self" buttons on Basescan write forms before submitting).
+
+Since the Safe requires **2 of 2** signatures (confirmed directly in the Safe app's Settings — Ledger `0x94FD52B6a6FcAcCb41BBE5717264BC9e95a35B4a` + MetaMask "PK Signer 2 Multi-Sig" `0x00df2Dbb2455C372204EdD901894E27281fA02C0`), this had to go through Safe's Transaction Builder rather than a direct wallet call. Along the way:
+
+- **Safe's Transaction Builder silently bundled in an unrelated, unintended `acceptAdminTransfer()` call via `multiSend`**, alongside the correct `approveToken` action — caught and confirmed via the exported batch JSON before anyone signed, and removed using the per-row trash icon (not the top-level batch trash, which would have deleted the whole batch). Checked `pendingAdmin()` afterward out of caution — returned the zero address, confirming there was no real pending admin transfer and this was very likely stale Transaction Builder UI state, not a genuine threat. Cause not fully understood; worth being alert to this recurring if the Transaction Builder is used again.
+- **First signature was accidentally provided by the MetaMask "PK Signer 2 Multi-Sig" account, not the intended Ledger** — the audit log showed "Signed (1/2), By MetaMask" when the Ledger was expected. Since a 2-of-2 Safe requires two genuinely different signers, the same account could not later provide the second confirmation (Safe correctly disabled its own "Confirm" button and showed "You've already signed this transaction").
+- **Fix:** connected the actual physical Ledger device as a new hardware-wallet account in MetaMask (first attempt showed "0 total address found" because the device wasn't yet PIN-unlocked and on the Ethereum app — worth remembering as a checklist for next time), selected the correct address (`0x94FD52B6a6...5B4a`) specifically, and signed with that. Audit log then correctly showed "Signed (2/2), By Ledger."
+- **Execution then failed** with "Your connected wallet doesn't have enough funds" — the Ledger account had no testnet ETH. Resolved by switching MetaMask to the **Deployer wallet** (which had ETH) and executing from there — a Safe's execution step can be triggered by any wallet once the signature threshold is met, it doesn't have to be one of the two signers.
+- **Confirmed on-chain**, not just via the success toast: `approvedTokens(0x808456652fdb597867f38412077A9182bf77359F)` on the vault read back `true` via Basescan Read Contract directly.
+
+### Merchant re-approval needed — a second, unrelated blocker
+
+Rerunning the script after EURC was approved hit a *new* error: `MerchantNotApproved` reverted on `merch test`, despite the merchant having been confirmed approved earlier in §39. Root cause: **`merch test` had been deliberately revoked during §39's own Revoke-button testing and never re-approved afterward** — the vault correctly checking `MerchantRegistry.isApproved()` and finding it false, exactly as designed. Not a new bug — leftover state from earlier testing this same night. Re-approved `merch test` via the Deployer wallet on `MerchantRegistry` (tx `0xf41fe905...`, confirmed via direct `isApproved()` read = `true`, not just the UI message).
+
+### Session paused on a public RPC outage, not a code or contract bug
+
+Rerunning immediately after the merchant re-approval hit the *same* `MerchantNotApproved` error one more time — investigated by reading the vault's own `merchantRegistry` address (`admin()`-style Read Contract call), which correctly matched `0x393BA721...C0299`, ruling out a "vault pointed at the wrong registry" theory. The very next run then surfaced the real cause directly: an explicit RPC error, **`"no backend is currently healthy to serve traffic"`**, from the public shared `https://sepolia.base.org` endpoint — an outage/instability on Base's public infrastructure, unrelated to any of tonight's code or contract work. The earlier repeat `MerchantNotApproved` was very likely this same instability serving a stale read.
+
+**Recommended fix for next session, not yet applied:** point `create-test-subscriptions.js` at Alchemy instead of the public endpoint via `.env`'s `BASE_SEPOLIA_RPC_URL` (the script already prefers this variable if set, falling back to the public endpoint only if it's absent) — removes dependence on the public endpoint's health entirely, worth doing regardless of whether the outage has cleared by then, especially before the real 100-transaction run.
+
+### Updated pre-mainnet checklist status
+
+- ~~`config.js` dead-code cleanup~~ — **DONE**, deployed (`c79e32b`).
+- **Merchant list live-badge fix** — written, **not yet deployed or tested**. Next session: build, commit, push, verify against a real merchant on Basescan.
+- **EURC approved on `SubscriptionVault`** — **DONE**, confirmed on-chain (`approvedTokens(EURC) == true`).
+- **`merch test` re-approved** after earlier revoke-testing left it in the wrong state — **DONE**, confirmed on-chain.
+- **New, important, standing fact to remember:** `SubscriptionVault`'s admin is the Safe multisig (2-of-2: Ledger + "PK Signer 2 Multi-Sig" MetaMask), not the Deployer wallet. Any future `onlyAdmin` vault call (fee changes, keeper address changes, treasury changes, further token approvals, etc.) needs to go through the Safe, not a direct Basescan write from Deployer.
+- **Volume test — still not run.** `create-test-subscriptions.js` exists and is unblocked (both tokens approved, merchant approved), but has not yet completed a successful run due to the RPC outage. Next session: switch to Alchemy RPC, rerun with `TOTAL_SUBSCRIPTIONS = 6` first to confirm end-to-end success (including the EIP-712 permit signing, which has never yet been proven working in practice), then scale toward the real 100-transaction test.
+- `fund-test-wallet-multi.js`'s own budget-math bug (`MAX_CLAIMS_TOTAL` vs. combined `targetEth`) — noted, not fixed, low urgency since ETH isn't the test's constraint.
+- Everything else unchanged from §39: `PayPage.jsx` pre-flight `isApproved()` check, SaaS tier billing → tier access linkage, slide 11 founder bio claim, MerchantRegistry admin transfer to the Safe (deferred to mainnet — note this is now confirmed to be a *different, still-pending* transfer from the Vault's, which is already done), AuthOnce Lda. incorporation, Safe 2-of-3 signer, Hashlock audit-scope email still unsent, autovacuum tuning, `keeper_pull_attempts` investigation, WooCommerce `external_ref` `/link` retry logic, Base Ecosystem Fund reply still awaited.
+
+*Last updated: 2026-08-18*
+
+---
+
+## 41. Session Summary — August 20 2026 (RPC outage resolved, first real subscription confirmed; CDP faucet API isolated as a Coinbase-side account issue via their own CLI; Alchemy free tier exhausted — confirmed root cause is keeper.js's polling design, not testnet activity; AUTHONCE-BACKLOG.md created as a structural fix for how work gets tracked)
+
+### RPC outage from §40 — resolved on its own, confirmed
+
+Two days after §40's pause, `create-test-subscriptions.js`'s first `approvedTokens` check succeeded immediately — the public Base Sepolia endpoint's outage had cleared. Continuing the run produced the **first-ever real, confirmed success**: Subscriber 1's USDC subscription created on-chain (permit signing included), tx `0xafa0616919d65fd94cd0ecdf254b7afed1441c91115072f6db256fc48161a02e`. This is the first time the EIP-712 permit signing path in the script has been proven working in practice, not just written.
+
+### Real blockers found on the next run — both fixed
+
+- **Subscriber 2 (Account 7) and Subscriber 3 (Account 8) had zero ETH** — never funded. Only Subscriber 1 had testnet ETH from earlier sessions. `fund-test-wallet-multi.js` updated to add all three subscriber wallets (0.0005 ETH target each — generous margin for the eventual ~35-50 creation transactions per wallet needed for the real 100-subscription test), listed *first* in the `WALLETS` array so their tiny combined budget (0.0015 ETH = 15 claims) is guaranteed to clear before the pre-existing Safe/Deployer/Keeper budget-math issue (flagged in §40) can interfere. Also raised `MAX_CLAIMS_TOTAL` from 750 to 950 while in the file, since 750 was already below just Safe+Deployer+Keeper's combined target on its own.
+  **File:** `C:\authonce-faucet\fund-test-wallet-multi.js` — updated, given to Vasco, not yet confirmed saved/run as of this writing.
+- **Genuine RPC rate limit** on Subscriber 1's EURC attempt (`-32016 over rate limit`) — from 3 wallets firing near-simultaneously against the public endpoint. Root cause turned out to be moot once the Alchemy switch was made (see below), though the underlying Alchemy account then hit its own separate cap.
+- **`.env` location bug in the script itself, found and fixed:** `dotenv` only looks in the current working directory by default; the script lives in `scripts/` but `.env` lives at the project root. Fixed via `require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env") })`.
+  **File:** `scripts/create-test-subscriptions.js`
+
+### CDP faucet API — isolated conclusively as a Coinbase-side account/project issue, not local
+
+Continuing to chase the `"Unauthorized"` error from earlier sessions:
+
+- **Confirmed the credentials weren't the problem.** Fully wiped and regenerated both the API Key and Wallet Secret together (not incrementally) — still failed identically.
+- **Ruled out `.env` naming/truncation** — checked variable names and value lengths directly (`CDP_API_KEY_ID` 36 chars, `CDP_API_KEY_SECRET` 88 chars, `CDP_WALLET_SECRET` 184 chars), all correct and unchanged from before rotation.
+- **Ruled out the wrong-permission-page theory** (the "Coinbase App & Advanced Trade" checkboxes with View/Trade/Transfer/Receive) — confirmed via Coinbase's own CLI documentation that faucet access has nothing to do with those toggles at all; that page governs a separate retail-trading product, not the CDP Wallet/Onchain API.
+- **Decisive test:** installed Coinbase's own official `@coinbase/cdp-cli` tool, configured it with the same freshly-rotated credentials via `cdp env live --key-id ... --key-secret ...` and `cdp env live --wallet-secret ...`, confirmed correct setup via `cdp env` (showed `live` with key ID and `(wallet)` indicator). Ran `cdp evm accounts list` directly — **failed with the identical `401 Unauthorized`**, trace `7179795976991766943`. Since this bypasses our script and the npm SDK entirely, this conclusively rules out anything on our end. It is very likely an account/project-level restriction on Coinbase's side (e.g. the Wallet API/Faucet product not actually enabled for this specific CDP project).
+- **Next step, not yet done:** contact Coinbase CDP support directly with the reproducible CLI failure and trace ID above. **Workaround in the meantime:** fund test wallets manually via the CDP portal's own web UI faucet button, which bypasses this broken API auth path entirely — this is how Account 7/8 in fact got funded this session.
+- **Third credential exposure incident this project** (after Aug 3-4 and this session's earlier full-value paste): a fragment of `CDP_API_KEY_SECRET` was pasted into chat again mid-debugging. Low urgency to rotate again specifically since the key isn't functional anyway, but should happen once support resolves the underlying issue.
+
+### Alchemy billing — free tier fully exhausted, and the root cause is now proven, not suspected
+
+`create-test-subscriptions.js` hung silently for minutes after switching to an Alchemy RPC URL. Direct isolation test (`Invoke-RestMethod` calling `eth_chainId` directly against the Alchemy URL, bypassing the script) revealed the real cause: **`429 Monthly capacity limit exceeded`** — the free tier's 30M compute-unit allowance was fully consumed, apps paused account-wide.
+
+**Real, hard evidence pulled from Alchemy's dashboard (not inference) directly confirms the structural risk flagged in earlier sessions' review of `keeper.js`:**
+- 100% of the 30M CUs came from one app ("Authonce"), one network (Base Sepolia), all HTTP.
+- Method breakdown: `eth_call` overwhelmingly dominates (peaking ~6M CUs in a single day) while `eth_blockNumber`/`eth_getTransactionCount`/`eth_getTransactionByHash`/`eth_getTransactionReceipt` stay essentially flat at zero.
+- Usage climbed smoothly and continuously from Aug 9 through Aug 17 until hitting the cap — a shape consistent with a 24/7 background service, not occasional manual test sessions.
+- `eth_call` is exactly what `keeper.js`'s `processDueSubscriptions` loop generates on every active subscription, every 20-second cycle, regardless of whether that subscription is actually due — the exact risk identified by reading the code in an earlier session, now confirmed with real production billing data. Even a small handful of test subscriptions running continuously in the background was enough to exhaust a 30M/month free tier.
+
+**Cost estimate given (explicitly caveated as based on current usage continuing unchanged, not a guarantee):** roughly $13.50/month on Alchemy's Pay-As-You-Go tier ($0.45/M CUs) at current usage — but this number is expected to drop significantly once the keeper polling fix (see backlog T1) lands, since the fix directly targets the exact `eth_call` volume shown to be the entire problem.
+
+**Not yet decided:** whether to upgrade Alchemy's plan now to unblock testing immediately, or wait for the keeper fix first. Recommendation given: fix `keeper.js` before or alongside any billing decision, since paying for the current inefficiency without fixing it just means paying more as subscriber count grows toward mainnet.
+
+### Structural change: AUTHONCE-BACKLOG.md created
+
+Prompted by Vasco naming a real, recurring pattern directly: sessions repeatedly branch from one task into an unrelated fix into another unrelated fix, with no checkpoint marking task boundaries, no reset between sessions, and this single chat thread having quietly spanned 2026-08-16 through 2026-08-20 (four real days) without any structural marker distinguishing one session's work from the next.
+
+**Response:** built `AUTHONCE-BACKLOG.md` — a flat, numbered, status-tracked list (Business/CEO pains + Technical pains, both ordered by real importance), explicitly designed to replace narrative-only tracking as the thing work gets picked *from*, with CLAUDE-CORE.md remaining the historical *why*-record alongside it. Includes an explicit session-start ritual (upload both files, pick one item, log new problems as new backlog lines instead of silently tunneling into them, update statuses before ending) and a status legend (`OPEN`/`IN PROGRESS`/`BUILT, UNVERIFIED`/`BLOCKED`/`DONE`) that requires real verification evidence before anything is marked done, not just "looks right."
+
+**File:** `AUTHONCE-BACKLOG.md`, saved at `C:\The-Opportunity\` — same root location as this file (correcting a stale assumption from earlier project history that these lived at `C:\AuthOnce-Docs\`; that path is no longer accurate).
+
+**T1 (keeper.js polling rewrite) named as the single highest-leverage item on the entire backlog** — it's the one item already causing confirmed, measured real-world damage (this session's Alchemy incident) rather than a theoretical risk, and it's the reason the volume test keeps stalling across multiple sessions. Recommended as the very next thing to work on, before resuming the volume test itself.
+
+### Updated status — going forward, see AUTHONCE-BACKLOG.md for the full authoritative list; this section is now just a pointer, not a duplicate
+
+This is the last session where open items are enumerated in prose here. From next session onward, **AUTHONCE-BACKLOG.md is the single source of truth for open items** — check it directly rather than searching back through CLAUDE-CORE.md's session summaries for outstanding work. This file (`CLAUDE-CORE.md`) continues to record *what happened and why*, session by session, but no longer needs to also serve as the task list.
+
+*Last updated: 2026-08-20*
