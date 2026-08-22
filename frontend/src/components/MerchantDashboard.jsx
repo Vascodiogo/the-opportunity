@@ -5,7 +5,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { useWriteContract, useSignMessage } from "wagmi";
+import { useWriteContract, useSignMessage, useChainId, useSwitchChain } from "wagmi";
 import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
@@ -1839,12 +1839,22 @@ export default function MerchantDashboard({ address }) {
   // scripts/api.js (requireMerchantAuth now requires a JWT, not a
   // self-reported header). See frontend/src/lib/merchantAuth.js.
   const { signMessageAsync } = useSignMessage();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  // [MOBILE FIX Aug 2026] True whenever a wallet is connected but not on
+  // Base Sepolia. Previously nothing checked this before firing a signature
+  // request, so mobile wallets without Base Sepolia already added (the
+  // common case — it isn't a default network anywhere) would fail inside
+  // signMessageAsync and dump wagmi's raw error text ("An error occurred
+  // when attempting to switch chain. Details: Chain not configured...")
+  // straight into the UI. See AUTHONCE-BACKLOG.md B9.
+  const isWrongNetwork = Boolean(address) && chainId !== baseSepolia.id;
   const [merchantAuthReady, setMerchantAuthReady]   = useState(false); // true once login succeeded for the CURRENT address
   const [merchantAuthError, setMerchantAuthError]   = useState(null);
   const [merchantAuthLoading, setMerchantAuthLoading] = useState(false);
 
   const attemptMerchantLogin = useCallback(async () => {
-    if (!address) return;
+    if (!address || isWrongNetwork) return;
     setMerchantAuthLoading(true);
     setMerchantAuthError(null);
     const result = await merchantLogin(`${API_BASE}/api/merchant/login`, address, signMessageAsync);
@@ -1855,7 +1865,7 @@ export default function MerchantDashboard({ address }) {
       setMerchantAuthReady(false);
       setMerchantAuthError(result.error);
     }
-  }, [address, signMessageAsync]);
+  }, [address, signMessageAsync, isWrongNetwork]);
 
   useEffect(() => {
     if (!address) return;
@@ -2034,7 +2044,28 @@ export default function MerchantDashboard({ address }) {
           API-backed calls (products, payments, webhooks, handle) need it,
           and those already fail gracefully with console.error + empty state
           if merchantFetch gets a 401. */}
-      {!merchantAuthReady && (
+      {/* [MOBILE FIX Aug 2026] Wrong-network state gets its own clean banner,
+          matching the pattern PayPage.jsx already uses for the same case —
+          instead of letting it reach attemptMerchantLogin/signMessageAsync
+          and surface a raw wagmi error. See AUTHONCE-BACKLOG.md B9. */}
+      {!merchantAuthReady && isWrongNetwork && (
+        <div style={{
+          maxWidth: 1160, margin: "16px auto 0", padding: "12px 16px",
+          borderRadius: 10, display: "flex", alignItems: "center", gap: 12,
+          background: "rgba(248,113,113,0.08)", border: "0.5px solid rgba(248,113,113,0.25)",
+        }}>
+          <span style={{ fontSize: 13, color: "var(--red)", flex: 1 }}>
+            Wrong network. AuthOnce runs on Base Network.
+          </span>
+          <button
+            onClick={() => switchChain({ chainId: baseSepolia.id })}
+            style={S.btn.ghost}
+          >
+            Switch now
+          </button>
+        </div>
+      )}
+      {!merchantAuthReady && !isWrongNetwork && (
         <div style={{
           maxWidth: 1160, margin: "16px auto 0", padding: "12px 16px",
           borderRadius: 10, display: "flex", alignItems: "center", gap: 12,
