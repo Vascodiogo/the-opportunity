@@ -56,6 +56,30 @@ const KEEPER_PRIVKEY  = (process.env.KEEPER_PRIVATE_KEY || process.env.DEPLOYER_
 const RUN_INTERVAL_MS = 20_000; // reduced from 60s for faster detection of due subscriptions
 const DUE_WINDOW_HOURS = 4; // [T1] Active subscriptions are DB-pre-filtered to this rolling window
 
+// [T18] Mask API keys embedded in RPC URLs before logging. Provider URLs
+// (Alchemy, Infura, etc.) carry the API key as the last path segment —
+// logging RPC_URL verbatim exposes it in plaintext to anyone with log
+// access (Railway dashboard, support, connected tools). This masks any
+// path segment that looks like a key (long alphanumeric token) down to
+// its last 4 characters; URLs with no such segment (e.g. the public
+// https://sepolia.base.org fallback, which carries no key) pass through
+// unchanged. This is a display-only transform — RPC_URL itself is never
+// mutated, so the real key is still used for the actual provider connection.
+function maskRpcUrl(url) {
+  try {
+    const u = new URL(url);
+    const segments = u.pathname.split("/").filter(Boolean);
+    const last = segments[segments.length - 1];
+    if (last && last.length >= 12 && /^[A-Za-z0-9_-]+$/.test(last)) {
+      segments[segments.length - 1] = "*".repeat(last.length - 4) + last.slice(-4);
+      u.pathname = "/" + segments.join("/");
+    }
+    return u.toString();
+  } catch {
+    return "<unparseable RPC URL — value withheld from log>";
+  }
+}
+
 // ─── DB pool (optional — falls back to on-chain scan if DATABASE_URL not set) ─
 const db = process.env.DATABASE_URL
   ? new Pool({ connectionString: process.env.DATABASE_URL, max: 3 })
@@ -552,7 +576,7 @@ async function run() {
   console.log("=".repeat(60));
   console.log(`  Vault:    ${VAULT_ADDRESS}`);
   console.log(`  Keeper:   ${wallet.address}`);
-  console.log(`  RPC:      ${RPC_URL}`);
+  console.log(`  RPC:      ${maskRpcUrl(RPC_URL)}`);
   console.log(`  Interval: ${RUN_INTERVAL_MS / 1000}s after each cycle completes (self-rescheduling)`);
   console.log(`  Due window: ${DUE_WINDOW_HOURS}h (active subscriptions pre-filtered)`);
   console.log(`  Concurrency: ${CONCURRENCY} parallel pulls per batch`);
