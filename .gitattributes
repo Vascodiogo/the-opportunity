@@ -1,0 +1,7 @@
+# Normalize line endings in the repository to LF, regardless of the
+# OS/editor a contributor uses to save a file. This is the standard fix
+# for CRLF/LF drift on Windows checkouts (see T19, AUTHONCE-BACKLOG.md).
+#
+# Repo-level, not a per-machine git config — every contributor and every
+# clone gets this automatically, no local setup step required.
+* text=auto
