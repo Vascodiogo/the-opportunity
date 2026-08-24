@@ -109,7 +109,7 @@ export default function PayLink() {
 
         {/* Features */}
         {[
-          "Authorise once — never enter details again",
+          "No card details, ever — pulled straight from your wallet",
           "Cancel anytime from authonce.io/my-subscriptions",
           "3-day notice before every payment",
           "Secured by Base Network",

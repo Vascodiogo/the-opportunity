@@ -137,7 +137,7 @@ export default function App() {
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <img src="/logo.svg" alt="AuthOnce" style={{ width: 56, height: 56, marginBottom: 16 }} />
           <h1 style={{ fontSize: 28, fontWeight: 700, color: textPrimary, letterSpacing: "-0.02em", margin: 0 }}>Auth<span style={{ color: "#34d399" }}>Once</span></h1>
-          <p style={{ color: textMuted, marginTop: 8, fontSize: 15, fontWeight: 300 }}>Authorize once. Pay forever. Stay in control.</p>
+          <p style={{ color: textMuted, marginTop: 8, fontSize: 15, fontWeight: 300 }}>Authorize AuthOnce. Pay automatically. Stay in control.</p>
         </div>
         <div style={{ background: cardBg, border: `0.5px solid ${borderColor}`, borderRadius: 16, padding: 32, width: "100%", maxWidth: 380, textAlign: "center" }}>
           <p style={{ color: textMuted, marginBottom: 24, fontSize: 14, fontWeight: 300 }}>Connect your wallet to manage your subscriptions on Base Network.</p>

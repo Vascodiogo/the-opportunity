@@ -392,7 +392,7 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
             <button style={{ width: "100%", padding: 11, background: "#34d399", color: "#080c14", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "default" }}>
               {"Connect wallet to subscribe →"}
             </button>
-            <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{"Non-custodial · Base Network · Authorise once"}</p>
+            <p style={{ fontSize: 11, color: muted, textAlign: "center", margin: "6px 0 0" }}>{"Non-custodial · Base Network · No card required"}</p>
           </div>
         </div>
       </div>
@@ -655,7 +655,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
               <circle cx="100" cy="22" r="6" fill="url(#cycleGrad)" />
               <circle cx="163" cy="128" r="6" fill="none" stroke="url(#cycleGrad)" strokeWidth="2" />
               <circle cx="37" cy="128" r="6" fill="none" stroke="url(#cycleGrad)" strokeWidth="2" />
-              <text x="100" y="10" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>sign once</text>
+              <text x="100" y="10" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>authorise</text>
               <text x="163" y="150" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>day 30</text>
               <text x="37" y="150" textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>day 60</text>
             </svg>
@@ -676,7 +676,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
 
           {/* Subheadline */}
           <p className="ao-fade-in-3" style={{ fontSize: 19, color: text, maxWidth: 620, margin: "0 auto 28px", lineHeight: 1.6, fontWeight: 600 }}>
-            {<>Subscribers authorise once. Our keeper bot pulls USDC directly from their wallet every billing cycle — <span style={{ color: accent }}>straight to yours</span>. Full merchant suite included.</>}
+            {<>Subscribers authorise AuthOnce to pull USDC from their wallet — automatically, every billing cycle, <span style={{ color: accent }}>straight to yours</span>. Full merchant suite included.</>}
           </p>
 
           {/* Pain point cards */}
@@ -860,7 +860,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
             {"What is AuthOnce"}
           </p>
           <p style={{ fontSize: 18, color: text, lineHeight: 1.8, margin: 0, fontWeight: 300 }}>
-            {"AuthOnce is a non-custodial subscription protocol built on Base Network. Subscribers authorise a one-time payment intent — their tokens stay in their own wallet and are pulled automatically on schedule. Merchants receive funds directly. No intermediary. Everything is on-chain, auditable, and permissionless."}
+            {"AuthOnce is a non-custodial subscription protocol built on Base Network. Subscribers authorise AuthOnce to pull payment on schedule — their tokens stay in their own wallet until each transfer. Merchants receive funds directly. No intermediary. Everything is on-chain, auditable, and permissionless."}
           </p>
         </div>
       </section>
