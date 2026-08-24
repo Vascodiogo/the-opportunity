@@ -67,7 +67,7 @@ footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margi
 
       <div class="warning-box">
         <div class="warning-title">Pre-Mainnet Notice</div>
-        <p>AuthOnce is currently live on Base Sepolia testnet. All integrations built now will be compatible with Base Mainnet at Q3 2026 launch.</p>
+        <p>AuthOnce is currently live on Base Sepolia testnet. All integrations built now will be compatible with Base Mainnet at launch, timing pending completion of the security audit.</p>
       </div>
 
       <h2>Before You Start</h2>
@@ -77,13 +77,13 @@ footer{border-top:1px solid var(--rule);padding:32px 2rem;max-width:1160px;margi
 
       <div class="step-block"><div class="step-num-lg">1</div><div><h3>Create Your Merchant Account</h3><p>Visit authonce.io and connect your USDC wallet. Your wallet address becomes your merchant identifier. Registration takes under five minutes. You will receive a vanity handle (e.g. <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:.85em;font-family:'SF Mono',monospace;color:var(--base-blue)">pay.authonce.io/yourstore</code>) immediately after registration.</p></div></div>
 
-      <div class="step-block"><div class="step-num-lg">2</div><div><h3>Configure Your Subscription Plan</h3><p>In the merchant dashboard, create a subscription plan with the following settings:</p><ul><li><strong>Billing amount</strong> — fixed USDC amount per cycle (max $200 during pre-audit period)</li><li><strong>Billing cycle</strong> — monthly, quarterly, or annual</li><li><strong>Grace period</strong> — 1–30 days (recommended: 7–14 days for most use cases)</li><li><strong>Plan name</strong> — displayed to subscribers at checkout</li></ul></div></div>
+      <div class="step-block"><div class="step-num-lg">2</div><div><h3>Configure Your Subscription Plan</h3><p>In the merchant dashboard, create a subscription plan with the following settings:</p><ul><li><strong>Billing amount</strong> — fixed USDC amount per cycle</li><li><strong>Billing cycle</strong> — monthly, quarterly, or annual</li><li><strong>Grace period</strong> — 1–30 days (recommended: 7–14 days for most use cases)</li><li><strong>Plan name</strong> — displayed to subscribers at checkout</li></ul></div></div>
 
       <div class="step-block"><div class="step-num-lg">3</div><div><h3>Install the WooCommerce Plugin</h3><p>Download the AuthOnce WooCommerce plugin from the merchant dashboard. Install via WooCommerce > Plugins > Add New > Upload. Activate the plugin and navigate to WooCommerce > Settings > AuthOnce. Enter your merchant wallet address and plan ID. Save settings. The plugin automatically adds the AuthOnce payment option to your checkout flow.</p></div></div>
 
       <div class="step-block"><div class="step-num-lg">4</div><div><h3>Test on Base Sepolia</h3><p>Before activating for real subscribers, test the complete flow on Base Sepolia testnet. Use a test wallet with Sepolia USDC to simulate a subscriber authorization and first pull payment. Verify the subscription appears in your merchant dashboard. Verify the grace period triggers correctly on a simulated failed payment.</p></div></div>
 
-      <div class="step-block"><div class="step-num-lg">5</div><div><h3>Activate and Go Live</h3><p>Switch the plugin to Base Mainnet mode (Q3 2026 at protocol launch). Your existing test configuration carries over. Subscribers visiting your WooCommerce checkout will see the USDC subscription option. Their authorization uses an <a href="eip2612-explained.html" class="ilink">EIP-2612 permit</a> — zero gas, no pre-approval transaction required. The first pull payment executes at the start of their first billing cycle.</p></div></div>
+      <div class="step-block"><div class="step-num-lg">5</div><div><h3>Activate and Go Live</h3><p>Switch the plugin to Base Mainnet mode once the protocol launches on mainnet. Your existing test configuration carries over. Subscribers visiting your WooCommerce checkout will see the USDC subscription option. Their authorization uses an <a href="eip2612-explained.html" class="ilink">EIP-2612 permit</a> — zero gas, no pre-approval transaction required. The first pull payment executes at the start of their first billing cycle.</p></div></div>
 
       <div class="callout">
         <div class="callout-title">PrestaShop Integration</div>
