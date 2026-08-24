@@ -298,7 +298,7 @@
         <div class="step-num">4</div>
         <div class="step-body">
           <h3>Share your pay link</h3>
-          <p>Every product gets a unique URL: <code>authonce.io/pay/your-name/your-product</code>. Send it by email, embed it in your app, or put it in a button. Subscribers click, connect a wallet or enter a card, and they're subscribed.</p>
+          <p>Every product gets a unique URL: <code>authonce.io/pay/your-name/your-product</code>. Send it by email, embed it in your app, or put it in a button. Subscribers click, connect a wallet, and they're subscribed.</p>
         </div>
       </div>
     </div>
@@ -314,10 +314,9 @@
         <tr><td><strong>Slug</strong></td><td>URL-friendly identifier. Auto-generated from the name. E.g. <code>pro-plan</code>.</td></tr>
         <tr><td><strong>Price</strong></td><td>Set in USDC or your preferred fiat currency. All tokens are priced 1:1 with USD.</td></tr>
         <tr><td><strong>Interval</strong></td><td>Weekly, Monthly, or Yearly. Immutable after the first subscriber.</td></tr>
-        <tr><td><strong>Payment methods</strong></td><td>Choose any combination: USDC, EURC, USDT, or card (requires connected payment processor account).</td></tr>
+        <tr><td><strong>Payment methods</strong></td><td>Choose any combination: USDC, EURC, or USDT. All non-custodial, wallet to wallet — see Payment methods below.</td></tr>
         <tr><td><strong>Grace period</strong></td><td>1–30 days. How long a failed payment retries before the subscription expires. Default: 7 days.</td></tr>
         <tr><td><strong>Introductory pricing</strong></td><td>Optional. First N payments at a lower price. Useful for free trials and launch discounts.</td></tr>
-        <tr><td><strong>Crypto discount</strong></td><td>Optional. 0–50% discount when subscribers pay with a crypto wallet instead of card.</td></tr>
       </tbody>
     </table>
 
@@ -342,21 +341,20 @@
 
     <!-- PAYMENT METHODS -->
     <h2 id="payment-methods">Payment methods</h2>
-    <p>AuthOnce supports two flows that you control at the product level:</p>
+    <p>AuthOnce is fully non-custodial. Every payment method moves USDC, EURC, or USDT directly from the subscriber's own wallet to yours — AuthOnce never processes a card, never touches fiat, and never holds a key to either side's funds.</p>
 
-    <h3>Crypto wallet (USDC, EURC, USDT)</h3>
-    <p>The subscriber connects a wallet and signs a single EIP-2612 permit. No gas required. From that point, AuthOnce's keeper bot pulls the subscription amount on each billing date directly to your wallet. The subscriber never needs to approve again.</p>
+    <h3>USDC / EURC — one signature, gasless</h3>
+    <p>The subscriber connects a wallet and signs a single EIP-2612 permit. No gas required. From that point, AuthOnce's keeper bot pulls the subscription amount on each billing date directly to your wallet. The subscriber never needs to sign again.</p>
+
+    <h3>USDT — two-step approval</h3>
+    <p>USDT doesn't support EIP-2612 permits. The subscriber approves the vault on-chain first (one gas transaction), then confirms the subscription. Slightly more friction up front than USDC/EURC, but the same non-custodial, pull-based billing from then on.</p>
 
     <div class="callout success">
       <p><strong>Zero chargebacks.</strong> On-chain payments are cryptographically final. There is no chargeback mechanism — once the payment executes, it's settled.</p>
     </div>
 
-    <h3>Card (fiat)</h3>
-    <p>The subscriber pays with a credit or debit card through your connected payment processor account. You receive the payment in your bank account in the currency you configured. AuthOnce charges its 0.5% fee as an application fee on top of the processor's standard fee.</p>
-
-    <div class="callout warning">
-      <p><strong>Card payments require setup.</strong> Connect your payment processor account from <strong>Dashboard → Settings → Payments</strong> before enabling card as a payment method.</p>
-    </div>
+    <h3>Subscribers without a stablecoin wallet yet</h3>
+    <p>AuthOnce doesn't process cards and doesn't touch fiat at any point. A subscriber who doesn't already hold USDC, EURC, or USDT gets it through an onramp partner (Circle or Coinbase Onramp), which delivers stablecoin straight to their own wallet — AuthOnce is never in that path. This onramp integration is not yet live; until it is, subscribers need a stablecoin wallet before they can subscribe.</p>
 
     <!-- GRACE PERIOD -->
     <h2 id="grace-period">Grace period &amp; dunning</h2>
@@ -392,8 +390,7 @@
       <thead><tr><th>Fee type</th><th>Amount</th><th>Who pays</th></tr></thead>
       <tbody>
         <tr><td><strong>Protocol fee</strong></td><td>0.5% per successful payment</td><td>Deducted from each pull — merchant receives 99.5%</td></tr>
-        <tr><td><strong>Monthly fee</strong></td><td>€0 on Starter tier</td><td>Optional tiers unlock additional features</td></tr>
-        <tr><td><strong>Card processing fee</strong></td><td>Standard processor rate</td><td>Deducted by your payment processor before settlement</td></tr>
+        <tr><td><strong>Monthly fee</strong></td><td>€0 on Starter tier</td><td>Optional tiers unlock additional features — billed in USDC through AuthOnce's own protocol, see Pricing tiers</td></tr>
         <tr><td><strong>Setup / withdrawal fee</strong></td><td>None</td><td>—</td></tr>
       </tbody>
     </table>
@@ -550,6 +547,10 @@ app.<span class="token-fn">post</span>(<span class="token-str">"/webhook/authonc
         </tr>
       </tbody>
     </table>
+
+    <div class="callout info">
+      <p><strong>Tier fees are billed in USDC.</strong> Growth, Business, and Enterprise are billed the same way your own subscribers pay you — a recurring USDC subscription through AuthOnce's own protocol. No card, no separate billing system.</p>
+    </div>
 
     <div class="callout info">
       <p><strong>Founding merchant offer.</strong> The first 10 approved merchants pay zero fees for 3 months. The first 5 receive lifetime Growth tier free. <a href="https://authonce.io/#contact">Apply now →</a></p>

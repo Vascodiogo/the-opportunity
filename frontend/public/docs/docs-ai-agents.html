@@ -6,13 +6,13 @@
   <link rel="icon" type="image/svg+xml" href="https://authonce.io/favicon.svg" />
 
   <title>AuthOnce Docs — AI Agent Payments Integration</title>
-  <meta name="description" content="Enable AI agents to pay recurring USDC subscriptions autonomously on Base Network. ERC-1271 native, EIP-2612 permit-based, non-custodial. The only recurring billing protocol built for AI agent spending." />
+  <meta name="description" content="ERC-1271 native support for AI agent wallets to pay recurring USDC subscriptions on Base Network, non-custodial. EOA agents use EIP-2612 permits; smart-contract agent wallets authorise via a fresh signature each billing cycle." />
   <meta name="keywords" content="AI agent payments, ERC-1271 subscription, autonomous agent billing, AI agent USDC, Base Network AI payments, on-chain AI spending, stablecoin agent payments, Web3 billing AI" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://authonce.io/docs/ai-agents" />
 
   <meta property="og:title" content="AI Agent Payments — AuthOnce Integration Guide" />
-  <meta property="og:description" content="The only recurring USDC billing protocol with native ERC-1271 support for AI agent wallets. Autonomous, non-custodial, on Base Network." />
+  <meta property="og:description" content="Native ERC-1271 support for AI agent wallets to pay recurring USDC subscriptions, non-custodial, on Base Network." />
   <meta property="og:image" content="https://authonce.io/og-image.png" />
   <meta property="og:url" content="https://authonce.io/docs/ai-agents" />
   <meta property="og:type" content="website" />
@@ -180,12 +180,16 @@
   <main>
     <div class="doc-hero">
       <div class="eyebrow">AI Agent Payments Guide</div>
-      <h1>Autonomous recurring payments for AI agents</h1>
-      <p>AuthOnce is the only recurring USDC billing protocol with native ERC-1271 support. AI agents can authorise, manage, and pay subscriptions on Base Network without human intervention after the initial setup.</p>
+      <h1>Recurring payments for AI agents</h1>
+      <p>AuthOnce has native ERC-1271 support for smart-contract agent wallets, alongside standard EIP-2612 permit support for EOA agents, on Base Network.</p>
     </div>
 
     <div class="callout amber">
       <p><strong>Developer guide.</strong> This page assumes familiarity with EVM smart contracts, ethers.js or viem, and AI agent wallet architectures. For a business-level overview, read our <a href="/blog/ai-agent-payments.html">AI agent payments blog post</a> first.</p>
+    </div>
+
+    <div class="callout warning">
+      <p><strong>Status: ERC-1271 subscriptions are not yet live in production.</strong> <code>createSubscription()</code> works today and records a smart-contract-wallet subscription on-chain. But the production keeper bot does not yet execute recurring pulls for ERC-1271 subscriptions — that support is still being built. A subscription created via this path will not be billed automatically until this ships. If you're integrating an AI agent for production use now, contact us first so we can tell you the real status.</p>
     </div>
 
     <!-- WHY -->
@@ -206,8 +210,8 @@
       <div class="compare-card">
         <div class="label">✅ AuthOnce</div>
         <ul>
-          <li>Agent wallet signs a permit once</li>
-          <li>Fully autonomous after setup</li>
+          <li>EOA agents: sign a permit once. Smart-contract agent wallets: sign a fresh authorisation each cycle</li>
+          <li>No manual re-entry of payment details after setup</li>
           <li>Payment IS the access credential</li>
           <li>Guardian sets hard spending limits</li>
           <li>On-chain — cryptographically final</li>
@@ -222,8 +226,8 @@
       <div class="flow-step">
         <div class="flow-icon">🤖</div>
         <div class="flow-body">
-          <h3>Agent wallet signs ERC-1271 authorisation</h3>
-          <p>The AI agent's smart contract wallet signs a structured authorisation (EIP-712 typed data) that grants the AuthOnce vault permission to pull a specific amount of USDC on a recurring schedule.</p>
+          <h3>Agent wallet creates the subscription</h3>
+          <p>The AI agent's smart contract wallet calls <code>createSubscription()</code>, registering the token, amount, interval, and grace period on-chain. This one call does not authorise any future payment by itself.</p>
         </div>
       </div>
       <div class="flow-step">
@@ -234,10 +238,17 @@
         </div>
       </div>
       <div class="flow-step">
+        <div class="flow-icon">✍️</div>
+        <div class="flow-body">
+          <h3>Agent wallet signs a fresh authorisation each cycle</h3>
+          <p>Unlike an EOA's one-time permit, a smart-contract wallet must produce a new EIP-712 signature — bound to that specific subscription, amount, pull number, and deadline — for every single billing cycle. Something has to generate that signature autonomously each cycle for this to run without a human; AuthOnce does not hold a key that can do this on the agent's behalf.</p>
+        </div>
+      </div>
+      <div class="flow-step">
         <div class="flow-icon">⚡</div>
         <div class="flow-body">
-          <h3>Keeper executes pulls automatically</h3>
-          <p>On each billing date, AuthOnce's keeper bot calls <code>executePull()</code>. The contract validates the ERC-1271 signature and transfers USDC from the agent's vault to the merchant — no human action required.</p>
+          <h3>Keeper submits the pull</h3>
+          <p>The keeper bot calls <code>executePull()</code> with that cycle's signature. The contract validates it via <code>isValidSignature()</code> and transfers USDC from the agent's vault to the merchant.</p>
         </div>
       </div>
       <div class="flow-step">
@@ -266,7 +277,7 @@
     </ul>
 
     <div class="callout success">
-      <p><strong>EOA agents work too.</strong> If your agent uses a regular private key (EOA), pass <code>deadline=0</code> and <code>signature="0x"</code> to <code>executePull()</code>. The ERC-1271 check is skipped. USDC allowance is still required via a prior <code>approve()</code> call.</p>
+      <p><strong>EOA agents work too.</strong> If your agent uses a regular private key (EOA), the ERC-1271 check is skipped entirely — no per-cycle signature needed. The EIP-2612 permit, bundled into the same <code>createSubscription()</code> call described above, is what authorises the keeper to pull USDC on schedule going forward.</p>
     </div>
 
     <!-- AGENT WALLET -->
@@ -428,7 +439,7 @@ console.<span class="token-fn">log</span>(<span class="token-str">"Subscription 
       <tbody>
         <tr><td><strong>SubscriptionVault v7</strong></td><td>Base Sepolia (testnet)</td><td><code>0xeb068B47731261F7B4A5ae8535686D67D7f72321</code></td></tr>
         <tr><td><strong>MerchantRegistry v4</strong></td><td>Base Sepolia (testnet)</td><td><code>0xAE681E431c353f5930dDFfBC74037d3f2afE3264</code></td></tr>
-        <tr><td><strong>SubscriptionVault</strong></td><td>Base Mainnet</td><td><span class="badge amber">Q3 2026</span></td></tr>
+        <tr><td><strong>SubscriptionVault</strong></td><td>Base Mainnet</td><td><span class="badge amber">Not yet deployed</span></td></tr>
         <tr><td><strong>USDC</strong></td><td>Base Mainnet</td><td><code>0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913</code></td></tr>
         <tr><td><strong>USDC</strong></td><td>Base Sepolia</td><td><code>0x036CbD53842c5426634e7929541eC2318f3dCF7e</code></td></tr>
       </tbody>

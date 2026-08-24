@@ -203,7 +203,7 @@
       <div class="arch-card">
         <div class="label">vs. Token streaming</div>
         <h4>Subscription semantics</h4>
-        <p>Pull-based billing with configurable intervals. Subscriber authorises once — payments execute automatically on schedule.</p>
+        <p>Pull-based billing with configurable intervals. Payments execute automatically on schedule — one signature for EOA subscribers, a fresh signature each cycle for smart-contract wallets.</p>
       </div>
       <div class="arch-card">
         <div class="label">On-chain</div>
@@ -213,7 +213,7 @@
       <div class="arch-card">
         <div class="label">Protocol</div>
         <h4>0.5% flat fee</h4>
-        <p>Hardcoded in the smart contract. No surprise increases. No monthly fee on the Starter tier. The fee ceiling is 2% and can only be lowered.</p>
+        <p>Hardcoded in the smart contract. No surprise increases. No monthly fee on the Starter tier. 0.5% is itself the hard ceiling — it can only be lowered, never raised.</p>
       </div>
     </div>
 
@@ -225,13 +225,13 @@
       <thead><tr><th>Contract</th><th>Role</th></tr></thead>
       <tbody>
         <tr><td><strong>MerchantRegistry</strong></td><td>Stores approved merchants and their treasury wallet addresses.</td></tr>
-        <tr><td><strong>SubscriptionVault</strong></td><td>Holds subscriber authorisations (EIP-2612 permits) and executes payment pulls on each billing date.</td></tr>
+        <tr><td><strong>SubscriptionVault</strong></td><td>Holds subscriber authorisations — EIP-2612 permits for EOA wallets, ERC-1271 signatures for smart-contract wallets — and executes payment pulls on each billing date.</td></tr>
       </tbody>
     </table>
 
     <p>When a subscriber authorises a subscription:</p>
     <ol>
-      <li>They sign an EIP-2612 permit off-chain — a cryptographic signature that authorises the vault to pull a specific amount of USDC on a recurring schedule.</li>
+      <li>If the subscriber is an EOA (regular wallet), they sign a single EIP-2612 permit off-chain — no gas, no further signing required for future cycles. If the subscriber is a smart-contract wallet (Safe, EIP-4337 account), they instead provide a fresh EIP-712 signature every billing cycle via ERC-1271 — this is not yet supported by AuthOnce's production keeper, see the <a href="/docs/ai-agents">AI Agents guide</a> for current status.</li>
       <li>The subscriber's vault is funded with exactly one billing cycle's worth of USDC. No more.</li>
       <li>On each billing date, the keeper bot calls <code>executePull()</code> on the SubscriptionVault, which atomically transfers USDC from the subscriber vault to the merchant treasury (99.5%) and the AuthOnce protocol treasury (0.5%).</li>
     </ol>
@@ -309,7 +309,7 @@
     <ul>
       <li>Create a "Member" product at your monthly or annual membership rate</li>
       <li>Share the pay link in your Discord, Notion, or governance forum</li>
-      <li>Members connect their wallet and sign once — no further action needed</li>
+      <li>Members connect their wallet and authorise the subscription — EOA members sign once, smart-contract wallet members see current status in the <a href="/docs/ai-agents">AI Agents guide</a></li>
       <li>USDC arrives in the DAO treasury wallet on each billing date</li>
       <li>Failed payments enter a grace period and retry automatically — no manual intervention</li>
     </ul>
