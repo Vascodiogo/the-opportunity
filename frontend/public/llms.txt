@@ -1,0 +1,20 @@
+# AuthOnce
+
+> Non-custodial USDC subscription payment protocol on Base Network. Subscribers authorize recurring payments with an EIP-2612 permit signature; funds move in a single atomic on-chain transfer directly from subscriber wallet to merchant wallet on each billing cycle. AuthOnce never holds or controls funds. Currently live on Base Sepolia testnet; mainnet launch targeted for Q3 2026, pending security audit.
+
+## Product
+
+- [Homepage](https://authonce.io/): product overview, pricing, fee calculator, founding merchant offer
+- [Web3 integration docs](https://authonce.io/docs/web3): SubscriptionVault and MerchantRegistry contract integration
+- [AI agent integration docs](https://authonce.io/docs/ai-agents): ERC-1271 smart-wallet and AI-agent subscription flows
+- [Status](https://authonce.io/status): protocol status
+- [Legal](https://authonce.io/legal), [Privacy](https://authonce.io/privacy), [Terms](https://authonce.io/terms)
+
+## Blog
+
+- [Blog](https://blog.authonce.io/): articles on non-custodial billing, EIP-2612 permits, programmable grace periods, and subscriptions on Base Network
+
+## Notes
+
+- Protocol fee: 0.5%, hardcoded on-chain in executePull(). No other fees.
+- Not yet audited. Not yet deployed to mainnet as of August 2026.
