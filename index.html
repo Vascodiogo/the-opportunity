@@ -13,9 +13,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- Preconnect: wallet-connect origins hit during page load, flagged by PageSpeed Insights (T24) -->
-    <link rel="preconnect" href="https://api.web3modal.org" />
-    <link rel="preconnect" href="https://pulse.walletconnect.org" />
+    <!-- Preconnect: wallet-connect origins hit during page load, flagged by PageSpeed Insights (T24).
+         crossorigin required: these are fetched via CORS-mode requests (JSON config calls) — without
+         it the browser opens a separate anonymous connection and the hint goes unused (confirmed via
+         PageSpeed's "Unused preconnect" warning on the first attempt without this attribute). -->
+    <link rel="preconnect" href="https://api.web3modal.org" crossorigin />
+    <link rel="preconnect" href="https://pulse.walletconnect.org" crossorigin />
 
     <!-- Primary SEO -->
     <title>AuthOnce — Non-Custodial USDC Subscription Payments on Base Network</title>
