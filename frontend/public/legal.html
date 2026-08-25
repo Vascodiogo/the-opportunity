@@ -339,7 +339,7 @@
       <p>This Refund Policy applies to subscription payments processed through the AuthOnce platform. AuthOnce is payment infrastructure — refund decisions for goods and services belong exclusively to the Merchant. AuthOnce is not responsible for refunds issued or refused by Merchants.</p>
 
       <h2>2. Subscription Cancellation</h2>
-      <p>Subscribers may cancel their subscription at any time by using the cancellation link provided in their payment confirmation email or notification. Cancellation takes effect immediately and prevents all future charges. No action from the Merchant is required to process the cancellation.</p>
+      <p>Subscribers may cancel their subscription at any time by connecting their wallet at <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a> and confirming the on-chain cancellation transaction. Cancellation takes effect immediately once the transaction is confirmed on Base Network and prevents all future charges. No action from the Merchant is required to process the cancellation.</p>
 
       <h2>3. Refunds for Current Billing Period</h2>
       <p>AuthOnce does not automatically issue refunds for the current billing period already paid. When a Subscriber cancels, they retain access to the Merchant's service until the end of the current billing period, after which no further charges are made. Merchants may choose to issue pro-rata refunds at their own discretion.</p>
@@ -351,7 +351,7 @@
       <p>If a payment fails, the subscription enters a grace period of 1 to 30 days, as configured by the Merchant (default: 7 days). The Subscriber is notified and given the opportunity to resolve the payment. No charges are made during the grace period. If the payment is not resolved within the grace period, the subscription is automatically cancelled with no further charges.</p>
 
       <h2>6. Merchant-Initiated Refunds</h2>
-      <p>Merchants may issue partial or full refunds to their Subscribers at their own discretion through the AuthOnce merchant dashboard. Each Merchant is solely responsible for their own refund policies and for compliance with all applicable consumer protection laws in their jurisdiction.</p>
+      <p>Merchants may issue partial or full refunds to their Subscribers at their own discretion, via a separate on-chain USDC transfer to the Subscriber's wallet. AuthOnce does not currently provide a refund feature within the merchant dashboard. Each Merchant is solely responsible for their own refund policies and for compliance with all applicable consumer protection laws in their jurisdiction.</p>
 
       <h2>7. Disputes</h2>
       <p>Disputes regarding charges are exclusively between the Subscriber and the Merchant. Subscribers should contact their Merchant directly for any refund requests. AuthOnce does not mediate commercial disputes and cannot override Merchant refund decisions. AuthOnce may be contacted at <a href="mailto:support@authonce.io">support@authonce.io</a> solely in cases of suspected platform fraud or technical errors caused by the AuthOnce protocol.</p>
@@ -420,8 +420,7 @@
       <h2>7. Cancellation</h2>
       <p>You may cancel your subscription at any time with no penalty or fee from AuthOnce or the Merchant. AuthOnce processes cancellations independently — the Merchant cannot block or delay your cancellation. A minimal Base Network transaction fee (typically well under $0.01) applies when cancelling, paid directly to the network by your wallet — not to AuthOnce.</p>
       <ul>
-        <li><strong>Self-service:</strong> Visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a> and log in with your email — cancellation is immediate</li>
-        <li><strong>By email:</strong> Click the cancellation link in any payment notification email</li>
+        <li><strong>Self-service:</strong> Visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a>, connect the wallet you subscribed with, and confirm the cancellation transaction — cancellation is immediate once confirmed on Base Network</li>
         <li><strong>Support:</strong> Contact <a href="mailto:support@authonce.io">support@authonce.io</a> for technical issues with cancellation</li>
       </ul>
       <p>Cancellation takes effect immediately. No further payments will be collected. For questions about access to the Merchant's service after cancellation, contact the Merchant directly.</p>
@@ -435,8 +434,8 @@
       <h2>10. Your Data</h2>
       <p>AuthOnce collects only what is necessary to operate your subscription: your email address and your wallet address. Your personal data is never sold. Full details are in our <a href="#" onclick="showDoc('privacy'); return false;">Privacy Policy</a>.</p>
 
-      <h2>11. Google OAuth</h2>
-      <p>To access your subscriber dashboard at authonce.io/my-subscriptions, you log in using a magic link sent to your email address. Each magic link is valid for 15 minutes and can only be used once. No password is required. If you did not request a magic link, you can safely ignore the email.</p>
+      <h2>11. Accessing Your Subscriber Dashboard</h2>
+      <p>To view and manage your subscriptions at authonce.io/my-subscriptions, connect the wallet you used to subscribe and sign a free verification message. This proves wallet ownership and costs no gas — it is not an on-chain transaction. No password is required. AuthOnce may also offer optional Google sign-in for account and notification purposes, but viewing or managing your subscriptions requires connecting your wallet.</p>
 
       <h2>12. Contact</h2>
       <p>To cancel or manage your subscription: <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a><br>
