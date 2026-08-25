@@ -187,7 +187,7 @@ function ApplyForm({ isDark }) {
       </div>
 
       <p style={{ fontSize: 11, color: muted, margin: "0 0 16px", lineHeight: 1.6 }}>
-        {<>Use any exchange deposit address — <a href="https://coinbase.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Coinbase</a>, <a href="https://binance.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Binance</a>, <a href="https://kraken.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none" }}>Kraken</a>, or any other. Stablecoins land directly and you can convert to EUR and withdraw to your bank in two clicks.</>}
+        {<>Use any exchange deposit address — <a href="https://coinbase.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "underline" }}>Coinbase</a>, <a href="https://binance.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "underline" }}>Binance</a>, <a href="https://kraken.com" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "underline" }}>Kraken</a>, or any other. Stablecoins land directly and you can convert to EUR and withdraw to your bank in two clicks.</>}
       </p>
 
       <div style={{ marginBottom: 24 }}>
@@ -270,16 +270,16 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
         <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 16px" }}>{"New product"}</p>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Product name"}</label>
-        <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", marginBottom: 14 }} />
+        <input type="text" value={name} onChange={e => setName(e.target.value)} aria-label="Product name" style={{ width: "100%", boxSizing: "border-box", marginBottom: 14 }} />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 4 }} className="ao-form-row">
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Price ($)"}</label>
-            <input type="number" value={price} min={1} onChange={e => setPrice(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box" }} />
+            <input type="number" value={price} min={1} onChange={e => setPrice(Number(e.target.value))} aria-label="Price in dollars" style={{ width: "100%", boxSizing: "border-box" }} />
           </div>
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Interval"}</label>
-            <select value={interval} onChange={e => setInterval(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }}>
+            <select value={interval} onChange={e => setInterval(e.target.value)} aria-label="Billing interval" style={{ width: "100%", boxSizing: "border-box" }}>
               <option>{"Monthly"}</option>
               <option>{"Weekly"}</option>
               <option>{"Yearly"}</option>
@@ -289,7 +289,7 @@ function ProductCreator({ isDark, border, cardBg, text, muted, accent }) {
         <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>$1 = 1 USDC = 1 EURC</p>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>{"Grace period (days, 1–30)"}</label>
-        <input type="number" value={grace} min={1} max={30} onChange={e => setGrace(Number(e.target.value))} style={{ width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
+        <input type="number" value={grace} min={1} max={30} onChange={e => setGrace(Number(e.target.value))} aria-label="Grace period in days" style={{ width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
         <p style={{ fontSize: 11, color: muted, margin: "0 0 14px" }}>{"Keeper retries daily. Expires if unpaid after this window."}</p>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>{"Crypto tokens"}</label>
@@ -425,7 +425,7 @@ function ROICalculator({ isDark, accent, border, cardBg, text, muted }) {
             {"Monthly recurring revenue"}
           </p>
           <input type="range" min={500} max={50000} step={500} value={mrr}
-            onChange={e => setMrr(Number(e.target.value))} style={sliderStyle} />
+            onChange={e => setMrr(Number(e.target.value))} aria-label="Monthly recurring revenue" style={sliderStyle} />
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ fontSize: 11, color: muted }}>$500</span>
             <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{fmt(mrr)}</span>
@@ -437,7 +437,7 @@ function ROICalculator({ isDark, accent, border, cardBg, text, muted }) {
             {"Number of subscribers"}
           </p>
           <input type="range" min={5} max={500} step={5} value={subs}
-            onChange={e => setSubs(Number(e.target.value))} style={sliderStyle} />
+            onChange={e => setSubs(Number(e.target.value))} aria-label="Number of subscribers" style={sliderStyle} />
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ fontSize: 11, color: muted }}>5</span>
             <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{subs}</span>
