@@ -1950,12 +1950,15 @@ passport.deserializeUser(async (id, done) => {
   } catch (err) { done(err); }
 });
 
-function generateSubscriberWallet(email) {
-  const seed = process.env.WALLET_SEED_SECRET || process.env.ENCRYPTION_KEY || "authonce-subscriber-wallet-seed";
-  const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`${seed}:${email}`));
-  const wallet = new ethers.Wallet(privateKey);
-  return { address: wallet.address, privateKey };
-}
+// generateSubscriberWallet() was removed (custody-gap fix, 2026-08-25). It
+// derived a subscriber's private key deterministically from their email —
+// db.encrypt(walletPrivateKey) stored a copy, but the key was always
+// re-derivable from email + WALLET_SEED_SECRET/ENCRYPTION_KEY regardless.
+// AuthOnce is non-custodial by design: it must never be able to compute or
+// hold a subscriber's key at all. Subscribers now authenticate for viewing
+// via Google OAuth (email/profile only) and authenticate for any wallet
+// action (view subscriptions by wallet, cancel) by connecting and signing
+// with their own wallet — see the self-custody path in MySubscriptions.jsx.
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
@@ -1971,21 +1974,13 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
       if (!email) return done(new Error("No email from Google"));
 
-      // [Custody gap, §24] Google OAuth signup disabled — no new custodial
-      // wallets. Existing subscribers created before this gate can still log
-      // in normally; only first-time emails are blocked.
-      const existingSubscriber = await db.getSubscriberByEmail(email);
-      if (!existingSubscriber) {
-        return done(null, false, { message: "google_signup_disabled" });
-      }
-
-      const { address: walletAddress, privateKey: walletPrivateKey } = generateSubscriberWallet(email);
-      const encryptedKey = db.encrypt(walletPrivateKey);
-
+      // Google OAuth is identity/profile only — email, name, avatar. AuthOnce
+      // never generates or holds a wallet for the subscriber (custody-gap
+      // fix, 2026-08-25). Viewing and managing subscriptions requires
+      // connecting the wallet they actually subscribed with — see
+      // MySubscriptions.jsx's self-custody signature-auth path.
       const subscriber = await db.upsertSubscriber({
         email, googleId, name, avatarUrl,
-        walletAddress,
-        walletPrivateKey: encryptedKey,
       });
 
       return done(null, subscriber);
@@ -2032,121 +2027,23 @@ app.get("/auth/google/callback",
 );
 
 // POST /api/subscriber/cancel/:subscriptionId
-// Type B (custodied wallet) cancel — backend signs the transaction
+// AuthOnce never holds a subscriber's key (custody-gap fix, 2026-08-25) —
+// this endpoint always defers to the subscriber's own connected wallet.
+// Kept as a real endpoint (rather than removed outright) because the
+// frontend probes it first and falls back to a direct on-chain wallet
+// transaction on "not_custodied" — see handleCancel() in MySubscriptions.jsx.
 app.post("/api/subscriber/cancel/:subscriptionId", geofenceMiddleware, async (req, res) => {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "unauthorized" });
   try {
-    // Verify subscriber JWT
-    const auth = req.headers.authorization;
-    if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "unauthorized" });
-    const token = auth.slice(7);
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-      if (decoded.type !== "subscriber") return res.status(401).json({ error: "invalid_token_type" });
-    } catch {
-      return res.status(401).json({ error: "invalid_token" });
-    }
-
-    const subscriptionId = parseInt(req.params.subscriptionId);
-    if (isNaN(subscriptionId)) return res.status(400).json({ error: "invalid_subscription_id" });
-
-    // Get subscriber record
-    const subscriber = await db.getSubscriberByEmail(decoded.email);
-    if (!subscriber) return res.status(404).json({ error: "subscriber_not_found" });
-
-    // Must have a custodied wallet key to use this endpoint
-    if (!subscriber.wallet_private_key) {
-      return res.status(400).json({
-        error: "not_custodied",
-        message: "This subscription was created with your own wallet. Please connect your wallet to cancel.",
-      });
-    }
-
-    // Decrypt private key
-    const privateKey = db.decrypt(subscriber.wallet_private_key);
-
-    // Sign and send cancelSubscription transaction
-    const { ethers } = require("ethers");
-    const provider   = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL || "https://sepolia.base.org");
-    const signer     = new ethers.Wallet(privateKey, provider);
-
-    const VAULT_ABI_CANCEL = [
-      {
-        name: "cancelSubscription",
-        type: "function",
-        inputs: [{ name: "id", type: "uint256" }],
-        outputs: [],
-        stateMutability: "nonpayable",
-      },
-      {
-        // Complete v6 struct — all 19 fields in declaration order.
-        // Always use named access (sub.owner, sub.status) — never numeric indexes.
-        name: "subscriptions",
-        type: "function",
-        inputs: [{ name: "id", type: "uint256" }],
-        outputs: [
-          { name: "owner",              type: "address" },
-          { name: "guardian",           type: "address" },
-          { name: "merchant",           type: "address" },
-          { name: "safeVault",          type: "address" },
-          { name: "token",              type: "address" },
-          { name: "amount",             type: "uint256" },
-          { name: "introAmount",        type: "uint256" },
-          { name: "introPulls",         type: "uint256" },
-          { name: "pullCount",          type: "uint256" },
-          { name: "interval",           type: "uint8"   },
-          { name: "lastPulledAt",       type: "uint256" },
-          { name: "billingPausedUntil", type: "uint256" },
-          { name: "pausedAt",           type: "uint256" },
-          { name: "expiresAt",          type: "uint256" },
-          { name: "trialEndsAt",        type: "uint256" },
-          { name: "gracePeriodDays",    type: "uint256" },
-          { name: "dataVaultId",        type: "bytes32" },
-          { name: "status",             type: "uint8"   },
-          { name: "isContractVault",    type: "bool"    },
-        ],
-        stateMutability: "view",
-      },
-    ];
-
-    const VAULT_ADDRESS = process.env.VAULT_ADDRESS;
-    if (!VAULT_ADDRESS) return res.status(500).json({ error: "vault_not_configured" });
-
-    const vault = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI_CANCEL, signer);
-
-    // Verify this subscriber owns the subscription.
-    // Named field access — never numeric indexes.
-    const sub = await vault.subscriptions(BigInt(subscriptionId));
-    const subOwner         = sub.owner.toLowerCase();
-    const subVault         = sub.safeVault.toLowerCase();
-    const subscriberWallet = subscriber.wallet_address.toLowerCase();
-
-    if (subOwner !== subscriberWallet && subVault !== subscriberWallet) {
-      return res.status(403).json({ error: "not_your_subscription" });
-    }
-
-    // Check it's cancellable (Active=0 or Paused=1).
-    // Named access: sub.status — correct regardless of struct field count.
-    const status = Number(sub.status);
-    if (status !== 0 && status !== 1) {
-      return res.status(400).json({ error: "not_cancellable", message: "Subscription is already cancelled or expired." });
-    }
-
-    console.log(`[CANCEL] Subscriber ${decoded.email} cancelling subscription #${subscriptionId}`);
-    const tx      = await vault.cancelSubscription(BigInt(subscriptionId));
-    const receipt = await tx.wait();
-    console.log(`[CANCEL] ✅ Cancelled subscription #${subscriptionId} — tx: ${tx.hash}`);
-
-    res.json({
-      success:         true,
-      subscription_id: subscriptionId,
-      tx_hash:         tx.hash,
-      block_number:    receipt.blockNumber,
-    });
-  } catch (err) {
-    console.error("[CANCEL] Error:", err.message);
-    res.status(500).json({ error: "server_error", message: err.message });
+    jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: "invalid_token" });
   }
+  return res.status(400).json({
+    error: "not_custodied",
+    message: "Please connect your wallet to cancel this subscription.",
+  });
 });
 app.get("/api/subscriber/me", async (req, res) => {
   try {
@@ -2451,79 +2348,16 @@ app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) =
     );
     const cancelledSubs = subResult.rows.length;
 
-    // 2. Auto cancel on-chain subscriptions for fiat subscribers (custodied wallet)
-    // Crypto-native subscribers manage their own wallets — skipped if no private key stored
+    // AuthOnce never holds a subscriber's key (custody-gap fix, 2026-08-25),
+    // so on-chain cancellation on account deletion always requires manual
+    // handling — there is no automatic path left to attempt.
     let onChainCancelled = 0;
     let onChainSkipped   = 0;
     const onChainErrors  = [];
 
-    if (subscriber.wallet_private_key && cancelledSubs > 0) {
-      try {
-        const { ethers } = require("ethers");
-        const RPC_URL     = process.env.BASE_SEPOLIA_RPC_URL || process.env.BASE_RPC_URL || "https://sepolia.base.org";
-        const VAULT_ADDR  = process.env.VAULT_ADDRESS;
-
-        if (VAULT_ADDR) {
-          const privateKey = db.decrypt(subscriber.wallet_private_key);
-          const provider   = new ethers.JsonRpcProvider(RPC_URL);
-          const signer     = new ethers.Wallet(privateKey, provider);
-
-          const VAULT_ABI_CANCEL = [
-            { name: "cancelSubscription", type: "function", inputs: [{ name: "id", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
-            { name: "subscriptions", type: "function", inputs: [{ name: "id", type: "uint256" }], outputs: [
-              { name: "owner",              type: "address" },
-              { name: "guardian",           type: "address" },
-              { name: "merchant",           type: "address" },
-              { name: "safeVault",          type: "address" },
-              { name: "token",              type: "address" },
-              { name: "amount",             type: "uint256" },
-              { name: "introAmount",        type: "uint256" },
-              { name: "introPulls",         type: "uint256" },
-              { name: "pullCount",          type: "uint256" },
-              { name: "interval",           type: "uint8"   },
-              { name: "lastPulledAt",       type: "uint256" },
-              { name: "billingPausedUntil", type: "uint256" },
-              { name: "pausedAt",           type: "uint256" },
-              { name: "expiresAt",          type: "uint256" },
-              { name: "trialEndsAt",        type: "uint256" },
-              { name: "gracePeriodDays",    type: "uint256" },
-              { name: "dataVaultId",        type: "bytes32" },
-              { name: "status",             type: "uint8"   },
-              { name: "isContractVault",    type: "bool"    },
-            ], stateMutability: "view" },
-          ];
-
-          const vault = new ethers.Contract(VAULT_ADDR, VAULT_ABI_CANCEL, signer);
-
-          // Attempt to cancel each subscription on-chain
-          for (const sub of subResult.rows) {
-            try {
-              const onChainSub = await vault.subscriptions(BigInt(sub.id));
-              const status     = Number(onChainSub.status);
-
-              // Only cancel if Active(0) or Paused(1)
-              if (status === 0 || status === 1) {
-                const tx = await vault.cancelSubscription(BigInt(sub.id));
-                await tx.wait();
-                onChainCancelled++;
-                console.log(`[GDPR] ✅ On-chain cancelled subscription #${sub.id} — tx: ${tx.hash}`);
-              } else {
-                onChainSkipped++;
-              }
-            } catch (subErr) {
-              onChainErrors.push({ id: sub.id, error: subErr.message });
-              console.error(`[GDPR] ⚠️ Could not cancel subscription #${sub.id} on-chain: ${subErr.message}`);
-            }
-          }
-        }
-      } catch (err) {
-        console.error(`[GDPR] On-chain cancellation error: ${err.message}`);
-        onChainErrors.push({ error: err.message });
-      }
-    } else if (cancelledSubs > 0 && !subscriber.wallet_private_key) {
-      // Crypto-native subscriber — no private key stored, cannot auto-cancel on-chain
+    if (cancelledSubs > 0) {
       onChainSkipped = cancelledSubs;
-      console.log(`[GDPR] Crypto-native subscriber — ${cancelledSubs} on-chain subscription(s) require manual cancellation via Safe multisig`);
+      console.log(`[GDPR] ${cancelledSubs} on-chain subscription(s) require manual cancellation via Safe multisig`);
 
       // Log pending on-chain cancellations to DB for dashboard visibility
       const subscriberHash = require("crypto").createHash("sha256").update(email).digest("hex").slice(0, 16);
@@ -2587,8 +2421,8 @@ app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) =
         on_chain_skipped:           onChainSkipped,
         on_chain_errors:            onChainErrors.length > 0 ? onChainErrors : undefined,
       },
-      note: onChainSkipped > 0 && !subscriber.wallet_private_key
-        ? `${onChainSkipped} on-chain subscription(s) require manual cancellation via Safe multisig — crypto-native subscriber.`
+      note: onChainSkipped > 0
+        ? `${onChainSkipped} on-chain subscription(s) require manual cancellation via Safe multisig.`
         : undefined,
     });
   } catch (err) {
