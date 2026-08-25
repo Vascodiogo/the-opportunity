@@ -269,6 +269,8 @@
   .pillar-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
   .pillar-links a { font-size: .875rem; color: var(--ink-2); text-decoration: none; padding: 8px 12px; background: white; border-radius: 8px; border: 1px solid var(--rule); display: block; transition: border-color .15s; }
   .pillar-links a:hover { border-color: var(--base-blue); color: var(--base-blue); }
+  .pillar-title-link { text-decoration: none; display: block; }
+  .pillar-title-link:hover h2 { color: var(--base-blue); }
 
   /* CTA BANNER */
   .cta-banner { background: var(--base-blue); padding: 60px 2rem; text-align: center; }
@@ -519,10 +521,12 @@
     <div class="section-header">
       <span class="section-title">Complete Guide</span>
     </div>
-    <a href="complete-guide.html" class="pillar-card">
+    <div class="pillar-card">
       <div>
-        <div class="pillar-eyebrow">Pillar Resource · 10,000 words</div>
-        <h2>The Complete Guide to USDC Subscription Billing on Base Network</h2>
+        <a href="complete-guide.html" class="pillar-title-link">
+          <div class="pillar-eyebrow">Pillar Resource · 10,000 words</div>
+          <h2>The Complete Guide to USDC Subscription Billing on Base Network</h2>
+        </a>
         <p>Everything you need to understand, implement, and scale non-custodial recurring payments — from EIP-2612 permit flows to Keeper automation, grace period configuration, and compliance posture.</p>
         <ul class="pillar-toc">
           <li><a href="what-is-noncustodial-billing.html">What is non-custodial USDC subscription billing?</a></li>
@@ -546,7 +550,7 @@
           <li><a href="compliance.html">No-license compliance posture →</a></li>
         </ul>
       </div>
-    </a>
+    </div>
   </div>
 </div>
 
