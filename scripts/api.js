@@ -2143,15 +2143,6 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
       ORDER BY s.created_at DESC
     `, [wallet]);
 
-    // Check which subscriptions came from Stripe (fiat)
-    const fiatWallets = new Set();
-    try {
-      const fiatResult = await db.query(
-        `SELECT LOWER(subscriber_wallet) AS w FROM stripe_checkout_sessions WHERE status = 'completed'`
-      );
-      fiatResult.rows.forEach(r => fiatWallets.add(r.w));
-    } catch (e) { /* ignore */ }
-
     res.json({
       wallet_address: wallet,
       subscriptions: result.rows.map(s => ({
@@ -2160,7 +2151,12 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
         safe_vault:        s.safe_vault,
         token:             s.token,
         is_contract_vault: s.is_contract_vault || false,
-        is_fiat_subscriber: fiatWallets.has(s.owner_address?.toLowerCase()),
+        // Always false: no fiat payment processor exists in AuthOnce's stack.
+        // Any future fiat on-ramp delivers USDC to the subscriber's own wallet
+        // via a third-party onramp partner and is indistinguishable on-chain
+        // from any other USDC subscription — there is no separate "fiat
+        // subscriber" state to track.
+        is_fiat_subscriber: false,
         merchant_name:     s.merchant_name,
         product_name:      s.product_name,
         product_slug:      s.product_slug,
@@ -2374,22 +2370,16 @@ app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) =
       [email, walletAddress]
     );
 
-    // 3. Delete checkout sessions (contains email + wallet)
-    await db.query(
-      "DELETE FROM stripe_checkout_sessions WHERE subscriber_email = $1",
-      [email]
-    );
-
-    // 4. Delete subscriber record (PII: email, name, google_id, wallet_private_key, avatar_url)
+    // 3. Delete subscriber record (PII: email, name, google_id, wallet_private_key, avatar_url)
     await db.query("DELETE FROM subscribers WHERE email = $1", [email]);
 
-    // 5. Delete session data
+    // 4. Delete session data
     await db.query(
       "DELETE FROM session WHERE sess::text LIKE $1",
       [`%${email}%`]
     ).catch(() => {}); // Non-fatal if session table format differs
 
-    // 6. Log deletion to audit_log for GDPR compliance evidence
+    // 5. Log deletion to audit_log for GDPR compliance evidence
     await db.query(
       `INSERT INTO admin_audit_log (admin_email, action, target, details, created_at)
        VALUES ($1, 'gdpr_delete', $2, $3, NOW())`,

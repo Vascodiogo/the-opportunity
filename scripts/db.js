@@ -403,8 +403,6 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_payments_subscription ON payments(subscription_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_payments_merchant ON payments(merchant_address)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_merchant ON webhook_deliveries(merchant_address)`);
-  await pool.query("ALTER TABLE merchants ADD COLUMN IF NOT EXISTS stripe_account_id TEXT, ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMPTZ");
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_merchants_stripe_account_id ON merchants(stripe_account_id) WHERE stripe_account_id IS NOT NULL");
 
   // DataOnce — Phase 2 data consent registry
   await query(`
@@ -486,27 +484,6 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS payment_methods  TEXT[]        DEFAULT ARRAY['crypto']`);
   // ✅ v7: grace period per product (1–30 days, default 7)
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS grace_period_days INTEGER NOT NULL DEFAULT 7`);
-
-  // Stripe checkout sessions — track pending payments before on-chain confirmation
-  await query(`
-    CREATE TABLE IF NOT EXISTS stripe_checkout_sessions (
-      id                  SERIAL PRIMARY KEY,
-      session_id          TEXT UNIQUE NOT NULL,
-      merchant_address    TEXT NOT NULL,
-      product_slug        TEXT NOT NULL,
-      subscriber_email    TEXT NOT NULL,
-      subscriber_wallet   TEXT NOT NULL,
-      amount_eur          NUMERIC(10,2) NOT NULL,
-      currency            TEXT NOT NULL DEFAULT 'eur',
-      status              TEXT NOT NULL DEFAULT 'pending',
-      stripe_payment_intent TEXT,
-      completed_at        TIMESTAMPTZ,
-      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_session_id ON stripe_checkout_sessions(session_id)`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_merchant ON stripe_checkout_sessions(merchant_address)`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_stripe_sessions_subscriber ON stripe_checkout_sessions(subscriber_email)`);
 
   // System health — keeper heartbeat and service monitoring
   await query(`
@@ -1053,36 +1030,6 @@ async function deactivateProduct(merchantAddress, slug) {
 }
 
 // -----------------------------------------------------------------------------
-// Stripe checkout session helpers
-// -----------------------------------------------------------------------------
-
-async function createCheckoutSession({ sessionId, merchantAddress, productSlug, subscriberEmail, subscriberWallet, amountEur, currency }) {
-  const res = await query(`
-    INSERT INTO stripe_checkout_sessions
-      (session_id, merchant_address, product_slug, subscriber_email, subscriber_wallet, amount_eur, currency, created_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
-    RETURNING *
-  `, [sessionId, merchantAddress, productSlug, subscriberEmail, subscriberWallet, amountEur, currency || "eur"]);
-  return res.rows[0];
-}
-
-async function getCheckoutSession(sessionId) {
-  const res = await query(
-    "SELECT * FROM stripe_checkout_sessions WHERE session_id = $1",
-    [sessionId]
-  );
-  return res.rows[0] || null;
-}
-
-async function completeCheckoutSession(sessionId, paymentIntentId) {
-  await query(`
-    UPDATE stripe_checkout_sessions
-    SET status = 'completed', stripe_payment_intent = $2, completed_at = NOW()
-    WHERE session_id = $1
-  `, [sessionId, paymentIntentId]);
-}
-
-// -----------------------------------------------------------------------------
 // Webhook delivery log
 // -----------------------------------------------------------------------------
 
@@ -1236,10 +1183,6 @@ module.exports = {
   getProduct,
   getMerchantProducts,
   deactivateProduct,
-  // Stripe checkout sessions
-  createCheckoutSession,
-  getCheckoutSession,
-  completeCheckoutSession,
   // Subscribers
   upsertSubscriber,
   getSubscriberByEmail,

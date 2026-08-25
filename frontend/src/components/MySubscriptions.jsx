@@ -246,20 +246,8 @@ function SubscriptionCard({ sub, token, onCancelled }) {
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--amber)" }}>Payment failed — grace period active</span>
             </div>
 
-            {/* Fiat subscriber */}
-            {sub.is_fiat_subscriber && (
-              <>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
-                  Your card payment could not be collected. Please ensure your card has sufficient funds — the payment will be retried automatically. If it continues to fail, your subscription will expire.
-                </div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
-                  🔄 Retries automatically every 24h
-                </div>
-              </>
-            )}
-
             {/* Crypto human subscriber */}
-            {!sub.is_fiat_subscriber && !sub.is_contract_vault && (
+            {!sub.is_contract_vault && (
               <>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
                   Your wallet needs <strong style={{ color: "var(--text-primary)" }}>${sub.amount_usdc} {tokenSymbol(sub.token)}</strong> to cover the next payment. Top up your wallet and the payment will be retried automatically.

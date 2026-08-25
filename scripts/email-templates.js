@@ -151,7 +151,6 @@ const subjects = {
   merchantCancellation:    () => `A subscriber has cancelled`,
   merchantExpired:         () => `Subscription expired — grace period ended`,
   merchantResumed:         () => `Subscription resumed`,
-  merchantFiatPaymentReceived: (amount, currency) => `Card payment received — ${amount} ${(currency || 'EUR').toUpperCase()}`,
 };
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -457,35 +456,6 @@ const templates = {
     return { html: emailWrapper({ preheader: `Payment received — $${merchantReceivedUsdc} USDC`, body }), text };
   },
 
-
-  // ── Merchant: fiat payment received (card/Stripe) ────────────────────────────
-  merchantFiatPaymentReceived({ amountFiat, currency, date, subscriptionId, productName = null, subscriberEmail = null, stripeSessionId = null }) {
-    const currencyUpper = (currency || 'EUR').toUpperCase();
-    const body = `
-      <p style="margin:0 0 20px;color:#0f172a;">A card payment subscription has been collected.</p>
-
-      <div class="amount-box">
-        <p class="amount-label">You received</p>
-        <p class="amount-value">${amountFiat} ${currencyUpper}</p>
-        <p class="amount-sub">${date} · via card payment</p>
-      </div>
-
-      <div style="margin: 20px 0;">
-        ${productName ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">${productName}</span></div>` : ""}
-        <div class="detail-row"><span class="detail-label">Subscription ID</span><span class="detail-value">#${subscriptionId}</span></div>
-        ${subscriberEmail ? `<div class="detail-row"><span class="detail-label">Subscriber</span><span class="detail-value">${subscriberEmail}</span></div>` : ""}
-        <div class="detail-row"><span class="detail-label">Payment method</span><span class="detail-value">Card (fiat)</span></div>
-        <div class="detail-row"><span class="detail-label">Currency</span><span class="detail-value">${currencyUpper}</span></div>
-        ${stripeSessionId ? `<div class="detail-row"><span class="detail-label">Stripe session</span><span class="detail-value" style="font-family:monospace;font-size:11px;">${stripeSessionId.slice(0,20)}...</span></div>` : ""}
-        <div class="detail-row" style="border:none;"><span class="detail-label">Status</span><span class="status-badge badge-success">Confirmed</span></div>
-      </div>
-
-      <p style="font-size:13px;color:#64748b;">Funds will be settled to your connected bank account via your payment processor. Check your payment processor dashboard for payout timing.</p>
-    `;
-
-    const text = `Fiat payment received: ${amountFiat} ${currencyUpper} for subscription #${subscriptionId}. Check your payment processor dashboard for settlement.`;
-    return { html: emailWrapper({ preheader: `Card payment received — ${amountFiat} ${currencyUpper}`, body }), text };
-  },
 
   // ── Merchant: payment failed ──────────────────────────────────────────────────
   merchantPaymentFailed({ requiredUsdc, graceDate, reason, subscriptionId, productName = null, subscriberWallet = null, subscriberEmail = null }) {

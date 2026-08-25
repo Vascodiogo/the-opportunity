@@ -458,7 +458,6 @@ function MerchantDetail({ merchant, token, onClose }) {
             {[
               ["Email",     merchant.email || "—"],
               ["Tier",      merchant.tier || "starter"],
-              ["Stripe",    merchant.stripe_account_id ? "Connected" : "Not connected"],
               ["Registered", formatDate(merchant.created_at)],
               ["Approved",  formatDate(merchant.approved_at)],
               ["Brand",     merchant.brand_name || "—"],
