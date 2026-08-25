@@ -83,6 +83,8 @@ export default function Pricing({ isDark = false, onToggleTheme, onLaunchApp }) 
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
       <Helmet>
+        <title>AuthOnce Pricing — Merchant Plans & 0.5% Protocol Fee | Base Network</title>
+        <meta name="description" content="Compare AuthOnce merchant plans. One flat 0.5% on-chain protocol fee per transaction, no hidden costs. Plans billed in USDC through AuthOnce's own protocol. Configurable grace periods, webhook delivery, and CSV export on every tier." />
         <link rel="canonical" href="https://authonce.io/pricing" />
       </Helmet>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>

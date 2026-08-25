@@ -499,6 +499,8 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
   return (
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
       <Helmet>
+        <title>AuthOnce — Non-Custodial USDC Subscription Payments on Base Network</title>
+        <meta name="description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Accept gasless USDC recurring payments using EIP-2612 permits — no chargebacks, no custody, 0.5% flat fee. Mainnet Q3 2026." />
         <link rel="canonical" href={"https://authonce.io"} />
       </Helmet>
       <style>{`

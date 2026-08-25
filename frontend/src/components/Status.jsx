@@ -122,6 +122,8 @@ export default function Status() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
       <Helmet>
+        <title>AuthOnce Protocol Status — Service & Keeper Health</title>
+        <meta name="description" content="Live status for AuthOnce's non-custodial USDC subscription protocol on Base Network — keeper bot execution, webhook delivery, and API availability." />
         <link rel="canonical" href="https://authonce.io/status" />
       </Helmet>
 
