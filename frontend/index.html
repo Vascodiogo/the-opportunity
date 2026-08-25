@@ -13,6 +13,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <!-- Preconnect: wallet-connect origins hit during page load, flagged by PageSpeed Insights (T24) -->
+    <link rel="preconnect" href="https://api.web3modal.org" />
+    <link rel="preconnect" href="https://pulse.walletconnect.org" />
+
     <!-- Primary SEO -->
     <title>AuthOnce — USDC Subscription Payments on Base</title>
     <meta name="description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Accept gasless USDC recurring payments using EIP-2612 permits — no chargebacks, no custody, 0.5% flat fee. Mainnet Q3 2026." />
