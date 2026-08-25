@@ -98,7 +98,7 @@
       </div>
 
       <h2>2. About AuthOnce</h2>
-      <p>AuthOnce is a non-custodial subscription payment infrastructure platform. AuthOnce provides software infrastructure that enables Merchants to collect recurring payments from Subscribers via credit card (powered by Stripe) and USDC on Base Network. AuthOnce provides software infrastructure only and does not provide financial, investment, legal, or tax advice.</p>
+      <p>AuthOnce is a non-custodial subscription payment infrastructure platform. AuthOnce provides software infrastructure that enables Merchants to collect recurring payments from Subscribers in USDC and other supported stablecoins directly on Base Network. AuthOnce never holds, custodies, or has access to Subscriber or Merchant funds at any point. AuthOnce provides software infrastructure only and does not provide financial, investment, legal, or tax advice.</p>
 
       <h2>3. Acceptance of Terms</h2>
       <p>By accessing authonce.io or using AuthOnce services, you confirm that you are at least 18 years of age, have the legal authority to accept these terms, and agree to be bound by them. If you do not agree, do not use our services.</p>
@@ -107,7 +107,7 @@
       <p>AuthOnce provides:</p>
       <ul>
         <li>A platform for Merchants to create and manage recurring subscription products</li>
-        <li>Payment processing infrastructure via Stripe Connect (fiat) and Base Network (USDC)</li>
+        <li>Payment processing infrastructure via Base Network — fully on-chain, non-custodial, in USDC and other supported stablecoins</li>
         <li>Subscriber management tools and notification services</li>
         <li>A merchant dashboard, hosted payment pages, embeddable widget, and REST API</li>
       </ul>
@@ -123,16 +123,15 @@
       </ul>
 
       <h2>6. Fees</h2>
-      <p>AuthOnce charges a Protocol Fee per successful transaction, as displayed on authonce.io at the time of Merchant registration. Stripe processing fees are separate and charged by Stripe directly under Stripe's own terms. AuthOnce reserves the right to update fees with 30 days written notice to Merchants.</p>
+      <p>AuthOnce charges a single Protocol Fee per successful transaction — 0.5%, hardcoded on-chain, as displayed on authonce.io at the time of Merchant registration. There are no other fees, processing charges, or intermediary costs. AuthOnce reserves the right to update the Protocol Fee with 30 days written notice to Merchants, subject to a hard ceiling of 2%.</p>
 
       <h2>7. Non-Custodial Architecture</h2>
-      <p>AuthOnce provides software infrastructure only and does not hold, control, or have access to user funds at any time. Fiat payments flow directly between Subscribers and Merchants via Stripe Connect. USDC payments flow directly on-chain via Base Network smart contracts. AuthOnce facilitates the technical execution of pre-authorised payment instructions but is not a payment service provider, custodian, or financial institution.</p>
+      <p>AuthOnce provides software infrastructure only and does not hold, control, or have access to user funds at any time. USDC and other supported stablecoin payments flow directly on-chain, from Subscriber wallet to Merchant wallet, via Base Network smart contracts in a single atomic transaction. AuthOnce facilitates the technical execution of pre-authorised payment instructions but is not a payment service provider, custodian, or financial institution. Where fiat on-ramp access becomes available through a third-party onramp partner, that partner will deliver USDC directly to the Subscriber's own wallet — AuthOnce will never hold a key or touch the fiat leg of that transaction.</p>
 
       <h2>8. Merchant Obligations</h2>
       <p>Merchants using AuthOnce agree to:</p>
       <ul>
         <li>Comply with all applicable laws including consumer protection, AML, and tax regulations</li>
-        <li>Maintain their own Stripe Connect account and comply with Stripe's terms of service</li>
         <li>Clearly communicate subscription terms, pricing, and cancellation rights to Subscribers</li>
         <li>Handle all disputes with their Subscribers directly and independently</li>
         <li>Be solely responsible for their own AML/KYC compliance obligations</li>
@@ -175,7 +174,7 @@
       <p>Nothing on authonce.io or in any AuthOnce communication constitutes financial, investment, legal, or tax advice. The use of USDC, blockchain technology, and digital assets carries risk. Use of the AuthOnce protocol is entirely at your own risk.</p>
 
       <h2>18. Force Majeure</h2>
-      <p>AuthOnce is not liable for any failure or delay in performance caused by events beyond our reasonable control, including but not limited to: blockchain network outages, Stripe or third-party service failures, natural disasters, regulatory changes, government actions, or acts of war.</p>
+      <p>AuthOnce is not liable for any failure or delay in performance caused by events beyond our reasonable control, including but not limited to: blockchain network outages, third-party service failures, natural disasters, regulatory changes, government actions, or acts of war.</p>
 
       <h2>19. Indemnification</h2>
       <p>Merchants agree to indemnify, defend, and hold harmless AuthOnce and its operator from and against any claims, liabilities, damages, losses, and expenses (including legal fees) arising from: their use of the platform, their business operations, their Subscribers, their violation of these terms, or their violation of any applicable law.</p>
@@ -239,10 +238,9 @@
       <p><strong>What we do NOT store:</strong></p>
       <ul>
         <li>Subscriber names or email addresses</li>
-        <li>Credit card details (held by Stripe only)</li>
+        <li>Credit card, bank account, or other fiat payment details — AuthOnce has no fiat payment processor in its stack</li>
         <li>IP addresses (used transiently for geofencing checks only, never logged or retained)</li>
-        <li>Government ID or KYC data (held by Stripe only)</li>
-        <li>Bank account details (held by Stripe only)</li>
+        <li>Government ID or KYC data — AuthOnce does not perform identity verification; any KYC required for future fiat on-ramp access will be handled entirely by the third-party onramp partner, not AuthOnce</li>
         <li>Any data not strictly necessary for platform operation</li>
       </ul>
 
@@ -274,7 +272,6 @@
 
       <h2>9. Third-Party Processors</h2>
       <ul>
-        <li><strong>Stripe</strong> — payment processing, KYC, and identity verification. <a href="https://stripe.com/privacy" target="_blank">Stripe Privacy Policy</a></li>
         <li><strong>Privy</strong> — embedded wallet and subscriber authentication. <a href="https://privy.io/privacy" target="_blank">Privy Privacy Policy</a></li>
         <li><strong>Railway</strong> — backend infrastructure hosting (EU/US servers)</li>
         <li><strong>Netlify</strong> — frontend hosting</li>
@@ -354,7 +351,7 @@
       <p>If a payment fails, the subscription enters a grace period of 1 to 30 days, as configured by the Merchant (default: 7 days). The Subscriber is notified and given the opportunity to resolve the payment. No charges are made during the grace period. If the payment is not resolved within the grace period, the subscription is automatically cancelled with no further charges.</p>
 
       <h2>6. Merchant-Initiated Refunds</h2>
-      <p>Merchants may issue partial or full refunds to their Subscribers at their own discretion through the AuthOnce merchant dashboard or their Stripe account. Each Merchant is solely responsible for their own refund policies and for compliance with all applicable consumer protection laws in their jurisdiction.</p>
+      <p>Merchants may issue partial or full refunds to their Subscribers at their own discretion through the AuthOnce merchant dashboard. Each Merchant is solely responsible for their own refund policies and for compliance with all applicable consumer protection laws in their jurisdiction.</p>
 
       <h2>7. Disputes</h2>
       <p>Disputes regarding charges are exclusively between the Subscriber and the Merchant. Subscribers should contact their Merchant directly for any refund requests. AuthOnce does not mediate commercial disputes and cannot override Merchant refund decisions. AuthOnce may be contacted at <a href="mailto:support@authonce.io">support@authonce.io</a> solely in cases of suspected platform fraud or technical errors caused by the AuthOnce protocol.</p>
@@ -363,7 +360,7 @@
       <p>The AuthOnce Protocol Fee is automatically deducted at the time of each successful transaction. The Protocol Fee is non-refundable under any circumstances, including in cases of disputed transactions, chargebacks, or Merchant-issued refunds. In the event of a full Merchant refund to a Subscriber, the Protocol Fee is not refunded to the Merchant.</p>
 
       <h2>9. Technical Errors</h2>
-      <p>In the event of a demonstrable technical error caused solely by the AuthOnce protocol that results in an incorrect charge, AuthOnce will investigate and, if confirmed, facilitate a remedy in coordination with Stripe. Such cases should be reported immediately to <a href="mailto:support@authonce.io">support@authonce.io</a> with full details.</p>
+      <p>In the event of a demonstrable technical error caused solely by the AuthOnce protocol that results in an incorrect charge, AuthOnce will investigate and, if confirmed, facilitate a remedy. Such cases should be reported immediately to <a href="mailto:support@authonce.io">support@authonce.io</a> with full details.</p>
 
       <h2>10. On-Chain Transactions</h2>
       <p>USDC payments executed on Base Network are irreversible by nature of blockchain technology. AuthOnce cannot reverse, cancel, or refund on-chain transactions once confirmed. Merchants receiving USDC payments are responsible for issuing any refunds through separate on-chain transfers at their own discretion.</p>
@@ -404,14 +401,8 @@
       <p>This authorisation covers all future payments at the same amount and interval unless the Merchant initiates a price change with a minimum 30-day notice period. You will be notified of any price change before it takes effect.</p>
 
       <h2>4. Payment Methods</h2>
-      <p>AuthOnce supports the following payment methods depending on your country:</p>
-      <ul>
-        <li><strong>Credit or debit card</strong> — available globally</li>
-        <li><strong>MB Way</strong> — available in Portugal. You authorise once via your MB Way app; all subsequent payments are collected automatically.</li>
-        <li><strong>Multibanco</strong> — available in Portugal. A new payment reference is generated and sent to you by SMS and email before each billing cycle.</li>
-        <li><strong>USDC wallet</strong> — available globally for crypto-native users.</li>
-      </ul>
-      <p>Your payment method at subscription creation is used for all subsequent recurring payments. You may update your payment method by cancelling and creating a new subscription.</p>
+      <p>AuthOnce currently supports payment via USDC and other supported stablecoins held in your own wallet on Base Network — available globally. Fiat on-ramp access, allowing you to fund a subscription directly without holding crypto beforehand, is planned via a third-party onramp partner but is not yet live. When available, that onramp will deliver USDC directly to your own wallet — AuthOnce will never hold your funds or your fiat payment details at any point.</p>
+      <p>Your wallet at subscription creation is used for all subsequent recurring payments. You may update your payment method by cancelling and creating a new subscription.</p>
 
       <h2>5. Payment Notifications</h2>
       <p>AuthOnce sends payment notifications from <strong>notifications@authonce.io</strong>:</p>
@@ -427,7 +418,7 @@
       <p>If a payment fails, your subscription enters a grace period configured by the Merchant (default: 7 days, maximum: 30 days). During the grace period you will be notified and given the opportunity to resolve the payment. No charges are made during the grace period. If the payment is not resolved within the grace period, your subscription is automatically cancelled with no further charges.</p>
 
       <h2>7. Cancellation</h2>
-      <p>You may cancel your subscription at any time with no penalty. AuthOnce processes cancellations independently — the Merchant cannot block or delay your cancellation.</p>
+      <p>You may cancel your subscription at any time with no penalty or fee from AuthOnce or the Merchant. AuthOnce processes cancellations independently — the Merchant cannot block or delay your cancellation. A minimal Base Network transaction fee (typically well under $0.01) applies when cancelling, paid directly to the network by your wallet — not to AuthOnce.</p>
       <ul>
         <li><strong>Self-service:</strong> Visit <a href="https://authonce.io/my-subscriptions">authonce.io/my-subscriptions</a> and log in with your email — cancellation is immediate</li>
         <li><strong>By email:</strong> Click the cancellation link in any payment notification email</li>
@@ -442,7 +433,7 @@
       <p>Refund requests for subscription payments are handled by the Merchant, not by AuthOnce. Please contact your Merchant directly for any refund requests. AuthOnce's Refund Policy applies in cases of technical errors caused solely by the AuthOnce protocol.</p>
 
       <h2>10. Your Data</h2>
-      <p>AuthOnce collects only what is necessary to operate your subscription: your email address, phone number (if using MB Way or Multibanco), and your payment method reference. Your personal data is never sold. Full details are in our <a href="#" onclick="showDoc('privacy'); return false;">Privacy Policy</a>.</p>
+      <p>AuthOnce collects only what is necessary to operate your subscription: your email address and your wallet address. Your personal data is never sold. Full details are in our <a href="#" onclick="showDoc('privacy'); return false;">Privacy Policy</a>.</p>
 
       <h2>11. Google OAuth</h2>
       <p>To access your subscriber dashboard at authonce.io/my-subscriptions, you log in using a magic link sent to your email address. Each magic link is valid for 15 minutes and can only be used once. No password is required. If you did not request a magic link, you can safely ignore the email.</p>
