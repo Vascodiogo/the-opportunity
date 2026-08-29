@@ -2,15 +2,10 @@
 <html lang="en">
   <head>
     <!-- Google tag (gtag.js) — gated behind cookie consent, 2026-08-25.
-         legal.html's Privacy Policy §13 states "No advertising, tracking, or
-         analytics cookies are used." That was false while this fired
-         unconditionally with no consent mechanism — a live GDPR/ePrivacy
-         Directive issue, not just stale wording. Fix: GA4 no longer loads
-         on page load. It only loads after the consent banner below records
-         an explicit "accept". See the consent-banner script near </body>
-         for the loader (window.__authonceLoadGA). §13 needs updating to
-         disclose GA4 with consent, since "no analytics cookies" is no
-         longer accurate — see T27's open item (a) in the backlog. -->
+         GA4 never loads on page load. It only loads once the visitor
+         accepts the cookie banner (frontend/public/consent-banner.js,
+         loaded at the end of the body) — see legal.html §13 and
+         AUTHONCE-BACKLOG.md T27 for the compliance history. -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -170,122 +165,11 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- ═══════════════════════════════════════════════════════════════════
-         Cookie consent banner + gated GA4 loader — 2026-08-25.
-         Only non-essential cookie/tracking mechanism in the app is GA4.
-         GA4 never loads until this records an explicit "accept". Choice is
-         stored in localStorage and can be changed any time via the small
-         "Cookie preferences" pill in the bottom-left corner, present on
-         every page regardless of app/React state. Deliberately plain JS,
-         outside the React tree, so it works even if the app fails to mount.
-         ═══════════════════════════════════════════════════════════════════ -->
-    <script>
-    (function () {
-      var CONSENT_KEY = "authonce_cookie_consent"; // "accepted" | "rejected"
-      var GA_ID = "G-5NE0QK40WZ";
-
-      function getConsent() {
-        try { return window.localStorage.getItem(CONSENT_KEY); } catch (e) { return null; }
-      }
-      function setConsent(value) {
-        try { window.localStorage.setItem(CONSENT_KEY, value); } catch (e) { /* private mode etc — banner will just reappear */ }
-      }
-
-      window.__authonceLoadGA = function () {
-        if (window.__authonceGALoaded) return;
-        window.__authonceGALoaded = true;
-        var s = document.createElement("script");
-        s.async = true;
-        s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
-        document.head.appendChild(s);
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = function () { window.dataLayer.push(arguments); };
-        window.gtag("js", new Date());
-        window.gtag("config", GA_ID);
-      };
-
-      function removeBanner() {
-        var el = document.getElementById("authonce-cookie-banner");
-        if (el) el.remove();
-      }
-
-      function showBanner() {
-        removeBanner();
-        var bar = document.createElement("div");
-        bar.id = "authonce-cookie-banner";
-        bar.setAttribute("role", "dialog");
-        bar.setAttribute("aria-label", "Cookie consent");
-        bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#0f172a;border-top:1px solid rgba(255,255,255,0.1);padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:16px;font-family:sans-serif;";
-
-        var text = document.createElement("div");
-        text.style.cssText = "color:#f1f5f9;font-size:13px;line-height:1.6;max-width:640px;flex:1 1 320px;";
-        text.innerHTML = 'We use an analytics cookie (Google Analytics) to understand how visitors use authonce.io, so we can improve it. It is off by default. See our <a href="/legal" style="color:#34d399;">Privacy Policy</a> for details.';
-
-        var btnRow = document.createElement("div");
-        btnRow.style.cssText = "display:flex;gap:10px;flex:0 0 auto;";
-
-        function makeButton(labelText, primary) {
-          var b = document.createElement("button");
-          b.type = "button";
-          b.textContent = labelText;
-          b.style.cssText = "font-family:sans-serif;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer;border:1px solid " +
-            (primary ? "#34d399;background:#34d399;color:#08120c;" : "rgba(255,255,255,0.15);background:transparent;color:#f1f5f9;");
-          return b;
-        }
-
-        var acceptBtn = makeButton("Accept", true);
-        acceptBtn.onclick = function () {
-          setConsent("accepted");
-          window.__authonceLoadGA();
-          removeBanner();
-        };
-
-        var rejectBtn = makeButton("Reject", false);
-        rejectBtn.onclick = function () {
-          setConsent("rejected");
-          removeBanner();
-          // If GA was already running this session (e.g. user previously
-          // accepted, then reopened preferences and changed their mind),
-          // a reload is the only clean way to actually stop it — the
-          // already-injected script can't be un-run in place.
-          if (window.__authonceGALoaded) window.location.reload();
-        };
-
-        btnRow.appendChild(rejectBtn);
-        btnRow.appendChild(acceptBtn);
-        bar.appendChild(text);
-        bar.appendChild(btnRow);
-        document.body.appendChild(bar);
-      }
-
-      function showPreferencesPill() {
-        if (document.getElementById("authonce-cookie-prefs-pill")) return;
-        var pill = document.createElement("button");
-        pill.id = "authonce-cookie-prefs-pill";
-        pill.type = "button";
-        pill.textContent = "Cookie preferences";
-        pill.setAttribute("aria-label", "Open cookie preferences");
-        pill.style.cssText = "position:fixed;left:14px;bottom:14px;z-index:99998;font-family:sans-serif;font-size:11px;font-weight:500;color:#64748b;background:rgba(15,23,42,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:6px 12px;cursor:pointer;backdrop-filter:blur(6px);";
-        pill.onclick = function () { showBanner(); };
-        document.body.appendChild(pill);
-      }
-
-      function init() {
-        var consent = getConsent();
-        if (consent === "accepted") {
-          window.__authonceLoadGA();
-        } else if (consent !== "rejected") {
-          showBanner();
-        }
-        showPreferencesPill(); // always present, so consent can be changed later
-      }
-
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", init);
-      } else {
-        init();
-      }
-    })();
-    </script>
+    <!-- Cookie consent banner + gated GA4 loader — 2026-08-25. Moved to
+         external files (rather than inline) on 2026-08-29 specifically so
+         they're covered by CSP's script-src/style-src 'self' with no
+         per-edit hash to maintain — see frontend/public/_headers. -->
+    <link rel="stylesheet" href="/consent-banner.css" />
+    <script src="/consent-banner.js"></script>
   </body>
 </html>
