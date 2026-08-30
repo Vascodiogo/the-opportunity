@@ -27,12 +27,7 @@
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5NE0QK40WZ"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-5NE0QK40WZ');
-  </script>
+  <script src="/docs/docs-analytics.js"></script>
 
   <script type="application/ld+json">
   {
@@ -571,21 +566,7 @@ app.<span class="token-fn">post</span>(<span class="token-str">"/webhook/authonc
   </main>
 </div>
 
-<script>
-  // Sidebar active link on scroll
-  const sections = document.querySelectorAll('h2[id]');
-  const links = document.querySelectorAll('.sidebar-link');
-  const obs = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        links.forEach(l => l.classList.remove('active'));
-        const active = document.querySelector(`.sidebar-link[href="#${e.target.id}"]`);
-        if (active) active.classList.add('active');
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-  sections.forEach(s => obs.observe(s));
-</script>
+<script src="/docs/docs-scrollspy.js"></script>
 
 </body>
 </html>

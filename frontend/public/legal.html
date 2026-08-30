@@ -453,14 +453,6 @@
   <p>© 2026 AuthOnce · <a href="/">authonce.io</a> · <a href="mailto:support@authonce.io">support@authonce.io</a> · Subject to legal review before mainnet</p>
 </footer>
 
-<script>
-  function showDoc(doc) {
-    document.querySelectorAll('.doc').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.doc-tab').forEach(el => el.classList.remove('active'));
-    document.getElementById('doc-' + doc).classList.add('active');
-    document.querySelectorAll('.doc-tab')[['tos','privacy','refund','subscriber'].indexOf(doc)].classList.add('active');
-    window.scrollTo(0, 0);
-  }
-</script>
+<script src="/legal-tabs.js"></script>
 </body>
 </html>
