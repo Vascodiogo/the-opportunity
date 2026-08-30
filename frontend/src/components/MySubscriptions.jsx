@@ -397,54 +397,33 @@ export default function MySubscriptions() {
   // AuthOnce. It runs as soon as a wallet connects, whether or not the
   // subscriber is also logged in with Google.
   useEffect(() => {
-    // TEMP DEBUG 2026-08-30 — diagnosing "no subscriptions yet" on a wallet
-    // with a confirmed on-chain + backend-linked subscription. Remove this
-    // whole console.log/console.error block once root cause is confirmed fixed.
-    //
-    // ROOT CAUSE (confirmed 2026-08-30 via wagmi's own source,
-    // node_modules/@wagmi/core/dist/esm/actions/getConnectorClient.js):
-    // On page load with a previously-connected wallet, wagmi's
-    // `reconnectOnMount` restores `address` from persisted localStorage
-    // state (`wagmi.store`) synchronously, BEFORE the live connector
-    // instance has finished its async handshake with the wallet extension.
-    // During that window `useAccount().status === "reconnecting"` and the
-    // connector object can be a partial placeholder missing methods like
-    // `getChainId`. Calling `signMessageAsync` while still `reconnecting`
-    // hit that gap directly: `TypeError: connector.getChainId is not a
-    // function`, thrown from inside wagmi's own signMessage mutation. The
-    // previously-tried fix (removing a stray top-level `@wagmi/connectors`
-    // dependency, commit dbc24b8) did not address this — verified: the
-    // deployed bundle was byte-identical before and after that change,
-    // and the error was byte-identical too. That fix is superseded by
-    // this one; the dependency cleanup itself was harmless but not curative.
-    //
-    // Fix: gate on `accountStatus === "connected"`, not just `address`
-    // being truthy, so this only fires once wagmi's own reconnect
-    // handshake has actually completed and the live connector is in place.
-    console.log("[MySubs DEBUG] effect fired, address =", address, "status =", accountStatus);
-    if (!address || accountStatus !== "connected") {
-      console.log("[MySubs DEBUG] not fully connected yet (status =", accountStatus, "), waiting");
-      return;
-    }
+    // Gated on accountStatus === "connected", not just `address` being
+    // truthy. On page load with a previously-connected wallet, wagmi's
+    // reconnectOnMount restores `address` from persisted localStorage state
+    // synchronously, BEFORE the live connector instance has finished its
+    // async handshake with the wallet extension. During that window
+    // useAccount().status === "reconnecting" and the connector object can
+    // be a partial placeholder missing methods like getChainId() — calling
+    // signMessageAsync then throws `connector.getChainId is not a
+    // function` from inside wagmi's own signMessage mutation (root-caused
+    // 2026-08-30 against wagmi's source, see T29 in the backlog). Waiting
+    // for "connected" avoids that race.
+    if (!address || accountStatus !== "connected") return;
     setLoading(true);
     setWalletAuthError("");
     (async () => {
       try {
         const timestamp = Date.now();
         const message = `AuthOnce: view my subscriptions (${timestamp})`;
-        console.log("[MySubs DEBUG] about to call signMessageAsync", { address, message });
         const signature = await signMessageAsync({ message });
-        console.log("[MySubs DEBUG] got signature", signature);
         const res = await fetch(
           `${API_BASE}/api/subscriber/subscriptions/${address}?signature=${encodeURIComponent(signature)}&timestamp=${timestamp}`
         );
-        console.log("[MySubs DEBUG] fetch responded", res.status, res.ok);
         if (!res.ok) throw new Error("verification_failed: " + res.status);
         const data = await res.json();
-        console.log("[MySubs DEBUG] data received", data);
         mergeSubscriptions(data.subscriptions || []);
       } catch (err) {
-        console.error("[MySubs DEBUG] caught error in wallet-auth effect:", err);
+        console.error("[MySubscriptions] wallet-auth error:", err);
         setWalletAuthError("Could not verify this wallet. Try reconnecting and signing again.");
       } finally {
         setLoading(false);
