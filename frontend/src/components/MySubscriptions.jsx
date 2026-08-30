@@ -340,7 +340,7 @@ export default function MySubscriptions() {
   const [filter, setFilter]             = useState("active");
   const [walletAuthError, setWalletAuthError] = useState("");
 
-  const { address }            = useAccount();
+  const { address, status: accountStatus } = useAccount();
   const { signMessageAsync }   = useSignMessage();
 
   useEffect(() => {
@@ -397,11 +397,35 @@ export default function MySubscriptions() {
   // AuthOnce. It runs as soon as a wallet connects, whether or not the
   // subscriber is also logged in with Google.
   useEffect(() => {
-    // TEMP DEBUG 2026-08-29 — diagnosing "no subscriptions yet" on a wallet
+    // TEMP DEBUG 2026-08-30 — diagnosing "no subscriptions yet" on a wallet
     // with a confirmed on-chain + backend-linked subscription. Remove this
-    // whole console.log/console.error block once root cause is found.
-    console.log("[MySubs DEBUG] effect fired, address =", address);
-    if (!address) { console.log("[MySubs DEBUG] no address, bailing out"); return; }
+    // whole console.log/console.error block once root cause is confirmed fixed.
+    //
+    // ROOT CAUSE (confirmed 2026-08-30 via wagmi's own source,
+    // node_modules/@wagmi/core/dist/esm/actions/getConnectorClient.js):
+    // On page load with a previously-connected wallet, wagmi's
+    // `reconnectOnMount` restores `address` from persisted localStorage
+    // state (`wagmi.store`) synchronously, BEFORE the live connector
+    // instance has finished its async handshake with the wallet extension.
+    // During that window `useAccount().status === "reconnecting"` and the
+    // connector object can be a partial placeholder missing methods like
+    // `getChainId`. Calling `signMessageAsync` while still `reconnecting`
+    // hit that gap directly: `TypeError: connector.getChainId is not a
+    // function`, thrown from inside wagmi's own signMessage mutation. The
+    // previously-tried fix (removing a stray top-level `@wagmi/connectors`
+    // dependency, commit dbc24b8) did not address this — verified: the
+    // deployed bundle was byte-identical before and after that change,
+    // and the error was byte-identical too. That fix is superseded by
+    // this one; the dependency cleanup itself was harmless but not curative.
+    //
+    // Fix: gate on `accountStatus === "connected"`, not just `address`
+    // being truthy, so this only fires once wagmi's own reconnect
+    // handshake has actually completed and the live connector is in place.
+    console.log("[MySubs DEBUG] effect fired, address =", address, "status =", accountStatus);
+    if (!address || accountStatus !== "connected") {
+      console.log("[MySubs DEBUG] not fully connected yet (status =", accountStatus, "), waiting");
+      return;
+    }
     setLoading(true);
     setWalletAuthError("");
     (async () => {
@@ -426,7 +450,7 @@ export default function MySubscriptions() {
         setLoading(false);
       }
     })();
-  }, [address]);
+  }, [address, accountStatus]);
 
   const handleLogout = () => {
     sessionStorage.removeItem("subscriber_token");
