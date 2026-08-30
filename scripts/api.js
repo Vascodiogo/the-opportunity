@@ -2123,7 +2123,7 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
         s.id             AS subscription_id,
         s.merchant_address,
         s.safe_vault,
-        s.token,
+        COALESCE(p.token_symbol, 'USDC') AS token,
         s.is_contract_vault,
         s.amount,
         s.interval,
