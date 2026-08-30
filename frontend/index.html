@@ -80,7 +80,17 @@
     }
     </script>
 
-    <!-- FAQ JSON-LD structured data -->
+    <!-- FAQ JSON-LD structured data.
+         IMPORTANT: this must stay word-for-word identical to the visible FAQ
+         array in frontend/src/LandingPage.jsx (the "questions you're
+         actually asking" section, ~line 1256). Google's structured-data
+         guidelines require FAQPage markup to match content actually visible
+         on the page — this block previously listed 5 different questions
+         than what LandingPage.jsx rendered (a "what is a non-custodial
+         subscription", generic-explainer set vs. the real page's
+         objection-handling set), found and fixed 2026-08-30. If you edit
+         the FAQ section in LandingPage.jsx, update this block in the same
+         change, or it drifts out of sync again. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -88,42 +98,42 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is a non-custodial crypto subscription?",
+          "name": "What happens if a customer's payment fails?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A non-custodial crypto subscription uses smart contracts to execute recurring peer-to-peer payments directly between a subscriber's wallet and a merchant. Unlike custodial systems, no third-party intermediary ever holds or controls the funds. AuthOnce uses EIP-2612 permit signatures so funds flow atomically from subscriber wallet to merchant wallet in a single transaction."
+            "text": "Their subscription enters a grace period (1–30 days, you choose) with automatic daily retries. Nothing is cancelled immediately — most failures are temporary (low balance, momentary issue) and resolve on their own before the grace period ends."
           }
         },
         {
           "@type": "Question",
-          "name": "How do gasless USDC recurring payments work on Base?",
+          "name": "Can I change my pricing later?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "AuthOnce uses EIP-2612 permit-based authorization. Subscribers sign a single off-chain message — no gas required, no on-chain approval transaction. The AuthOnce keeper bot presents this permit on each billing date and pulls the exact subscription amount directly to the merchant's wallet on Base Network."
+            "text": "Yes. Price changes require 30 days' notice, enforced on-chain — existing subscribers can't be surprised by a sudden increase. New pricing applies from their next billing cycle after the notice period."
           }
         },
         {
           "@type": "Question",
-          "name": "What happens if a subscriber does not have enough USDC during a billing cycle?",
+          "name": "Can I get my money out whenever I want?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "If a payment fails due to insufficient balance, AuthOnce triggers a configurable grace period of 1 to 30 days. The keeper retries daily during this window before the subscription expires, giving merchants the opportunity to recover the account without abrupt service interruption."
+            "text": "Yes — funds are paid directly to your own wallet on every billing cycle. AuthOnce never holds your revenue at any point, so there's nothing to withdraw or wait on. It's already yours the moment the pull completes."
           }
         },
         {
           "@type": "Question",
-          "name": "What is the AuthOnce protocol fee?",
+          "name": "What if AuthOnce disappears or gets hacked?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "AuthOnce charges a 0.5% flat protocol fee per successful recurring payment. This fee is hardcoded in the smart contract — it cannot be changed unilaterally. There are no monthly fees, setup fees, or withdrawal fees. The hard ceiling is 2% and can never be raised above it."
+            "text": "Because the protocol never custodies funds, there's no pool of money to lose — each pull moves directly from subscriber to merchant. The contracts are open and verified on Basescan; a third-party audit is planned ahead of mainnet, pending funding."
           }
         },
         {
           "@type": "Question",
-          "name": "Which wallets does AuthOnce support?",
+          "name": "Is this actually live, or still just an idea?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "AuthOnce supports any EVM-compatible wallet — MetaMask, Ledger, Coinbase Wallet, Rainbow, and AI agent wallets via ERC-1271. Unlike Base Spend Permissions which require a Coinbase Smart Wallet, AuthOnce works with any wallet that supports EIP-2612 permit signatures."
+            "text": "Live and running on Base Sepolia testnet today — the dashboard screenshots above are real, not mocked up. Mainnet is targeted for September 2026, pending the security audit."
           }
         }
       ]
