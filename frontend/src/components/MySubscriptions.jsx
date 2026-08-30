@@ -174,9 +174,14 @@ function SubscriptionCard({ sub, token, onCancelled }) {
       });
       const data = await res.json();
       if (data.success) { onCancelled(sub.subscription_id); setCancelling(false); return; }
-      if (data.error !== "not_custodied") {
-        setCancelError(data.message || "Cancel failed."); setCancelling(false); return;
-      }
+      // Any other outcome — "not_custodied", a missing/invalid token (the
+      // normal case for a wallet-only subscriber with no Google session,
+      // who sends an empty Bearer header here), or anything else — falls
+      // through to the on-chain path below. AuthOnce never holds a
+      // subscriber's key (custody-gap fix, 2026-08-25; see the backend
+      // comment on this route in api.js): this probe can only ever
+      // succeed for a legacy custodial record, so every other response is
+      // expected to mean "cancel on-chain," not a hard failure.
     } catch {}
 
     if (!address) {
