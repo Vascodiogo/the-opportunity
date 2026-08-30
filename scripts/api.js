@@ -2123,7 +2123,12 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
         s.id             AS subscription_id,
         s.merchant_address,
         s.safe_vault,
-        COALESCE(p.token_symbol, 'USDC') AS token,
+        COALESCE(
+          (SELECT pay.token_symbol FROM payments pay
+             WHERE pay.subscription_id = s.id
+             ORDER BY pay.executed_at DESC LIMIT 1),
+          'USDC'
+        ) AS token,
         s.is_contract_vault,
         s.amount,
         s.interval,
