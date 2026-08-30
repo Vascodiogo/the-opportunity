@@ -4,36 +4,33 @@
 # not generic hardening, and the wrong value silently breaks wallet
 # popups with no error message to the user.
 #
-# CSP is currently Content-Security-Policy-Report-Only, NOT enforced.
-# Report-Only sends the exact same policy to the browser but never blocks
-# anything — violations only show as warnings in the browser DevTools
-# Console (Cloudflare Pages has no report-collector configured here, so
-# there is no server-side report; check the console directly).
+# CSP is ENFORCED as of 2026-08-30 (was Content-Security-Policy-Report-Only
+# from 2026-08-29 to 2026-08-30). Enforced means violations are actually
+# BLOCKED, silently, with no visible error to the user — only a console
+# message. Do not add a new inline <script> or a new external origin
+# anywhere in this app without updating this policy first, or it will
+# break silently in production.
 #
-# Before flipping Content-Security-Policy-Report-Only to a real, enforced
-# Content-Security-Policy header below: open the live site in a browser
-# with DevTools Console open, and walk through every flow that talks to
-# an external origin, watching for red "Refused to..." CSP messages:
-#   1. Connect a wallet (MetaMask + WalletConnect QR, if you have a second
-#      device to test with) on the homepage and on /pay/:merchant/:slug.
-#   2. Subscribe to a test product (full permit-signing flow).
-#   3. View /my-subscriptions (wallet-connect + sign-message flow).
-#   4. Cancel a subscription (on-chain tx flow).
-#   5. Load /admin and /pricing.
-#   6. Click "Accept" on the cookie banner and confirm GA4 actually loads
-#      (Network tab: a request to googletagmanager.com should appear).
-# If the console is clean across all of that, it's safe to rename
-# Content-Security-Policy-Report-Only to Content-Security-Policy below
-# (delete the -Report-Only suffix) and redeploy. If anything is blocked,
-# tell me exactly what the console message says — it names the exact
-# blocked origin and directive, which is normally all that's needed to
-# add one line to the relevant directive below.
+# Pre-enforcement audit performed across two passes before flipping this:
+#   1. React SPA (2026-08-29): wallet connect (homepage + /pay/:merchant/:slug),
+#      subscribe (permit-signing flow), /my-subscriptions (sign-message flow),
+#      cancel subscription (on-chain tx flow), /admin, /pricing, cookie
+#      banner → GA4. Console clean across all of it.
+#   2. Static pages outside the SPA (2026-08-30): docs/docs-ai-agents.html,
+#      docs/docs-saas.html, docs/docs-web3.html, legal.html — found and
+#      fixed a real gap here (see the 6-sha256-hash note below), then
+#      reverified clean.
+# If CSP ever needs to go back to audit-only (e.g. after a change you're
+# not sure about), rename Content-Security-Policy back to
+# Content-Security-Policy-Report-Only below, redeploy, test, then flip
+# back. Whoever adds a new page or a new external origin: re-run the same
+# two-pass audit above before assuming this policy still covers it.
 
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Cross-Origin-Opener-Policy: same-origin-allow-popups
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://www.googletagmanager.com 'sha256-ON0Xd1FLnbiEXZD3CXl6NkXyXq2gRglSFhJcIiF8cGM=' 'sha256-A6faL9pEGrGIJJtExNuFwOILzu401VZNw0qZPwO2aIA=' 'sha256-N0zVAtHZTUjQ1kXyq/qo48QgoxGHmt0EiWJYPSVScxc=' 'sha256-Ml/qolLkRBuvZr/j6Gga2iOkJJxrCDBENTXU+PvLqzs=' 'sha256-T7kPZ7VH6pRhS4kD4BBb7gW0Q5G1b6f3zvR4ocA2uY4=' 'sha256-qByWsKBDz6EtSluvymY+iOhl6JDZnEUZbQIdpECuE68='; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https://the-opportunity-production.up.railway.app https://base-sepolia.g.alchemy.com https://sepolia.base.org https://84532.rpc.thirdweb.com https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.com https://api.web3modal.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://www.googletagmanager.com; frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com 'sha256-ON0Xd1FLnbiEXZD3CXl6NkXyXq2gRglSFhJcIiF8cGM=' 'sha256-A6faL9pEGrGIJJtExNuFwOILzu401VZNw0qZPwO2aIA=' 'sha256-N0zVAtHZTUjQ1kXyq/qo48QgoxGHmt0EiWJYPSVScxc=' 'sha256-Ml/qolLkRBuvZr/j6Gga2iOkJJxrCDBENTXU+PvLqzs=' 'sha256-T7kPZ7VH6pRhS4kD4BBb7gW0Q5G1b6f3zvR4ocA2uY4=' 'sha256-qByWsKBDz6EtSluvymY+iOhl6JDZnEUZbQIdpECuE68='; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https://the-opportunity-production.up.railway.app https://base-sepolia.g.alchemy.com https://sepolia.base.org https://84532.rpc.thirdweb.com https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.com https://api.web3modal.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://www.googletagmanager.com; frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
 
 # ─── Notes on each directive, and why it's shaped this way ──────────────
 #
