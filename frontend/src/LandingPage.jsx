@@ -634,7 +634,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
                 {"Every cycle. Automatically."}
               </span><br/>
               <span style={{ color: muted, fontSize: "clamp(24px, 3.5vw, 40px)" }}>
-                {"Without you lifting a finger."}
+                {"USDC subscriptions on Base. Without you lifting a finger."}
               </span></>}
           </h1>
 
@@ -1279,7 +1279,7 @@ const res = await fetch(
                 padding: "20px 24px", borderRadius: 12,
                 background: cardBg, border: `0.5px solid ${border}`,
               }}>
-                <p style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 8px" }}>{q}</p>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: text, margin: "0 0 8px" }}>{q}</h3>
                 <p style={{ fontSize: 14, color: muted, margin: 0, lineHeight: 1.7, fontWeight: 300 }}>{a}</p>
               </div>
             ))}
