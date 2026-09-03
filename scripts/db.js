@@ -852,7 +852,7 @@ async function upsertMerchant(walletAddress, data = {}) {
        settlement_preference, iban_encrypted, bic, account_holder,
        country_code, vat_number, billing_address,
        approved_at, created_at, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW(),NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULL,NOW(),NOW())
     ON CONFLICT (wallet_address) DO UPDATE SET
       business_name         = COALESCE(EXCLUDED.business_name, merchants.business_name),
       email                 = COALESCE(EXCLUDED.email, merchants.email),

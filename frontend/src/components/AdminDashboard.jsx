@@ -2,7 +2,7 @@
 // AuthOnce Admin Dashboard — v2
 // Tabs: Overview · Merchants · Subscriptions · Subscribers · Payments · Webhooks · Analytics · Tax · Audit · Contracts
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useConnect, useDisconnect, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
 import { REGISTRY_ADDRESS, REGISTRY_ABI } from "../config.js";
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { VAULT_ADDRESS as VAULT_ADDRESS_TESTNET, REGISTRY_ADDRESS as REGISTRY_ADDRESS_TESTNET } from "../config.js";
@@ -320,7 +320,7 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
 }
 
 // ─── Merchant Row ─────────────────────────────────────────────────────────────
-function MerchantRow({ merchant, isLast, onViewMerchant }) {
+function MerchantRow({ merchant, isLast, onViewMerchant, isApprovedLive }) {
   // NOTE: approve/revoke removed from this row (Aug 2026) — they previously
   // called DB-only endpoints (/api/admin/merchants/:wallet/approve|reject)
   // with no on-chain interaction at all. That let this badge and the real
@@ -328,9 +328,12 @@ function MerchantRow({ merchant, isLast, onViewMerchant }) {
   // source of truth for approve/revoke is now the on-chain "Merchant
   // access — MerchantRegistry" card above (wallet-signed writeContract
   // calls, verified via Basescan event logs). This row is read-only.
-  // merchant.approved_at still reflects DB state only, not a live
-  // isApproved() read — treat this badge as informational, not authoritative.
-  const isPending = !merchant.approved_at;
+  // [T10, 2026-09-02] `isApprovedLive` is computed by the parent from a
+  // batched isApproved() multicall (see AdminDashboard's useReadContracts
+  // call), falling back to the DB approved_at flag only while that read is
+  // still loading — this badge can no longer silently disagree with the
+  // chain the way it did before this fix.
+  const isPending = !isApprovedLive;
 
   return (
     <div style={{
@@ -721,12 +724,40 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
     if (tab === "system")       { fetchSystemHealth(); fetchTreasuryBalances(); }
   }, [tab]);
 
-  const pendingCount  = merchants.filter(m => !m.approved_at).length;
-  const approvedCount = merchants.filter(m => !!m.approved_at).length;
+  // [T10, 2026-09-02 — live on-chain merchant status] One batched multicall
+  // (not one RPC call per row) reading MerchantRegistry.isApproved() for
+  // every merchant currently loaded. Replaces the DB-only `approved_at`
+  // flag as the source of truth for the badge, the filter tabs, and the
+  // counts below — all three now read from the same helper, so none of
+  // them can disagree with each other or with the chain. Falls back to
+  // `approved_at` only while the live read is still loading (first paint,
+  // or right after a merchant-list refresh) or if it fails outright.
+  const merchantAddresses = merchants.map(m => m.wallet_address);
+  const { data: liveApprovals } = useReadContracts({
+    contracts: merchantAddresses.map(addr => ({
+      address: REGISTRY_ADDRESS,
+      abi: REGISTRY_ABI,
+      functionName: "isApproved",
+      args: [addr],
+    })),
+    query: { enabled: merchantAddresses.length > 0 },
+  });
+
+  const isMerchantApprovedLive = useCallback((merchant) => {
+    const idx  = merchantAddresses.indexOf(merchant.wallet_address);
+    const live = idx >= 0 ? liveApprovals?.[idx] : undefined;
+    if (live && live.status === "success") return live.result === true;
+    // Loading, or the read failed (e.g. RPC hiccup) — fall back to DB state
+    // rather than show every merchant as pending while we wait/retry.
+    return !!merchant.approved_at;
+  }, [merchantAddresses, liveApprovals]);
+
+  const pendingCount  = merchants.filter(m => !isMerchantApprovedLive(m)).length;
+  const approvedCount = merchants.filter(m => isMerchantApprovedLive(m)).length;
 
   const filteredMerchants = merchants.filter(m => {
-    if (filter === "pending")  return !m.approved_at;
-    if (filter === "approved") return !!m.approved_at;
+    if (filter === "pending")  return !isMerchantApprovedLive(m);
+    if (filter === "approved") return isMerchantApprovedLive(m);
     if (search) return (
       m.business_name?.toLowerCase().includes(search.toLowerCase()) ||
       m.email?.toLowerCase().includes(search.toLowerCase()) ||
@@ -912,6 +943,7 @@ export default function AdminDashboard({ token, email, onLogout, isDark }) {
                   <MerchantRow key={m.wallet_address} merchant={m}
                     isLast={i === filteredMerchants.length - 1}
                     onViewMerchant={setSelectedMerchant}
+                    isApprovedLive={isMerchantApprovedLive(m)}
                   />
                 ))
               }
