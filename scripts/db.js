@@ -761,10 +761,29 @@ async function getSubscription(id, vaultAddress) {
   return res.rows[0] || null;
 }
 
-async function getSubscriptionsByMerchant(merchantAddress) {
+async function getSubscriptionsByMerchant(merchantAddress, limit = 50, offset = 0, status = null) {
+  // [T35 fix, 2026-09-06] Previously took only merchantAddress and ignored
+  // limit/offset/status entirely — api.js's GET /api/merchants/:address/subscriptions
+  // has been calling this with all four arguments since it was written, but
+  // this function silently dropped the last three, so every call returned
+  // the merchant's FULL subscription list regardless of what was requested.
+  // Not user-visible at today's low subscriber counts (the frontend likely
+  // filters/paginates what it already has), but a real scalability gap the
+  // moment any merchant has enough subscriptions for this to matter.
+  const safeLimit  = Number.isFinite(limit)  && limit  > 0 ? limit  : 50;
+  const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
+
+  const params = [merchantAddress];
+  let where = "merchant_address = $1";
+  if (status) {
+    params.push(status);
+    where += ` AND status = $${params.length}`;
+  }
+  params.push(safeLimit, safeOffset);
+
   const res = await query(
-    "SELECT * FROM subscriptions WHERE merchant_address = $1 ORDER BY created_at DESC",
-    [merchantAddress]
+    `SELECT * FROM subscriptions WHERE ${where} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
   );
   return res.rows;
 }
