@@ -770,11 +770,24 @@ async function getSubscriptionsByMerchant(merchantAddress, limit = 50, offset = 
   // Not user-visible at today's low subscriber counts (the frontend likely
   // filters/paginates what it already has), but a real scalability gap the
   // moment any merchant has enough subscriptions for this to matter.
+  //
+  // [T35 correction, same day, caught during live testing] The first version
+  // of this fix used a bare `merchant_address = $1`, matched against a
+  // lowercased address param (api.js's route does
+  // `req.params.address.toLowerCase()` before calling this). That returned
+  // ZERO rows for a real merchant with 16 active subscriptions — live-tested
+  // via the actual Merchant Portal, not caught by `node --check` since it's
+  // a data bug, not a syntax one. Root cause: `subscriptions.merchant_address`
+  // is written as-emitted from on-chain events in `upsertSubscription()`
+  // (no lowercasing applied there), i.e. checksummed/mixed-case, not
+  // lowercase — confirmed by precedent already in this same file
+  // (`getProductStats` etc. at ~line 929 already guards this exact issue
+  // with `WHERE LOWER(merchant_address) = LOWER($1)`). Fixed the same way.
   const safeLimit  = Number.isFinite(limit)  && limit  > 0 ? limit  : 50;
   const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
 
   const params = [merchantAddress];
-  let where = "merchant_address = $1";
+  let where = "LOWER(merchant_address) = LOWER($1)";
   if (status) {
     params.push(status);
     where += ` AND status = $${params.length}`;
