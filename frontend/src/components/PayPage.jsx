@@ -1,6 +1,6 @@
 // src/components/PayPage.jsx — Visual redesign May 2026
 // Logic: unchanged. Visual: CSS variables, solid green CTAs, no hardcoded colors.
-import { VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, INTERVAL_NAMES, TOKEN_ADDRESSES } from "../config.js";
+import { VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, INTERVAL_NAMES, TOKEN_ADDRESSES, REGISTRY_ADDRESS, REGISTRY_ABI } from "../config.js";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
@@ -271,6 +271,20 @@ export default function PayPage() {
   const { data: currentAllowance } = useReadContract({
     address: selectedTokenAddress, abi: USDC_APPROVE_ABI, functionName: "allowance",
     args: [address, VAULT_ADDRESS], query: { enabled: !!address && !!product },
+  });
+
+  // [T36 fix, 2026-09-06] Pre-flight merchant-approval check. Without this,
+  // a subscriber attempting to pay an unapproved merchant would only find
+  // out when the on-chain transaction reverted — and MerchantRegistry's
+  // access-control revert was observed (2026-08-16 testing) to surface
+  // through Alchemy's RPC as a misleading "exceeds max transaction gas
+  // limit" error instead of a clean, readable revert reason. Checking
+  // isApproved() directly here, before any transaction is attempted, lets
+  // the page show an honest message instead. Keyed on resolvedAddress (the
+  // merchant), not the connected subscriber wallet — doesn't need `address`.
+  const { data: merchantApproved, isLoading: merchantApprovedLoading } = useReadContract({
+    address: REGISTRY_ADDRESS, abi: REGISTRY_ABI, functionName: "isApproved",
+    args: [resolvedAddress], query: { enabled: !!resolvedAddress },
   });
 
   // Whether the selected token supports EIP-2612 permit (USDC, EURC only).
@@ -705,6 +719,15 @@ export default function PayPage() {
           </div>
         )}
 
+        {/* ── Merchant not approved (T36) ── */}
+        {!productLoading && product && !merchantApprovedLoading && merchantApproved === false && (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 36, marginBottom: 14 }}>⏳</div>
+            <div style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 600, marginBottom: 8 }}>This merchant isn't accepting payments yet</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>Their AuthOnce account is still pending approval. Please check back later or contact the merchant directly.</div>
+          </div>
+        )}
+
         {/* ── Success ── */}
         {!productLoading && product && flowStatus === "success" && (
           <div style={{ textAlign: "center", padding: "12px 0" }}>
@@ -736,7 +759,10 @@ export default function PayPage() {
         )}
 
         {/* ── Main flow ── */}
-        {!productLoading && product && flowStatus !== "success" && (
+        {/* [T36] merchantApproved !== false: proceed unless we've gotten a
+            definitive on-chain "not approved" answer — avoids blocking the
+            whole flow just because the read hasn't resolved yet. */}
+        {!productLoading && product && flowStatus !== "success" && merchantApproved !== false && (
           <>
             {/* Merchant header */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, paddingBottom: 20, borderBottom: "0.5px solid var(--border)" }}>
