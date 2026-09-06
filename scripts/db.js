@@ -761,7 +761,7 @@ async function getSubscription(id, vaultAddress) {
   return res.rows[0] || null;
 }
 
-async function getSubscriptionsByMerchant(merchantAddress, limit = 50, offset = 0, status = null) {
+async function getSubscriptionsByMerchant(merchantAddress, limit = 50, offset = 0, status = null, vaultAddress = null) {
   // [T35 fix, 2026-09-06] Previously took only merchantAddress and ignored
   // limit/offset/status entirely — api.js's GET /api/merchants/:address/subscriptions
   // has been calling this with all four arguments since it was written, but
@@ -783,11 +783,33 @@ async function getSubscriptionsByMerchant(merchantAddress, limit = 50, offset = 
   // lowercase — confirmed by precedent already in this same file
   // (`getProductStats` etc. at ~line 929 already guards this exact issue
   // with `WHERE LOWER(merchant_address) = LOWER($1)`). Fixed the same way.
+  //
+  // [T38 fix, 2026-09-06] Added optional vaultAddress scoping, found missing
+  // via the same live test: this merchant had 16 real subscriptions on the
+  // current vault (confirmed directly on-chain) but this query — even after
+  // the case-sensitivity fix above — returned rows from a dead, superseded
+  // pre-v9 vault deployment too (2 rows tagged vault_address =
+  // 'legacy-unknown-pre-v9' in production data), because nothing scoped this
+  // query to a specific vault. That's the exact "stale id from a prior
+  // deployment" risk keeper.js's own comments already flag for its due-scan
+  // query (scripts/keeper.js, ~line 275-278) — same underlying cause, same
+  // fix pattern, just a different query that had the same gap. When
+  // vaultAddress is passed (api.js now always passes process.env.VAULT_ADDRESS),
+  // this filters to only that vault; kept optional so any future caller that
+  // deliberately wants a merchant's full cross-deployment history can still
+  // omit it. NOTE: this fix does NOT explain or address the deeper issue
+  // found by the same test — 7 real subscriptions on the CURRENT vault
+  // (ids 0-6) are missing from this table entirely, not just mis-scoped.
+  // That's a separate indexing gap, still open — see backlog T38.
   const safeLimit  = Number.isFinite(limit)  && limit  > 0 ? limit  : 50;
   const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
 
   const params = [merchantAddress];
   let where = "LOWER(merchant_address) = LOWER($1)";
+  if (vaultAddress) {
+    params.push(vaultAddress);
+    where += ` AND LOWER(vault_address) = LOWER($${params.length})`;
+  }
   if (status) {
     params.push(status);
     where += ` AND status = $${params.length}`;

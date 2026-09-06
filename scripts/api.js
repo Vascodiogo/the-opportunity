@@ -1120,7 +1120,17 @@ app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req
     }
 
     const { status, limit = 50, offset = 0 } = req.query;
-    const subs = await db.getSubscriptionsByMerchant(address, parseInt(limit), parseInt(offset), status);    res.json({
+    // [T38 fix, 2026-09-06] Previously unscoped by vault_address — live-tested
+    // against a real merchant with subscriptions on both the current vault and
+    // a superseded pre-v9 deployment (rows tagged vault_address =
+    // 'legacy-unknown-pre-v9' in the DB). Without this scope, dead subscription
+    // ids from an old, no-longer-live vault deployment would be returned
+    // alongside real current ones — the exact "stale id from a prior
+    // deployment" failure mode keeper.js's own comments already warn about for
+    // its due-subscription scan (see scripts/keeper.js, ~line 275). Scoping to
+    // the currently configured vault matches that same established pattern.
+    const subs = await db.getSubscriptionsByMerchant(address, parseInt(limit), parseInt(offset), status, process.env.VAULT_ADDRESS);
+    res.json({
       merchant_address: address,
       subscriptions: subs.map(s => ({
         subscription_id: s.id,
