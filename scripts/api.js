@@ -1925,118 +1925,32 @@ function checkLoginRateLimit(ip) {
 }
 
 // =============================================================================
-// Subscriber Authentication — Google OAuth + JWT
+// Subscriber Authentication — Google OAuth REMOVED (T37, 2026-09-06)
 // =============================================================================
-
-const passport       = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const session        = require("express-session");
-// ethers already imported at top of file — removed duplicate require here
-// (this used to redeclare `ethers` at module scope, which would now clash
-// with the top-level import added for merchant auth).
-
-// Use PostgreSQL session store to eliminate MemoryStore warning
-// and persist sessions across Railway restarts.
-const pgSession = require("connect-pg-simple")(session);
-app.use(session({
-  store: new pgSession({
-    conString: process.env.DATABASE_URL,
-    tableName: "session",
-    createTableIfMissing: true,
-    ssl: { rejectUnauthorized: false },
-  }),
-  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === "production", maxAge: 10 * 60 * 1000 },
-}));
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser(async (id, done) => {
-  try {
-    const res = await db.query("SELECT * FROM subscribers WHERE id = $1", [id]);
-    done(null, res.rows[0] || null);
-  } catch (err) { done(err); }
-});
-
-// generateSubscriberWallet() was removed (custody-gap fix, 2026-08-25). It
-// derived a subscriber's private key deterministically from their email —
-// db.encrypt(walletPrivateKey) stored a copy, but the key was always
-// re-derivable from email + WALLET_SEED_SECRET/ENCRYPTION_KEY regardless.
-// AuthOnce is non-custodial by design: it must never be able to compute or
-// hold a subscriber's key at all. Subscribers now authenticate for viewing
-// via Google OAuth (email/profile only) and authenticate for any wallet
-// action (view subscriptions by wallet, cancel) by connecting and signing
-// with their own wallet — see the self-custody path in MySubscriptions.jsx.
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID:     process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL:  process.env.GOOGLE_CALLBACK_URL || "https://the-opportunity-production.up.railway.app/auth/google/callback",
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      const email     = profile.emails?.[0]?.value;
-      const googleId  = profile.id;
-      const name      = profile.displayName;
-      const avatarUrl = profile.photos?.[0]?.value;
-
-      if (!email) return done(new Error("No email from Google"));
-
-      // Google OAuth is identity/profile only — email, name, avatar. AuthOnce
-      // never generates or holds a wallet for the subscriber (custody-gap
-      // fix, 2026-08-25). Viewing and managing subscriptions requires
-      // connecting the wallet they actually subscribed with — see
-      // MySubscriptions.jsx's self-custody signature-auth path.
-      const subscriber = await db.upsertSubscriber({
-        email, googleId, name, avatarUrl,
-      });
-
-      return done(null, subscriber);
-    } catch (err) {
-      return done(err);
-    }
-  }));
-}
-
-app.get("/auth/google", geofenceMiddleware, (req, res, next) => {
-  const returnTo = req.query.returnTo || "/";
-  const origin = req.query.origin || process.env.FRONTEND_URL || "https://authonce.io";
-  const state = Buffer.from(JSON.stringify({ returnTo, origin })).toString("base64");
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-    prompt: "select_account",
-    state,
-  })(req, res, next);
-});
-
-app.get("/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed` }),
-  async (req, res) => {
-    try {
-      const subscriber = req.user;
-      const token = jwt.sign(
-        { sub: subscriber.id, email: subscriber.email, wallet: subscriber.wallet_address, type: "subscriber" },
-        process.env.JWT_SECRET,
-        { expiresIn: "30d" }
-      );
-      let returnTo = "/";
-      let origin = process.env.FRONTEND_URL || "https://authonce.io";
-      try {
-        const state = JSON.parse(Buffer.from(req.query.state || "", "base64").toString());
-        returnTo = state.returnTo || "/";
-        origin = state.origin || origin;
-      } catch (e) { /* use defaults */ }
-      res.redirect(`${origin}${returnTo}?subscriber_token=${token}`);
-    } catch (err) {
-      console.error("[AUTH] Google callback error:", err.message);
-      res.redirect(`${process.env.FRONTEND_URL || "https://authonce.io"}/pay?error=auth_failed`);
-    }
-  }
-);
+// [T37, 2026-09-06] This entire block — passport, express-session,
+// GoogleStrategy, and the /auth/google + /auth/google/callback routes — has
+// been removed. Reason: the frontend (MySubscriptions.jsx, §24) already
+// stopped linking to Google sign-in because AuthOnce decided it should not
+// keep subscriber data at all — but that was a UI-only change. This backend
+// route was still fully live, public, and unauthenticated: hitting
+// /auth/google directly (bypassing the frontend entirely) still ran
+// db.upsertSubscriber({ email, googleId, name, avatarUrl }), writing real
+// subscriber PII into the `subscribers` table on every use. That directly
+// contradicted the stated no-subscriber-data policy. Confirmed before
+// removing that nothing else depends on this: passport's req.session /
+// req.isAuthenticated() / req.user were never used anywhere else in this
+// file (grepped clean — req.user's only use was inside the callback route
+// removed here), and express-session's store existed solely to back
+// passport.session(), not for any other route. Previously-issued subscriber
+// JWTs (minted by the old /auth/google/callback, type: "subscriber") are
+// NOT invalidated by this change — they're self-contained and still verify
+// fine against JWT_SECRET in /api/subscriber/me and
+// /api/subscriber/cancel/:subscriptionId below, which is why those two
+// routes are left untouched. Only the ability to mint NEW subscriber JWTs
+// via Google is gone, matching what the frontend already implied but never
+// actually enforced. db.js's upsertSubscriber()/getSubscriberByEmail() are
+// left in place (harmless, unused by this route now) rather than removed,
+// to keep this change minimal and focused on the actual exposure.
 
 // POST /api/subscriber/cancel/:subscriptionId
 // AuthOnce never holds a subscriber's key (custody-gap fix, 2026-08-25) —
