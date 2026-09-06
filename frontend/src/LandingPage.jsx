@@ -95,7 +95,13 @@ function ApplyForm({ isDark }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          wallet_address:        form.wallet_address || "0x0000000000000000000000000000000000000000",
+          // [T32] Used to default a blank field to the zero address so the
+          // backend's format check would pass. That collided every walletless
+          // submission onto the same DB row (wallet_address is the primary
+          // key), silently overwriting whatever was there. Now genuinely
+          // required client-side (see the `required` input below) so this
+          // value is never blank by the time it's sent.
+          wallet_address:        form.wallet_address,
           business_name:         form.business_name,
           email:                 form.email,
           website:               form.website,
@@ -171,8 +177,8 @@ function ApplyForm({ isDark }) {
 
       <div className="ao-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 8 }}>
         <div>
-          <label style={labelStyle}>{"Wallet address (optional)"}</label>
-          <input type="text" value={form.wallet_address}
+          <label style={labelStyle}>{"Wallet address"}</label>
+          <input type="text" required value={form.wallet_address}
             onChange={e => setForm(p => ({ ...p, wallet_address: e.target.value }))}
             placeholder="0x..."
             style={inputStyle} />
@@ -1043,7 +1049,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, overflow: "hidden" }}>
           <div className="ao-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
             {[
-              { n: "01", title: "Apply",       sub: "Submit your business details",     note: "Wallet optional", c: "#1D9E75" },
+              { n: "01", title: "Apply",       sub: "Submit your business details",     note: "Any wallet or exchange address", c: "#1D9E75" },
               { n: "02", title: "Get approved",   sub: "We review and whitelist you",  note: "Within 48 hours",        c: "#1D9E75" },
               { n: "03", title: "Share your link",      sub: "authonce.io/pay/yourname", note: "No website needed",        c: "#1D9E75" },
               { n: "04", title: "Get paid",        sub: "Settled in stablecoins",   note: "Every billing cycle",      c: "#BA7517" },
