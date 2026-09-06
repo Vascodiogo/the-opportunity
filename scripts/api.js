@@ -586,6 +586,18 @@ app.post("/api/merchants/register", async (req, res) => {
       return res.status(400).json({ error: "invalid_wallet", message: "Valid Ethereum wallet address required" });
     }
 
+    // [T32] The zero address is well-formed (0x + 40 hex chars) but is not a
+    // real, distinct merchant identity — wallet_address is this table's
+    // PRIMARY KEY, so every zero-address submission collides on the same row
+    // via upsertMerchant's ON CONFLICT DO UPDATE, silently overwriting
+    // whatever business_name/email was there before. Found 2026-09-03 when a
+    // test registration silently clobbered a real, unrelated merchant row
+    // that happened to be four months old. Reject it explicitly rather than
+    // relying on callers never sending it.
+    if (/^0x0{40}$/i.test(wallet_address)) {
+      return res.status(400).json({ error: "invalid_wallet", message: "Wallet address cannot be the zero address" });
+    }
+
     if (settlement_preference && !["usdc", "fiat"].includes(settlement_preference)) {
       return res.status(400).json({ error: "invalid_settlement", message: "settlement_preference must be 'usdc' or 'fiat'" });
     }
@@ -2343,8 +2355,20 @@ app.delete("/api/admin/subscribers/:email", requireAdminAuth, async (req, res) =
 
     // 1. Cancel any active subscriptions in DB
     // (On-chain subscriptions must be cancelled separately via Safe multisig)
+    // [T34 fix, 2026-09-06] This previously also set cancelled_at = NOW() —
+    // a column that has never existed anywhere in this schema (checked
+    // directly against db.js's CREATE TABLE + every ALTER TABLE for
+    // `subscriptions`). Postgres validates column names at parse time
+    // regardless of whether any row matches the WHERE clause, so this
+    // statement failed with "column cancelled_at does not exist" on every
+    // single invocation — meaning this entire GDPR-erasure endpoint has
+    // been unconditionally broken (caught by the outer try/catch, returned
+    // as a 500) since whenever this line was written. Fixed by using the
+    // table's existing `updated_at` column instead, which already exists
+    // and already carries exactly this "when did this row last change"
+    // meaning — no new column, no migration needed.
     const subResult = await db.query(
-      "UPDATE subscriptions SET status = 'cancelled', cancelled_at = NOW() WHERE owner_address = $1 AND status IN ('active', 'paused') RETURNING id",
+      "UPDATE subscriptions SET status = 'cancelled', updated_at = NOW() WHERE owner_address = $1 AND status IN ('active', 'paused') RETURNING id",
       [walletAddress]
     );
     const cancelledSubs = subResult.rows.length;
