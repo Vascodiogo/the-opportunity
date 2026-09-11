@@ -1134,7 +1134,12 @@ app.get("/api/merchants/:address/subscriptions", requireMerchantAuth, async (req
       merchant_address: address,
       subscriptions: subs.map(s => ({
         subscription_id: s.id,
-        vault_address: s.owner_address,
+        // [T39 fix, 2026-09-11] Was s.owner_address — the subscriber's own
+        // wallet, not any vault address. Mislabel, confirmed unconsumed by
+        // any live caller (Merchant Portal's Subscribers tab reads on-chain
+        // data, not this endpoint) before fixing. s.vault_address is the
+        // real column (the SubscriptionVault contract address).
+        vault_address: s.vault_address,
         status: s.status,
         amount_usdc: (parseFloat(s.amount) / 1e6).toFixed(2),
         interval: s.interval,
@@ -1195,13 +1200,22 @@ app.get("/api/merchants/:address/payments", requireMerchantAuth, async (req, res
     }
 
     const { limit = 50, offset = 0 } = req.query;
-    const payments = await db.getPaymentsByMerchant(address, parseInt(limit), parseInt(offset));
+    // [T40 fix, 2026-09-11] getPaymentsByMerchant previously ignored the
+    // offset argument entirely (only took merchantAddress+limit — same bug
+    // class as T35's original finding) and matched merchant_address
+    // case-sensitively (same bug class as T35's live-tested correction) —
+    // see db.js for the full fix. Now also scoped to the current vault,
+    // matching T38's pattern.
+    const payments = await db.getPaymentsByMerchant(address, parseInt(limit), parseInt(offset), process.env.VAULT_ADDRESS);
     res.json({
       merchant_address: address,
       payments: payments.map(p => ({
         payment_id: p.id,
         subscription_id: p.subscription_id,
-        vault_address: p.owner_address,
+        // [T39 fix, 2026-09-11] Was p.owner_address — the subscriber's own
+        // wallet, not a vault address. Same mislabel as the /subscriptions
+        // endpoint; also confirmed unconsumed by any live frontend caller.
+        vault_address: p.vault_address,
         amount_usdc: (parseFloat(p.amount) / 1e6).toFixed(2),
         merchant_received_usdc: (parseFloat(p.merchant_received) / 1e6).toFixed(2),
         protocol_fee_usdc: (parseFloat(p.fee) / 1e6).toFixed(4),

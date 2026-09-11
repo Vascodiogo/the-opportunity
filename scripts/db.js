@@ -875,15 +875,38 @@ async function insertPayment(data) {
   ]);
 }
 
-async function getPaymentsByMerchant(merchantAddress, limit = 50) {
-  const res = await query(`
-    SELECT p.*, s.owner_address as subscriber_vault
-    FROM payments p
-    JOIN subscriptions s ON p.subscription_id = s.id
-    WHERE p.merchant_address = $1
-    ORDER BY p.executed_at DESC
-    LIMIT $2
-  `, [merchantAddress, limit]);
+async function getPaymentsByMerchant(merchantAddress, limit = 50, offset = 0, vaultAddress = null) {
+  // [T40 fix, 2026-09-11] Found while investigating T39's field-name mislabel.
+  // This function had the same bug class as T35's original bug (silently
+  // ignored `offset` — api.js has been calling this with 3 args since it was
+  // written, but the signature only took 2) and T35's live-tested case-
+  // sensitivity bug (`p.merchant_address = $1` with no LOWER(), while
+  // merchant_address is stored as-emitted/mixed-case — see T35). Also had a
+  // second copy of T38's vault-scoping gap: the old JOIN matched
+  // `p.subscription_id = s.id` alone, with no vault_address in the join
+  // condition — since subscription ids repeat across vault redeployments,
+  // that JOIN could attach the wrong subscriber's wallet to a payment row if
+  // an id collided across generations. The JOIN itself turned out to be
+  // unnecessary: `payments` already carries its own `vault_address` (NOT
+  // NULL, added in the same migration that added it to `subscriptions` — see
+  // above) and its own `owner_address` directly on every row, so this now
+  // reads straight from `payments` with no join at all — simpler and
+  // correct, not just patched.
+  const safeLimit  = Number.isFinite(limit)  && limit  > 0 ? limit  : 50;
+  const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
+
+  const params = [merchantAddress];
+  let where = "LOWER(p.merchant_address) = LOWER($1)";
+  if (vaultAddress) {
+    params.push(vaultAddress);
+    where += ` AND LOWER(p.vault_address) = LOWER($${params.length})`;
+  }
+  params.push(safeLimit, safeOffset);
+
+  const res = await query(
+    `SELECT * FROM payments p WHERE ${where} ORDER BY p.executed_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
   return res.rows;
 }
 
