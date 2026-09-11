@@ -251,56 +251,49 @@ async function initSchema() {
   // yet). Re-added further below, once both tables are already consistent.
   await query(`ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_subscription_id_fkey`);
 
-  // Corrective re-labeling — found Aug 11 2026, the day after the fix above
-  // first shipped. The original backfill labeled every pre-existing,
-  // origin-unknown row with the CURRENT vault address as a best-effort
-  // guess. That was itself a mistake: it meant an old, unrelated row could
-  // still collide with a genuinely new subscription that later reused the
-  // same id on the current vault — exactly the bug this whole migration
-  // exists to prevent, just reintroduced through the backfill choice. A
-  // real example: id=6 was stale June 2026 data, silently swallowed a
-  // genuine new subscription's data today.
+  // [T41 fix, 2026-09-11] The "corrective re-labeling" block that used to
+  // live here (added Aug 11 2026) has been REMOVED, not patched. What it did:
+  // on every boot, it re-tagged any subscriptions row still carrying the
+  // CURRENT VAULT_ADDRESS with created_at < 2026-08-09 to a shared sentinel
+  // 'legacy-unknown-pre-v9', then swept in any payment row sharing that
+  // subscription_id. Two fatal problems, both found while chasing an
+  // unrelated crash-loop:
+  //   1. The 2026-08-09 cutoff was simply wrong — real v9 subscriptions
+  //      existed as early as 2026-08-08. It mislabeled genuinely current
+  //      data as legacy.
+  //   2. The payments-side sweep joined on `p.subscription_id = s.id` alone,
+  //      with NO vault_address in the join condition — the exact collision
+  //      class this whole migration exists to prevent, reproduced one join
+  //      away from the fix. Any current payment whose subscription_id
+  //      happened to numerically match an old legacy id got silently
+  //      reclassified as legacy too, regardless of which vault actually
+  //      processed it. Confirmed this was a live risk, not just historical:
+  //      ids 2-11 had BOTH a legacy AND a current v9 subscription sharing
+  //      the same numeric id at the time this was found.
+  // It eventually produced two exact (id, vault_address) duplicates
+  // ('legacy-unknown-pre-v9' collisions on id=0 and id=1), which made
+  // subscriptions_pkey impossible to rebuild and crash-looped this service.
   //
-  // Fix: the v9 vault (current VAULT_ADDRESS) did not exist before
-  // 2026-08-09. Any row created before that date cannot possibly be a real
-  // subscription on it, however it was labeled. Re-tag those with a
-  // sentinel that can never equal a real vault address, permanently
-  // removing them from the collision surface — not another guess, a hard
-  // fact about when the contract came into existence. Safe to leave running
-  // on every boot: once a row is re-tagged, its vault_address no longer
-  // matches the current VAULT_ADDRESS, so this never touches it again, and
-  // genuinely new rows always have a created_at far after the cutoff.
-  // Both tables are relabeled here, before the FK below is re-added, so
-  // they're already consistent with each other by the time it validates.
-  if (process.env.VAULT_ADDRESS) {
-    await query(
-      `UPDATE subscriptions SET vault_address = 'legacy-unknown-pre-v9'
-       WHERE vault_address = $1 AND created_at < '2026-08-09'::timestamptz`,
-      [process.env.VAULT_ADDRESS.trim()]
-    );
-    // Relabeled based on the PARENT subscription's own relabeling, not an
-    // independent date check on the payment itself — a payment's
-    // executed_at doesn't necessarily track its subscription's created_at
-    // (e.g. a stale old subscription could in principle have a payment
-    // recorded later). Matching on the parent guarantees payments stay
-    // consistent with subscriptions no matter what, so the FK below always
-    // validates cleanly.
-    await query(
-      `UPDATE payments p SET vault_address = 'legacy-unknown-pre-v9'
-       FROM subscriptions s
-       WHERE p.subscription_id = s.id
-         AND s.vault_address = 'legacy-unknown-pre-v9'
-         AND p.vault_address = $1`,
-      [process.env.VAULT_ADDRESS.trim()]
-    );
-  }
-
-  // Drop-then-add so this is safe to run on every boot, same idiom as
-  // subscriptions_pkey above. Both tables are already consistent with each
-  // other by this point (corrective re-labeling above ran first), so this
-  // validates cleanly.
+  // Fix applied as a one-time manual data migration (see
+  // fix-legacy-vault-address.js in git history / CLAUDE-CORE.md), NOT
+  // baked into boot-time code: every row ever tagged 'legacy-unknown-pre-v9'
+  // (14 subscriptions, 29 payments) was re-keyed to its own real vault
+  // address, verified individually via eth_getTransactionReceipt against
+  // its own tx_hash — ground truth, not inference. The sentinel value no
+  // longer exists anywhere in this data as of that migration.
+  //
+  // About half of those payments (15 of 29) turned out to belong to a vault
+  // generation that has no corresponding subscription-creation row in this
+  // DB at all — the same logical subscription was evidently re-created on
+  // each new vault deployment without a fresh row ever being written here.
+  // Rather than fabricate synthetic parent rows to force full referential
+  // integrity across that unrecoverable history, the FK below is added
+  // NOT VALID: existing rows are grandfathered in unvalidated, but every
+  // new insert/update is fully enforced from this point forward. Revisit
+  // before mainnet — either backfill real parent rows if the history is
+  // ever reconstructed, or formally accept the pre-fix rows as historical.
   await query(`ALTER TABLE payments ADD CONSTRAINT payments_subscription_id_fkey
-    FOREIGN KEY (subscription_id, vault_address) REFERENCES subscriptions(id, vault_address)`);
+    FOREIGN KEY (subscription_id, vault_address) REFERENCES subscriptions(id, vault_address) NOT VALID`);
 
   // Webhook delivery log
   await query(`
