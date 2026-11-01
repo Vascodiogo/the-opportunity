@@ -1,6 +1,6 @@
 # AuthOnce
 
-> Non-custodial USDC subscription payment protocol on Base Network. Subscribers authorize recurring payments with an EIP-2612 permit signature; funds move in a single atomic on-chain transfer directly from subscriber wallet to merchant wallet on each billing cycle. AuthOnce never holds or controls funds. Currently live on Base Sepolia testnet; mainnet launch targeted for Q3 2026, pending security audit.
+> Non-custodial USDC subscription payment protocol on Base Network. Subscribers authorize recurring payments with an EIP-2612 permit signature; funds move in a single atomic on-chain transfer directly from subscriber wallet to merchant wallet on each billing cycle. AuthOnce never holds or controls funds. Currently live on Base Sepolia testnet; mainnet launch date not yet set, pending security audit.
 
 ## Product
 

@@ -506,7 +506,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
     <div style={{ background: bg, minHeight: "100vh", fontFamily: "'DM Sans Variable', 'DM Sans', sans-serif" }}>
       <Helmet>
         <title>AuthOnce — Non-Custodial USDC Subscription Payments on Base Network</title>
-        <meta name="description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Accept gasless USDC recurring payments using EIP-2612 permits — no chargebacks, no custody, 0.5% flat fee. Mainnet Q3 2026." />
+        <meta name="description" content="AuthOnce is a non-custodial crypto subscription protocol on Base Network. Accept gasless USDC recurring payments using EIP-2612 permits — no chargebacks, no custody, 0.5% flat fee. Live on Base Sepolia testnet." />
         <link rel="canonical" href={"https://authonce.io"} />
       </Helmet>
       <style>{`
@@ -846,7 +846,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
             "🔵 Base Network",
             "💵 USDC · EURC",
             "🔐 " + ("Non-custodial"),
-            "⏳ " + ("Audit Q3 2026"),
+            "⏳ " + ("Audit pending"),
             "🤖 ERC-1271 · EIP-712",
             "📄 BUSL-1.1",
           ].map((item, i, arr) => (
@@ -893,7 +893,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
                 icon: "🔵", color: blue, tag: "Base Network",
                 title: "On-chain by design",
                 desc: "Every subscription lives on Base. Auditable, autonomous, transparent. No database or central server controls your recurring revenue.",
-                detail: "SubscriptionVault · MerchantRegistry · Audit Q3 2026",
+                detail: "SubscriptionVault · MerchantRegistry · Audit pending",
               },
               {
                 icon: "🤖", color: purple, tag: "AI Agent Ready",
@@ -1408,7 +1408,7 @@ const res = await fetch(
               {"Roadmap"}
             </p>
             <h2 style={{ fontSize: 34, fontWeight: 700, color: text, margin: "0 0 12px", letterSpacing: "-0.02em" }}>
-              {"Built in the open. Launching Q3 2026."}
+              {"Built in the open. Mainnet date not yet set."}
             </h2>
           </div>
 
@@ -1425,7 +1425,7 @@ const res = await fetch(
               ],
             },
             {
-              phase: "Q3 2026 — in progress",
+              phase: "Pending audit",
               color: "#3b82f6",
               items: [
                 { done: false, active: true,  label: "Security audit", detail: "5 proposals received · Seeking audit grant funding" },
