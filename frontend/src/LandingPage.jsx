@@ -1278,7 +1278,7 @@ const res = await fetch(
               },
               {
                 q: "Is this actually live, or still just an idea?",
-                a: "Live and running on Base Sepolia testnet today — the dashboard screenshots above are real, not mocked up. Mainnet is targeted for September 2026, pending the security audit.",
+                a: "Live and running on Base Sepolia testnet today — the dashboard screenshots above are real, not mocked up. Mainnet date is not yet set, pending the security audit.",
               },
             ].map(({ q, a }, i) => (
               <div key={i} style={{
@@ -1395,7 +1395,7 @@ const res = await fetch(
           </div>
 
           <p style={{ fontSize: 12, color: isDark ? "#64748b" : "#6b7280", textAlign: "center", marginTop: 20 }}>
-            {"10 spots available · Mainnet launch September 2026"}
+            {"10 spots available · Mainnet launch date not yet set"}
           </p>
         </div>
       </section>
@@ -1432,7 +1432,7 @@ const res = await fetch(
                 { done: false, active: true,  label: "Partnership outreach", detail: "Web3 SaaS platforms · DAO tooling · Analytics providers" },
                 { done: false, active: false, label: "WooCommerce + PrestaShop plugins", detail: "Planned post-audit" },
                 { done: false, active: false, label: "Keeper bot v2 — parallel scaling", detail: "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" },
-                { done: false, active: false, label: "Base Mainnet launch — September 2026", detail: "Audit-gated · 10 founding spots" },
+                { done: false, active: false, label: "Base Mainnet launch — date not yet set", detail: "Audit-gated · 10 founding spots" },
               ],
             },
             {
