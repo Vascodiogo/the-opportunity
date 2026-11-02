@@ -51,7 +51,19 @@ function Root() {
                 <QueryClientProvider client={queryClient}>
                   <RainbowKitProvider theme={theme === "dark" ? darkTheme() : lightTheme()}>
                     <Routes>
-                      <Route path="/pay/:merchantAddress/:productSlug" element={<PayPage />} />
+                      <Route path="/pay/:merchantAddress/:productSlug" element={
+                        // This page has no light/dark toggle — it is always dark by
+                        // design. It sits inside the shared RainbowKitProvider above
+                        // (themed from the main app's toggle state), so without this
+                        // override its wallet-connect modal would inherit whatever
+                        // theme the visitor last set on the main app, mismatching
+                        // this always-dark page. Nesting a second RainbowKitProvider
+                        // here, pinned to darkTheme(), restores the original (and
+                        // correct) pairing for this specific route only.
+                        <RainbowKitProvider theme={darkTheme()}>
+                          <PayPage />
+                        </RainbowKitProvider>
+                      } />
                       <Route path="*" element={<App theme={theme} setTheme={setTheme} />} />
                     </Routes>
                   </RainbowKitProvider>
