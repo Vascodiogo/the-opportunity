@@ -8,12 +8,13 @@ import {
   useAccount, useDisconnect,
   useWriteContract, useWaitForTransactionReceipt,
   useReadContract, useChainId, useSwitchChain,
-  useSignTypedData,
+  useSignTypedData, usePublicClient,
 } from "wagmi";
 import { parseUnits, maxUint256 } from "viem";
 import { baseSepolia } from "wagmi/chains";
 
 import PermissionSteps from "./PermissionSteps";
+import { simulateAndWrite } from "../lib/contractErrors.js";
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
@@ -241,6 +242,7 @@ export default function PayPage() {
   const { switchChain }          = useSwitchChain();
   const { writeContractAsync }   = useWriteContract();
   const { signTypedDataAsync }   = useSignTypedData();
+  const publicClient             = usePublicClient();
 
   const { isSuccess: approveConfirmed } = useWaitForTransactionReceipt({
     hash: approveTxHash, query: { enabled: !!approveTxHash },
@@ -579,8 +581,12 @@ export default function PayPage() {
     setErrorMsg("");
     try {
       const introAmountRaw = hasIntro && !isYearly ? parseUnits(product.intro_amount.toString(), selectedTokenMeta.decimals) : 0n;
-      const hash = await writeContractAsync({
+      // [T9] Simulate first so a real contract revert surfaces its actual
+      // reason instead of a misleading gas-estimation error. See
+      // lib/contractErrors.js for why.
+      const hash = await simulateAndWrite(publicClient, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "createSubscription",
+        account: address,
         args: [
          resolvedAddress,                                        // merchant
          address,                                                // safeVault
