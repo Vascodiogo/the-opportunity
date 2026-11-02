@@ -13,7 +13,7 @@ import MerchantDashboard from "./components/MerchantDashboard.jsx";
 import LandingPage from "./LandingPage.jsx";
 import Status from "./components/Status.jsx";
 
-export default function App() {
+export default function App({ theme, setTheme }) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { openConnectModal } = useConnectModal();
@@ -36,13 +36,6 @@ export default function App() {
     }
   }, [showApp, isConnected, openConnectModal]);
 
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "dark" || saved === "light") return saved;
-    // No explicit user choice saved yet — respect the OS/browser setting.
-    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-    return prefersDark ? "dark" : "light";
-  });
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("theme-dark", "theme-light");
