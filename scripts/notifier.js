@@ -976,7 +976,11 @@ async function pollEvents(provider, iface, topicMap, lastBlock) {
     const toBlock      = currentBlock - BLOCK_LAG;
     if (toBlock <= lastBlock) return lastBlock;
 
-    const CHUNK_SIZE = 9; // Stay under Alchemy free tier 10-block limit
+    const CHUNK_SIZE = 190; // Base Sepolia public RPC (sepolia.base.org) caps
+                             // eth_getLogs at a 200-block range per call — stay
+                             // safely under that. (Was 9, tuned for Alchemy's
+                             // free-tier 10-block limit; raised after the Nov 2026
+                             // Alchemy quota outage forced a provider switch.)
     let fromBlock    = lastBlock + 1;
 
     while (fromBlock <= toBlock) {
