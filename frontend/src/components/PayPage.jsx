@@ -512,8 +512,15 @@ export default function PayPage() {
       const v = parseInt(sig.slice(128, 130), 16);
 
       const introAmountRaw = hasIntro && !isYearly ? parseUnits(product.intro_amount.toString(), selectedTokenMeta.decimals) : 0n;
-      const hash = await writeContractAsync({
+      // [T9] Simulate first, same as handleCreateSubscription — this call
+      // shares every require() in _createSubscriptionInternal
+      // (MerchantNotApproved, TokenNotApproved, ZeroAmount, ...) plus its
+      // own InsufficientAllowanceAfterPermit. Without this, any of those
+      // reverts was silently swallowed below and misreported as a permit
+      // problem.
+      const hash = await simulateAndWrite(publicClient, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_PERMIT_ABI, functionName: "createSubscriptionWithPermit",
+        account: address,
         args: [
           resolvedAddress,
           address,
@@ -532,12 +539,35 @@ export default function PayPage() {
       });
       setSubscribeTxHash(hash);
     } catch (err) {
-      // Permit signature rejected, or token's permit() failed on-chain
-      // (PermitFailed revert) — fall back to the standard two-step flow
-      // rather than leaving the subscriber stuck.
-      console.warn("[PayPage] Permit flow failed, falling back to approve+subscribe:", err);
+      const reason = err.shortMessage || err.message || String(err);
+      // [T9] Only fall back silently to approve+subscribe for failures that
+      // are genuinely permit-specific: the wallet rejected the signature or
+      // the transaction (viem's UserRejectedRequestError, code 4001 —
+      // checked at every nesting depth, since wagmi rewraps it), or the
+      // vault's own InsufficientAllowanceAfterPermit (the only real signal
+      // that the permit step itself failed — the contract's try/catch
+      // around permit() swallows unconditionally and relies on this check
+      // as the sole downstream signal). Any other reason
+      // (MerchantNotApproved, TokenNotApproved, ZeroAmount, ...) is shown
+      // directly — retrying via approve+subscribe would hit the identical
+      // revert again.
+      const isUserRejected =
+        err.code === 4001 ||
+        err?.cause?.code === 4001 ||
+        (typeof err.walk === "function" && err.walk((e) => e?.code === 4001)) ||
+        reason.toLowerCase().includes("user rejected");
+      const isPermitSpecific =
+        isUserRejected || reason.includes("InsufficientAllowanceAfterPermit");
+
+      if (isPermitSpecific) {
+        console.warn("[PayPage] Permit flow failed (permit-specific), falling back to approve+subscribe:", err);
+        setFlowStatus("connected");
+        await handleApprove(true);
+        return;
+      }
+      console.error("[PayPage] Permit flow failed (non-permit revert), surfacing to user:", err);
+      setErrorMsg(reason || "Transaction failed.");
       setFlowStatus("connected");
-      await handleApprove(true);
     }
   };
 
