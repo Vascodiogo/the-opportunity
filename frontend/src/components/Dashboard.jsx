@@ -9,6 +9,7 @@ import {
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS, TOKEN_ADDRESSES,
   shortAddress, formatUSDC,
 } from "../config.js";
+import { simulateAndWrite } from "../lib/contractErrors.js";
 
 // ─── Token-aware amount formatting ───────────────────────────────────────────
 const NETWORK = import.meta.env.VITE_NETWORK || "base-sepolia";
@@ -138,7 +139,12 @@ function CreateSubModal({ address, onClose, onCreated }) {
     try {
       const amountRaw    = BigInt(Math.round(parseFloat(amount) * 1_000_000));
       const guardianAddr = guardian || "0x0000000000000000000000000000000000000000";
-      const hash = await writeContractAsync({
+      // [T9] Simulated first so a real revert (e.g. MerchantNotApproved)
+      // decodes to its actual reason instead of a misleading gas-estimation
+      // error. Same pattern already shipped in PayPage.jsx and
+      // MySubscriptions.jsx; reuses this file's own module-level `client`
+      // (already used for reads above) as the public client.
+      const hash = await simulateAndWrite(client, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI,
         functionName: "createSubscription",
         args: [merchant, address, amountRaw, Number(interval), guardianAddr],
@@ -246,7 +252,10 @@ export default function Dashboard({ address }) {
   const handleCancel = async (id) => {
     setCancellingId(id);
     try {
-      await writeContractAsync({
+      // [T9] Simulated first, same pattern as MySubscriptions.jsx's
+      // cancelSubscription call site and this file's own createSubscription
+      // above.
+      await simulateAndWrite(client, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI,
         functionName: "cancelSubscription", args: [BigInt(id)],
       });
