@@ -5,7 +5,7 @@ import { useWriteContract } from "wagmi";
 import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import {
-  VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, USDC_ABI, REGISTRY_ADDRESS, REGISTRY_ABI, RPC_URLS,
+  VAULT_ADDRESS, USDC_ADDRESS, VAULT_ABI, USDC_ABI, RPC_URLS,
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS, TOKEN_ADDRESSES,
   shortAddress, formatUSDC,
 } from "../config.js";
@@ -197,7 +197,7 @@ function CreateSubModal({ address, onClose, onCreated }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-export default function Dashboard({ address, isAdmin }) {
+export default function Dashboard({ address }) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [vaultUSDC, setVaultUSDC]         = useState(0n);
   const [loading, setLoading]             = useState(false);
@@ -344,9 +344,6 @@ export default function Dashboard({ address, isAdmin }) {
         )}
       </div>
 
-      {/* Admin panel */}
-      {isAdmin && <AdminPanel />}
-
       {/* Modal */}
       {showCreate && (
         <CreateSubModal
@@ -354,59 +351,6 @@ export default function Dashboard({ address, isAdmin }) {
           onClose={() => setShowCreate(false)}
           onCreated={fetchData}
         />
-      )}
-    </div>
-  );
-}
-
-// ─── Admin Panel ──────────────────────────────────────────────────────────────
-function AdminPanel() {
-  const [merchantInput, setMerchantInput] = useState("");
-  const [status, setStatus]               = useState("");
-  const { writeContractAsync }            = useWriteContract();
-
-  const handleApprove = async () => {
-    if (!merchantInput) return;
-    setStatus("Sending...");
-    try {
-      await writeContractAsync({
-        address: REGISTRY_ADDRESS, abi: REGISTRY_ABI,
-        functionName: "approveMerchant", args: [merchantInput],
-      });
-      setStatus(`✅ Approved ${shortAddress(merchantInput)}`);
-      setMerchantInput("");
-    } catch (err) {
-      setStatus(`❌ ${err.shortMessage || err.message}`);
-    }
-  };
-
-  return (
-    <div style={{ ...S.card, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "0.5px solid var(--border)" }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Admin — Merchant Registry
-        </span>
-        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(251,191,36,0.12)", color: "var(--amber)", fontWeight: 600 }}>
-          God Mode
-        </span>
-      </div>
-      <div style={{ padding: "16px 20px", display: "flex", gap: 10, alignItems: "flex-end" }}>
-        <div style={{ flex: 1 }}>
-          <label style={S.label}>Approve a merchant address</label>
-          <input
-            placeholder="0x merchant wallet address"
-            value={merchantInput}
-            onChange={e => setMerchantInput(e.target.value)}
-          />
-        </div>
-        <button onClick={handleApprove} style={{ ...S.btn.primary, whiteSpace: "nowrap" }}>
-          Approve Merchant
-        </button>
-      </div>
-      {status && (
-        <div style={{ padding: "0 20px 16px", fontSize: 12, color: status.startsWith("✅") ? "var(--green)" : "var(--red)" }}>
-          {status}
-        </div>
       )}
     </div>
   );
