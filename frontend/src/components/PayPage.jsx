@@ -755,6 +755,19 @@ export default function PayPage() {
           </div>
         )}
 
+        {/* ── Merchant-approval check still in flight (T42) ── */}
+        {/* [T42] Blocks the main flow (and its clickable Subscribe button)
+            from rendering until this read resolves one way or the other —
+            previously the main flow rendered immediately on mount/refresh
+            whenever merchantApproved was still undefined, which is a real
+            window where Subscribe is clickable against an unapproved
+            merchant, not just a cosmetic flash. */}
+        {!productLoading && product && merchantApprovedLoading && (
+          <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)", fontSize: 13 }}>
+            Loading...
+          </div>
+        )}
+
         {/* ── Merchant not approved (T36) ── */}
         {!productLoading && product && !merchantApprovedLoading && merchantApproved === false && (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
@@ -795,10 +808,13 @@ export default function PayPage() {
         )}
 
         {/* ── Main flow ── */}
-        {/* [T36] merchantApproved !== false: proceed unless we've gotten a
-            definitive on-chain "not approved" answer — avoids blocking the
-            whole flow just because the read hasn't resolved yet. */}
-        {!productLoading && product && flowStatus !== "success" && merchantApproved !== false && (
+        {/* [T36/T42] merchantApproved !== false: proceed unless we've gotten
+            a definitive on-chain "not approved" answer. Also requires
+            !merchantApprovedLoading (T42 fix, 2026-11-08) — the read must
+            have actually resolved before this renders, otherwise the
+            Subscribe button below is clickable during the loading window
+            against a merchant that turns out to be unapproved. */}
+        {!productLoading && product && !merchantApprovedLoading && flowStatus !== "success" && merchantApproved !== false && (
           <>
             {/* Merchant header */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, paddingBottom: 20, borderBottom: "0.5px solid var(--border)" }}>
