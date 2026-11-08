@@ -14,6 +14,7 @@ import {
   INTERVAL_NAMES, STATUS_NAMES, STATUS_COLORS, TOKEN_ADDRESSES,
   shortAddress, formatUSDC,
 } from "../config.js";
+import { simulateAndWrite } from "../lib/contractErrors.js";
 import {
   merchantLogin, merchantFetch, getMerchantWalletFromToken, clearMerchantToken,
 } from "../lib/merchantAuth.js";
@@ -606,7 +607,11 @@ function PriceChangeModal({ product, address, onClose }) {
     setProgress({ done: 0, total: subscriptions.length });
     for (let i = 0; i < subscriptions.length; i++) {
       try {
-        await writeContractAsync({
+        // [T9] Simulated first so a real revert decodes to its actual
+        // reason instead of a misleading gas-estimation error. Same
+        // pattern already shipped elsewhere; reuses this file's own
+        // module-level `client` as the public client.
+        await simulateAndWrite(client, writeContractAsync, {
           address: VAULT_ADDRESS, abi: VAULT_ABI,
           functionName: "setProductExpiry",
           args: [BigInt(subscriptions[i]), BigInt(expiresAt)],
@@ -1336,7 +1341,12 @@ function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContr
     setProgress({ done: 0, total: count });
     for (let i = 0; i < count; i++) {
       try {
-        await writeContractAsync({
+        // [T9] Simulated first -- this call site already string-matches
+        // "NewMerchantNotApproved" below assuming it reliably appears in
+        // the error message; simulating first makes that assumption
+        // actually hold, instead of depending on the RPC provider's gas
+        // estimation happening to surface the real reason.
+        await simulateAndWrite(client, writeContractAsync, {
           address: VAULT_ADDRESS, abi: VAULT_ABI,
           functionName: "proposeMerchantChange",
           args: [BigInt(idsSnapshot[i]), newMerchant.trim()],
@@ -2129,7 +2139,9 @@ export default function MerchantDashboard({ address }) {
                     for (const req of pendingIncoming) {
                       setAcceptingChange(prev => ({ ...prev, [req.id]: true }));
                       try {
-                        await writeContractAsync({
+                        // [T9] Simulated first, same reasoning as the single
+                        // Accept button below.
+                        await simulateAndWrite(client, writeContractAsync, {
                           address: VAULT_ADDRESS, abi: VAULT_ABI,
                           functionName: "acceptMerchantChange",
                           args: [BigInt(req.subscription_id)],
@@ -2176,7 +2188,10 @@ export default function MerchantDashboard({ address }) {
                   onClick={async () => {
                     setAcceptingChange(prev => ({ ...prev, [req.id]: true }));
                     try {
-                      await writeContractAsync({
+                      // [T9] Simulated first so a real revert decodes to its
+                      // actual reason instead of a misleading gas-estimation
+                      // error.
+                      await simulateAndWrite(client, writeContractAsync, {
                         address: VAULT_ADDRESS, abi: VAULT_ABI,
                         functionName: "acceptMerchantChange",
                         args: [BigInt(req.subscription_id)],
@@ -2492,7 +2507,8 @@ export default function MerchantDashboard({ address }) {
                           <button
                             onClick={async () => {
                               try {
-                                await writeContractAsync({ address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "cancelMerchantChange", args: [BigInt(sub.id)] });
+                                // [T9] Simulated first so a real revert decodes to its actual reason.
+                                await simulateAndWrite(client, writeContractAsync, { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "cancelMerchantChange", args: [BigInt(sub.id)] });
                                 reloadPendingChangesSoon(); // give notifier.js time to index the event
                               } catch (err) { alert(`Could not cancel: ${err.shortMessage || err.message}`); }
                             }}
