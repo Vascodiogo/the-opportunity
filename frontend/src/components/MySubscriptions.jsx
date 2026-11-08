@@ -1,9 +1,10 @@
 // src/components/MySubscriptions.jsx — Visual redesign May 2026
 // Logic: unchanged. Visual: CSS variables, consistent tokens, no hardcoded colors.
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSignMessage } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSignMessage, usePublicClient } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { VAULT_ADDRESS, VAULT_ABI } from "../config.js";
+import { simulateAndWrite } from "../lib/contractErrors.js";
 
 const API_BASE = "https://the-opportunity-production.up.railway.app";
 
@@ -151,6 +152,7 @@ function SubscriptionCard({ sub, token, onCancelled }) {
   const [cancelTxHash, setCancelTxHash] = useState(null);
   const { writeContractAsync }          = useWriteContract();
   const { address }                     = useAccount();
+  const publicClient                    = usePublicClient();
 
   const { isSuccess: cancelConfirmed } = useWaitForTransactionReceipt({
     hash: cancelTxHash, query: { enabled: !!cancelTxHash },
@@ -189,7 +191,10 @@ function SubscriptionCard({ sub, token, onCancelled }) {
       setCancelling(false); return;
     }
     try {
-      const hash = await writeContractAsync({
+      // [T9] Simulated first so a real revert (NotAuthorised, AlreadyInactive)
+      // decodes to its actual reason instead of a misleading gas-estimation
+      // error from the provider. Same pattern already shipped in PayPage.jsx.
+      const hash = await simulateAndWrite(publicClient, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI,
         functionName: "cancelSubscription",
         args: [BigInt(sub.subscription_id)],
