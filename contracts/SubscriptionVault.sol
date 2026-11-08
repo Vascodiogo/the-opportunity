@@ -1175,8 +1175,12 @@ contract SubscriptionVault is ReentrancyGuard, EIP712 {
     ///           sub.isContractVault == true. Pass a valid EIP-712 PullAuthorisation
     ///           signature with deadline. Vault verifies via IERC1271.isValidSignature.
     ///
-    ///         [SV-01] Uses stored isContractVault flag — not live extcodesize check.
-    ///                 Constructor-bypass eliminated.
+    ///         [SV-19] Rechecks contract-wallet status live at pull time
+    ///                 (sub.isContractVault || _isContract(safeVault)), not the
+    ///                 cached creation-time flag alone — closes the
+    ///                 constructor-bypass the superseded [SV-01] comment above
+    ///                 wrongly claimed was already eliminated by the cached
+    ///                 flag. See [SV-19] in the file-header changelog.
     ///         [SV-02] Due-date check gates on both lastPulledAt and billingPausedUntil.
     ///         [SV-04] Both merchant and fee transfers use the same safe,
     ///                 return-data-checked transferFrom pattern (SV-14).
