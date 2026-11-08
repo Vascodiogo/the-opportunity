@@ -2,8 +2,9 @@
 // AuthOnce Admin Dashboard — v2
 // Tabs: Overview · Merchants · Subscriptions · Subscribers · Payments · Webhooks · Analytics · Tax · Audit · Contracts
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useConnect, useDisconnect, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useWriteContract, useWaitForTransactionReceipt, useReadContracts, usePublicClient } from "wagmi";
 import { REGISTRY_ADDRESS, REGISTRY_ABI } from "../config.js";
+import { simulateAndWrite } from "../lib/contractErrors.js";
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { VAULT_ADDRESS as VAULT_ADDRESS_TESTNET, REGISTRY_ADDRESS as REGISTRY_ADDRESS_TESTNET } from "../config.js";
 
@@ -178,6 +179,8 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
   const [saveMsg, setSaveMsg] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
   const [pendingAction, setPendingAction] = useState(null); // "approve" | "revoke" | null
+  const [simError, setSimError] = useState(null);
+  const [simulating, setSimulating] = useState(false);
 
   const isValid = address.startsWith("0x") && address.length === 42;
 
@@ -186,9 +189,10 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
   const { disconnect } = useDisconnect();
 
   const {
-    writeContract, data: txHash, isPending: isWriting,
+    writeContractAsync, data: txHash, isPending: isWriting,
     error: writeError, reset: resetWrite,
   } = useWriteContract();
+  const publicClient = usePublicClient();
 
   const {
     isLoading: isConfirming, isSuccess: isConfirmed, isError: receiptFailed,
@@ -224,19 +228,32 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
     if (connector) connect({ connector });
   };
 
-  const runWrite = (functionName) => {
+  const runWrite = async (functionName) => {
     if (!isValid) { return; }
     resetWrite();
+    setSimError(null);
     setPendingAction(functionName === "approveMerchant" ? "approve" : "revoke");
-    writeContract({
-      address: registryAddress,
-      abi: REGISTRY_ABI,
-      functionName,
-      args: [address],
-    });
+    setSimulating(true);
+    try {
+      // [T9] Simulated first so a real revert (e.g. "Registry: not admin"
+      // when the wrong wallet is connected) decodes to its actual reason
+      // instead of a misleading gas-estimation error. Same pattern already
+      // shipped in PayPage.jsx and MySubscriptions.jsx.
+      await simulateAndWrite(publicClient, writeContractAsync, {
+        address: registryAddress,
+        abi: REGISTRY_ABI,
+        functionName,
+        args: [address],
+      });
+    } catch (err) {
+      setSimError(err);
+      setPendingAction(null);
+    } finally {
+      setSimulating(false);
+    }
   };
 
-  const busy = isWriting || isConfirming;
+  const busy = simulating || isWriting || isConfirming;
 
   return (
     <div style={{ ...S.card, padding: "16px 20px", marginBottom: 16 }}>
@@ -265,7 +282,7 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
       )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <input value={address} onChange={e => { setAddress(e.target.value.trim()); resetWrite(); }}
+        <input value={address} onChange={e => { setAddress(e.target.value.trim()); resetWrite(); setSimError(null); }}
           placeholder="0x merchant wallet address"
           style={{ flex: 1, fontFamily: "monospace" }}
         />
@@ -291,6 +308,9 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
       {/* Honest status reporting — never a fake "success" before the chain
           actually confirms. Same reasoning as the webhook-test fix: a wrong
           "done" here would be worse than no message at all. */}
+      {simulating && (
+        <div style={{ fontSize: 12, marginTop: 10, color: "var(--text-muted)" }}>Checking transaction...</div>
+      )}
       {isWriting && !isConfirming && (
         <div style={{ fontSize: 12, marginTop: 10, color: "var(--text-muted)" }}>Waiting for wallet confirmation...</div>
       )}
@@ -310,9 +330,9 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
           )}
         </div>
       )}
-      {(writeError || receiptFailed) && (
+      {(writeError || receiptFailed || simError) && (
         <div style={{ fontSize: 12, marginTop: 10, color: "var(--red)" }}>
-          {writeError?.shortMessage || writeError?.message || "Transaction failed or was rejected."}
+          {simError?.message || writeError?.shortMessage || writeError?.message || "Transaction failed or was rejected."}
         </div>
       )}
     </div>
