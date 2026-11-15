@@ -398,6 +398,40 @@ async function processOneSubscription(vault, wallet, id) {
       return { pulled: 0, skipped: 1, expired: 0 };
     }
 
+    // [T45] isContractVault is set once, at creation, and never re-synced.
+    // The vault's own executePull() re-checks _isContract(safeVault) LIVE on
+    // every pull (SV-19) — if this EOA has since taken on contract code (e.g.
+    // an EIP-7702 delegation), the vault will now require the ERC-1271 /
+    // EIP-712 signature path. The keeper cannot produce that signature (see
+    // the isContractVault branch above — not yet built), so blindly sending
+    // executePull(id, 0, "0x") in that state is a guaranteed revert. Left
+    // unchecked, that revert falls into the generic catch block below and
+    // repeats silently, forever, indistinguishable from a transient RPC
+    // error — confirmed via direct source read against SubscriptionVault.sol,
+    // logged 2026-11-08/15. Check live, once, right before attempting the
+    // pull, and fail loud instead of generic-failed if the stored flag is
+    // now stale. eth_getCode is a single-address state read with no range
+    // limit — unlike eth_getLogs (T5/T44), this is not expected to be a
+    // concern on the free public RPC.
+    let liveCode = "0x";
+    try {
+      liveCode = await wallet.provider.getCode(sub.safeVault);
+    } catch (err) {
+      console.warn(`     WARNING: live code check failed for subscription #${id} (${err.message}) — proceeding with stored isContractVault flag only.`);
+    }
+    if (liveCode !== "0x") {
+      console.warn(`     WARNING: Subscription #${id}'s wallet (${sub.safeVault}) now has contract code but was recorded as EOA at creation — likely an EIP-7702 upgrade since subscribing. ERC-1271 signing not implemented in keeper (same gap as the contract-vault branch above). Skipping — this subscription needs manual review, not a routine retry. [T45]`);
+      await logPullAttempt({
+        subscriptionId: id,
+        wallet:   sub.owner,
+        merchant: sub.merchant,
+        amountUsdc: ethers.formatUnits(pullAmount, 6),
+        status:   "skipped_eoa_upgraded",
+        error:    "safeVault now contract-coded (stored isContractVault=false is stale) — ERC-1271 not implemented, needs manual review [T45]",
+      });
+      return { pulled: 0, skipped: 1, expired: 0 };
+    }
+
     const backoffState = notApprovedBackoff.get(id);
     if (backoffState && Date.now() < backoffState.skipUntil) {
       const minsLeft = Math.ceil((backoffState.skipUntil - Date.now()) / 60000);
