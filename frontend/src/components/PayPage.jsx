@@ -931,7 +931,11 @@ export default function PayPage() {
                 <div style={{ display: "flex", justifyContent: "center" }}>
                   <ConnectButton />
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 10 }}>MetaMask · Coinbase Wallet · WalletConnect</div>
+                {/* [FIX Nov 2026] Was "MetaMask · Coinbase Wallet · WalletConnect" —
+                    stale since T51 removed Coinbase Wallet/Base Account from the
+                    actual connector list (main.jsx); this line still advertised it
+                    as an option that no longer exists. See AUTHONCE-BACKLOG.md T51. */}
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 10 }}>MetaMask · Rainbow · WalletConnect</div>
               </div>
             )}
 
