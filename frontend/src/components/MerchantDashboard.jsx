@@ -174,7 +174,7 @@ const NAV_ITEMS = [
 
 function Sidebar({ tab, setTab, onPaymentsClick, activeSubs, totalMRR, products, isApproved, address, approvalBadge }) {
   return (
-    <aside style={{
+    <aside className="md-sidebar" style={{
       width: 220, flexShrink: 0,
       background: "var(--bg-card)", border: "0.5px solid var(--border)",
       borderRadius: 16, padding: "20px 0",
@@ -195,7 +195,7 @@ function Sidebar({ tab, setTab, onPaymentsClick, activeSubs, totalMRR, products,
       </div>
 
       {/* Nav items */}
-      <nav style={{ padding: "10px 10px", flex: 1 }}>
+      <nav className="md-sidebar-nav" style={{ padding: "10px 10px", flex: 1 }}>
         {NAV_ITEMS.map(item => (
           <button
             key={item.id}
@@ -807,7 +807,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
         </div>
 
         {/* Two-column grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+        <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
 
           {/* ── LEFT COLUMN ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -825,7 +825,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             </div>
 
             {/* Price + Interval */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
                 <label style={SECTION_LABEL}>Price ($)</label>
                 <input
@@ -880,7 +880,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
                   <div style={TOGGLE_TRACK(hasIntro)}><div style={TOGGLE_THUMB(hasIntro)} /></div>
                 </div>
                 {hasIntro && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                  <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
                     <div>
                       <label style={SECTION_LABEL}>Intro price ($)</label>
                       <input type="number" placeholder="5.00" value={introAmount} onChange={e => setIntroAmount(e.target.value)} />
@@ -923,7 +923,7 @@ function AddProductModal({ merchantAddress, onClose, onAdded }) {
             {/* Crypto tokens */}
             <div>
               <label style={SECTION_LABEL}>Crypto tokens</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {[
                   { id: "usdc", label: "USDC" },
                   { id: "usdt", label: "USDT" },
@@ -1108,7 +1108,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
             <label style={S.label}>Product name</label>
             <input value={name} onChange={e => setName(e.target.value)} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={S.label}>Price (USDC)</label>
               <input type="number" value={amount} onChange={e => setAmount(e.target.value)} />
@@ -1131,7 +1131,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
               <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Introductory pricing</span>
             </div>
             {hasIntro && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={S.label}>Intro price (USDC)</label>
                   <input type="number" value={introAmount} onChange={e => setIntroAmount(e.target.value)} />
@@ -1164,7 +1164,7 @@ function EditProductModal({ merchantAddress, product, onClose, onSaved }) {
           {/* Crypto tokens */}
           <div>
             <label style={S.label}>Accepted crypto tokens</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
               {[
                 { id: "usdc", label: "⬡ USDC" },
                 { id: "usdt", label: "₮ USDT" },
@@ -2099,7 +2099,7 @@ export default function MerchantDashboard({ address }) {
         </div>
       )}
 
-    <div style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 24px", display: "flex", gap: 24, alignItems: "flex-start" }}>
+    <div className="md-layout" style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 24px", display: "flex", gap: 24, alignItems: "flex-start" }}>
 
       {/* Sidebar */}
       <Sidebar
@@ -2220,7 +2220,7 @@ export default function MerchantDashboard({ address }) {
         )}
 
         {/* Stat cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+        <div className="md-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
           <StatCard label="Active Subscribers" value={activeSubs.length}           sub="on Base Network"           icon="⊙" />
           <StatCard label="MRR"                 value={`$${totalMRR.toFixed(2)}`}  sub="monthly recurring USDC"    icon="◎" />
           <StatCard label="Net Revenue"         value={`$${netRevenue.toFixed(2)}`} sub="after 0.5% protocol fee"  icon="⊟" />
@@ -2229,7 +2229,7 @@ export default function MerchantDashboard({ address }) {
 
         {/* ── Overview ── */}
         {tab === "overview" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="md-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
             {/* [FIX — Aug 2026] Was a duplicate embed of the exact same
                 AnalyticsPanel chart shown on the dedicated Analytics tab —
@@ -2438,8 +2438,8 @@ export default function MerchantDashboard({ address }) {
             ) : subscribers.length === 0 ? (
               <EmptyState message="No subscribers yet" sub="Share your pay link to get your first subscriber." />
             ) : (
-              <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "auto 2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)", alignItems: "center", gap: 10 }}>
+              <div className="md-table-wrap" style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
+                <div className="md-subs-row" style={{ display: "grid", gridTemplateColumns: "auto 2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)", alignItems: "center", gap: 10 }}>
                   <input
                     type="checkbox"
                     checked={subscribers.length > 0 && subscribers.filter(s => (s.status === 0 || s.status === 1) && !pendingOutgoing.some(r => String(r.subscription_id) === String(s.id))).every(s => selectedSubs[s.id])}
@@ -2455,7 +2455,7 @@ export default function MerchantDashboard({ address }) {
                 {subscribers.map((sub, i) => {
                   const pendingReq = pendingOutgoing.find(r => String(r.subscription_id) === String(sub.id));
                   return (
-                  <div key={sub.id} style={{ display: "grid", gridTemplateColumns: "auto 2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < subscribers.length - 1 ? "0.5px solid var(--border)" : "none", gap: 10 }}>
+                  <div key={sub.id} className="md-subs-row" style={{ display: "grid", gridTemplateColumns: "auto 2fr 1fr 1fr 1fr 1fr 1.2fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < subscribers.length - 1 ? "0.5px solid var(--border)" : "none", gap: 10 }}>
                     <input
                       type="checkbox"
                       disabled={!(sub.status === 0 || sub.status === 1) || !!pendingReq}
@@ -2583,12 +2583,12 @@ export default function MerchantDashboard({ address }) {
             ) : filteredPayments.length === 0 ? (
               <EmptyState message="No payments in this date range" sub="Try clearing or widening the date filter." />
             ) : (
-              <div style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)" }}>
+              <div className="md-table-wrap" style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow)" }}>
+                <div className="md-pay-row" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "10px 20px", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "0.5px solid var(--border)", background: "var(--bg-tag)" }}>
                   <span>Date</span><span>Amount</span><span>You Received</span><span>Fee</span><span>Transaction</span>
                 </div>
                 {filteredPayments.map((p, i) => (
-                  <div key={p.payment_id} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < filteredPayments.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                  <div key={p.payment_id} className="md-pay-row" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1.5fr", padding: "14px 20px", fontSize: 13, alignItems: "center", borderBottom: i < filteredPayments.length - 1 ? "0.5px solid var(--border)" : "none" }}>
                     <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{new Date(p.executed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                     <span style={{ color: "var(--text-primary)", fontFamily: "monospace", fontWeight: 600 }}>${p.amount_usdc}</span>
                     <span style={{ color: "var(--green)", fontFamily: "monospace", fontWeight: 600 }}>${p.merchant_received_usdc}</span>

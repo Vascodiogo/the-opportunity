@@ -105,3 +105,54 @@ select option {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
 }
+
+/* ── Merchant Dashboard — mobile layout (B9) ──────────────────────────────
+   MerchantDashboard.jsx had zero @media queries anywhere: a fixed-width
+   sidebar, a hardcoded 4-column stat grid, two fixed-column data tables
+   (Subscribers/Payments), and several nested 2-column form grids inside
+   the product modals. Everything below is scoped to classes added only
+   in that file and only fires at <=640px, so desktop is unaffected.
+   !important is required because these elements set layout via inline
+   `style`, which beats an external class rule regardless of selector
+   specificity unless that rule is !important. */
+@media (max-width: 640px) {
+  .md-layout {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 16px 12px !important;
+  }
+  .md-sidebar {
+    width: 100% !important;
+    position: static !important;
+    padding: 12px 0 !important;
+  }
+  .md-sidebar-nav {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .md-sidebar-nav::-webkit-scrollbar { display: none; }
+  .md-sidebar-nav button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    white-space: nowrap;
+  }
+  .md-stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .md-2col {
+    grid-template-columns: 1fr !important;
+  }
+  .md-table-wrap {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .md-subs-row {
+    min-width: 640px;
+  }
+  .md-pay-row {
+    min-width: 480px;
+  }
+}
