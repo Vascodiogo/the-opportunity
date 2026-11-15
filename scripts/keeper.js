@@ -354,13 +354,51 @@ const notApprovedBackoff = new Map(); // id -> { count: number, skipUntil: numbe
 const NOT_APPROVED_BACKOFF_THRESHOLD = 3;
 const NOT_APPROVED_BACKOFF_MS = 10 * 60 * 1000; // 10 minutes
 
+// [T46] The free public RPC (https://sepolia.base.org, in use since Alchemy's
+// quota ran out -- see T5) rate-limits at 25 req/s and, under load, drops
+// some reads outright instead of a clean error: ethers surfaces this as a
+// "missing revert data" CALL_EXCEPTION even for a plain view-function read
+// that cannot legitimately revert for a valid, existing subscription id.
+// Confirmed via direct log comparison 2026-11-15 that this was already
+// happening before T45's change -- pre-existing, not caused by it.
+//
+// This retries ONLY plain read calls, a few times with a short backoff, so
+// a dropped read becomes a short delay instead of this subscription being
+// skipped for the whole cycle. It deliberately does NOT wrap executePull()
+// itself below -- a revert there can be a real business-logic outcome
+// (e.g. AgentPullExceedsCap, T45) that must never be silently retried.
+function isTransientRpcError(err) {
+  if (!err) return false;
+  const rawCode = err.info?.error?.code ?? err.error?.code;
+  if (rawCode === -32007 || rawCode === -32005) return true; // rate limit / request limit
+  const msg = String(err.shortMessage || err.message || "");
+  if (/request limit reached/i.test(msg)) return true;
+  if (err.code === "CALL_EXCEPTION" && /missing revert data/i.test(msg)) return true;
+  return false;
+}
+async function readWithRetry(fn, id, label, { retries = 3, baseDelayMs = 400 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientRpcError(err) || attempt === retries) throw err;
+      const delay = baseDelayMs * 2 ** attempt + Math.floor(Math.random() * 100);
+      console.warn(`     WARNING: transient RPC error reading ${label}(${id}), retry ${attempt + 1}/${retries} in ${delay}ms — ${err.shortMessage || err.message}`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 async function processOneSubscription(vault, wallet, id) {
-  const sub    = await vault.subscriptions(id);
+  const sub    = await readWithRetry(() => vault.subscriptions(id), id, "subscriptions");
   const status = Number(sub.status);
 
   // ── Active: check if due and pull ──────────────────────────────────────
   if (status === STATUS.Active) {
-    const due = await vault.isDue(id);
+    const due = await readWithRetry(() => vault.isDue(id), id, "isDue");
 
     if (!due) {
       const now = Math.floor(Date.now() / 1000);
@@ -372,9 +410,9 @@ async function processOneSubscription(vault, wallet, id) {
       return { pulled: 0, skipped: 1, expired: 0 };
     }
 
-    const pullAmount     = await vault.nextPullAmount(id);
-    const isIntro        = await vault.inIntroPricing(id);
-    const introPullsLeft = isIntro ? await vault.introPullsRemaining(id) : 0n;
+    const pullAmount     = await readWithRetry(() => vault.nextPullAmount(id), id, "nextPullAmount");
+    const isIntro        = await readWithRetry(() => vault.inIntroPricing(id), id, "inIntroPricing");
+    const introPullsLeft = isIntro ? await readWithRetry(() => vault.introPullsRemaining(id), id, "introPullsRemaining") : 0n;
     const vaultType = sub.isContractVault ? "contract-wallet (ERC-1271)" : "EOA";
 
     console.log(`  -> Pulling subscription #${id}`);
@@ -549,9 +587,9 @@ async function processOneSubscription(vault, wallet, id) {
       }
     }
 
-    const balance   = await vault.vaultBalance(id);
-    const allowance = await vault.vaultAllowance(id);
-    const required  = await vault.nextPullAmount(id);
+    const balance   = await readWithRetry(() => vault.vaultBalance(id), id, "vaultBalance");
+    const allowance = await readWithRetry(() => vault.vaultAllowance(id), id, "vaultAllowance");
+    const required  = await readWithRetry(() => vault.nextPullAmount(id), id, "nextPullAmount");
 
     if (balance >= required && allowance >= required) {
       console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
