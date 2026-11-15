@@ -1,9 +1,14 @@
 // NOTE (Aug 2026 cleanup): this file used to also export a `wagmiConfig`
 // built with wagmi's createConfig(). It was dead code — main.jsx never
-// imported it; the app's actual wagmi config is built there via RainbowKit's
-// getDefaultConfig(). Removed to keep a single source of truth for wagmi
-// config, same class of fix as the merchant-list DB/on-chain mismatch found
-// the same session (see CLAUDE-CORE.md §39).
+// imported it; the app's actual wagmi config is built there instead.
+// Removed to keep a single source of truth for wagmi config, same class of
+// fix as the merchant-list DB/on-chain mismatch found the same session (see
+// CLAUDE-CORE.md §39).
+// [UPDATE Nov 2026] main.jsx's own wagmi config has since moved off
+// RainbowKit's getDefaultConfig() to connectorsForWallets()+createConfig(),
+// specifically to exclude Coinbase Wallet/Base Account (see T51 in
+// AUTHONCE-BACKLOG.md) — this note is kept only for the dead-`wagmiConfig`
+// history above, not a statement about main.jsx's current implementation.
 
 // ─── RPC URLs — used by createPublicClient in components ─────────────────────
 // Alchemy primary, public fallback, Thirdweb tertiary
