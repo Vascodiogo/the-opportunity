@@ -392,13 +392,165 @@ async function readWithRetry(fn, id, label, { retries = 3, baseDelayMs = 400 } =
   throw lastErr;
 }
 
-async function processOneSubscription(vault, wallet, id) {
-  const sub    = await readWithRetry(() => vault.subscriptions(id), id, "subscriptions");
+
+// ─── Multicall3 ───
+// [T47] Multicall3 is deployed at the same address on virtually every EVM
+// chain, including Base Sepolia (https://www.multicall3.com). T46 stopped a
+// single dropped RPC read from silently costing a whole subscription's cycle
+// by retrying it — but T46 itself flagged that the underlying call VOLUME
+// still scales linearly with subscription count (~5 reads per subscription
+// per cycle), so at real growth volume the free RPC's 25 req/s cap gets hit
+// more often, not less, and retries compete for the same scarce capacity.
+// This batches those per-subscription reads into a small, fixed number of
+// RPC round trips per cycle instead of ~5 per subscription.
+//
+// Design: prefetchCycleData() runs up to 3 aggregate3() calls total per
+// cycle covering every subscription id, and caches the results by id.
+// processOneSubscription() below reads from that cache first and only falls
+// back to the original, individually-retried per-call path (readWithRetry
+// against the vault directly) for any field the cache doesn't have — e.g. a
+// single id's result failed to decode, or Multicall3 itself was unreachable.
+// That fallback means a bad/edge-case id degrades only itself, and the
+// worst case (Multicall3 unreachable) behaves exactly as it did before this
+// change — never worse, only better in the common case.
+const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const MULTICALL3_ABI = [
+  {
+    name: "aggregate3",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [{
+      name: "calls", type: "tuple[]",
+      components: [
+        { name: "target",       type: "address" },
+        { name: "allowFailure", type: "bool"    },
+        { name: "callData",     type: "bytes"   },
+      ],
+    }],
+    outputs: [{
+      name: "returnData", type: "tuple[]",
+      components: [
+        { name: "success",    type: "bool"  },
+        { name: "returnData", type: "bytes" },
+      ],
+    }],
+  },
+];
+const MULTICALL_CHUNK_SIZE = 300; // conservative cap on sub-calls per aggregate3 call
+
+// Runs pre-encoded `calls` (each { id, field, target, callData }) through
+// Multicall3 in chunks of MULTICALL_CHUNK_SIZE, with the same transient-RPC
+// retry every other read in this file uses. allowFailure is always true, so
+// one id reverting (e.g. a stale/removed id) never fails the whole batch.
+// Returns an array of { success, returnData } aligned 1:1 with `calls`; a
+// chunk whose multicall call itself fails outright (even after retries)
+// contributes `null` entries for every call in that chunk — callers must
+// treat null the same as success:false and fall back per-id.
+async function multicallBatch(provider, calls) {
+  if (calls.length === 0) return [];
+  const multicall = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL3_ABI, provider);
+  const results = [];
+  for (let i = 0; i < calls.length; i += MULTICALL_CHUNK_SIZE) {
+    const chunk = calls.slice(i, i + MULTICALL_CHUNK_SIZE);
+    try {
+      const chunkCalls = chunk.map(c => ({ target: c.target, allowFailure: true, callData: c.callData }));
+      const raw = await readWithRetry(
+        () => multicall.aggregate3.staticCall(chunkCalls),
+        "multicall",
+        `aggregate3[${chunk.length}]`
+      );
+      for (const r of raw) results.push({ success: r.success, returnData: r.returnData });
+    } catch (err) {
+      console.warn(`     WARNING: Multicall3 batch of ${chunk.length} call(s) failed outright (${err.message}) — falling back to per-id reads for this chunk. [T47]`);
+      for (let j = 0; j < chunk.length; j++) results.push(null);
+    }
+  }
+  return results;
+}
+
+// Fetches subscriptions()+isDue() for every id in one batch, then
+// nextPullAmount()/inIntroPricing() for Active-and-due ids and
+// vaultBalance()/vaultAllowance()/nextPullAmount() for still-in-grace Paused
+// ids in a second batch, then introPullsRemaining() for Active-and-due ids
+// in intro pricing in a third. Returns a Map id -> partial data; any field
+// Multicall3 couldn't decode for a given id is simply left unset, and
+// processOneSubscription() re-fetches that one field itself. [T47]
+async function prefetchCycleData(vault, provider, ids) {
+  const cache = new Map(ids.map(id => [id, {}]));
+  if (ids.length === 0) return cache;
+
+  // ── Phase 1: subscriptions() + isDue() for every id ──
+  const phase1Calls = [];
+  for (const id of ids) {
+    phase1Calls.push({ id, field: "sub", target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("subscriptions", [id]) });
+    phase1Calls.push({ id, field: "due", target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("isDue", [id]) });
+  }
+  const phase1Results = await multicallBatch(provider, phase1Calls);
+  phase1Results.forEach((r, i) => {
+    const { id, field } = phase1Calls[i];
+    if (!r || !r.success) return; // leave unset -> per-id fallback
+    try {
+      if (field === "sub") cache.get(id).sub = vault.interface.decodeFunctionResult("subscriptions", r.returnData);
+      else cache.get(id).due = vault.interface.decodeFunctionResult("isDue", r.returnData)[0];
+    } catch { /* leave unset -> per-id fallback */ }
+  });
+
+  // ── Phase 2: per-status follow-up reads, using Phase 1's results ──
+  const phase2Calls = [];
+  const nowSecs = Math.floor(Date.now() / 1000);
+  for (const id of ids) {
+    const entry = cache.get(id);
+    if (!entry.sub) continue; // Phase 1 failed for this id -> full per-id fallback
+    const status = Number(entry.sub.status);
+    if (status === STATUS.Active && entry.due === true) {
+      phase2Calls.push({ id, field: "pullAmount", target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("nextPullAmount", [id]) });
+      phase2Calls.push({ id, field: "isIntro",    target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("inIntroPricing", [id]) });
+    } else if (status === STATUS.Paused) {
+      const pausedAt       = Number(entry.sub.pausedAt);
+      const gracePeriodEnd = pausedAt + Number(entry.sub.gracePeriodDays) * 86_400;
+      if (pausedAt > 0 && nowSecs <= gracePeriodEnd) {
+        phase2Calls.push({ id, field: "balance",   target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("vaultBalance", [id]) });
+        phase2Calls.push({ id, field: "allowance", target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("vaultAllowance", [id]) });
+        phase2Calls.push({ id, field: "required",  target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("nextPullAmount", [id]) });
+      }
+    }
+  }
+  const phase2Results = await multicallBatch(provider, phase2Calls);
+  const PHASE2_FN_NAME = { pullAmount: "nextPullAmount", isIntro: "inIntroPricing", balance: "vaultBalance", allowance: "vaultAllowance", required: "nextPullAmount" };
+  phase2Results.forEach((r, i) => {
+    const { id, field } = phase2Calls[i];
+    if (!r || !r.success) return;
+    try {
+      cache.get(id)[field] = vault.interface.decodeFunctionResult(PHASE2_FN_NAME[field], r.returnData)[0];
+    } catch { /* leave unset -> per-id fallback */ }
+  });
+
+  // ── Phase 3: introPullsRemaining() for Active-and-due ids in intro pricing ─
+  const phase3Calls = [];
+  for (const id of ids) {
+    if (cache.get(id).isIntro === true) {
+      phase3Calls.push({ id, field: "introPullsLeft", target: VAULT_ADDRESS, callData: vault.interface.encodeFunctionData("introPullsRemaining", [id]) });
+    }
+  }
+  const phase3Results = await multicallBatch(provider, phase3Calls);
+  phase3Results.forEach((r, i) => {
+    const { id } = phase3Calls[i];
+    if (!r || !r.success) return;
+    try {
+      cache.get(id).introPullsLeft = vault.interface.decodeFunctionResult("introPullsRemaining", r.returnData)[0];
+    } catch { /* leave unset -> per-id fallback */ }
+  });
+
+  return cache;
+}
+
+async function processOneSubscription(vault, wallet, id, prefetched = {}) {
+  const sub    = prefetched.sub ?? await readWithRetry(() => vault.subscriptions(id), id, "subscriptions");
   const status = Number(sub.status);
 
   // ── Active: check if due and pull ──────────────────────────────────────
   if (status === STATUS.Active) {
-    const due = await readWithRetry(() => vault.isDue(id), id, "isDue");
+    const due = prefetched.due ?? await readWithRetry(() => vault.isDue(id), id, "isDue");
 
     if (!due) {
       const now = Math.floor(Date.now() / 1000);
@@ -410,9 +562,9 @@ async function processOneSubscription(vault, wallet, id) {
       return { pulled: 0, skipped: 1, expired: 0 };
     }
 
-    const pullAmount     = await readWithRetry(() => vault.nextPullAmount(id), id, "nextPullAmount");
-    const isIntro        = await readWithRetry(() => vault.inIntroPricing(id), id, "inIntroPricing");
-    const introPullsLeft = isIntro ? await readWithRetry(() => vault.introPullsRemaining(id), id, "introPullsRemaining") : 0n;
+    const pullAmount     = prefetched.pullAmount ?? await readWithRetry(() => vault.nextPullAmount(id), id, "nextPullAmount");
+    const isIntro        = prefetched.isIntro ?? await readWithRetry(() => vault.inIntroPricing(id), id, "inIntroPricing");
+    const introPullsLeft = isIntro ? (prefetched.introPullsLeft ?? await readWithRetry(() => vault.introPullsRemaining(id), id, "introPullsRemaining")) : 0n;
     const vaultType = sub.isContractVault ? "contract-wallet (ERC-1271)" : "EOA";
 
     console.log(`  -> Pulling subscription #${id}`);
@@ -587,9 +739,9 @@ async function processOneSubscription(vault, wallet, id) {
       }
     }
 
-    const balance   = await readWithRetry(() => vault.vaultBalance(id), id, "vaultBalance");
-    const allowance = await readWithRetry(() => vault.vaultAllowance(id), id, "vaultAllowance");
-    const required  = await readWithRetry(() => vault.nextPullAmount(id), id, "nextPullAmount");
+    const balance   = prefetched.balance ?? await readWithRetry(() => vault.vaultBalance(id), id, "vaultBalance");
+    const allowance = prefetched.allowance ?? await readWithRetry(() => vault.vaultAllowance(id), id, "vaultAllowance");
+    const required  = prefetched.required ?? await readWithRetry(() => vault.nextPullAmount(id), id, "nextPullAmount");
 
     if (balance >= required && allowance >= required) {
       console.log(`  -> Subscription #${id} vault funded during grace — awaiting subscriber resume.`);
@@ -609,10 +761,15 @@ async function processOneSubscription(vault, wallet, id) {
   return { pulled: 0, skipped: 0, expired: 0 };
 }
 
-async function processDueSubscriptions(vault, wallet, ids) {
+async function processDueSubscriptions(vault, wallet, provider, ids) {
   let pulled  = 0;
   let skipped = 0;
   let expired = 0;
+
+  // [T47] One prefetch pass per cycle, covering every id, instead of each
+  // id making its own ~5 individual RPC reads. See prefetchCycleData's own
+  // comment above for the batching design and fallback behavior.
+  const cache = await prefetchCycleData(vault, provider, ids);
 
   // Process in batches of CONCURRENCY, parallel within each batch.
   // Sequential pulls were the bottleneck — each await blocked on RPC
@@ -624,7 +781,7 @@ async function processDueSubscriptions(vault, wallet, ids) {
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
     const batch = ids.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
-      batch.map(id => processOneSubscription(vault, wallet, id).catch(err => {
+      batch.map(id => processOneSubscription(vault, wallet, id, cache.get(id) || {}).catch(err => {
         console.error(`  Subscription #${id} processing error: ${err.message}`);
         return { pulled: 0, skipped: 0, expired: 0 };
       }))
@@ -771,7 +928,7 @@ async function run() {
         console.log("  Nothing to do.");
         console.log("");
       } else {
-        ({ pulled, skipped, expired } = await processDueSubscriptions(vault, wallet, ids));
+        ({ pulled, skipped, expired } = await processDueSubscriptions(vault, wallet, provider, ids));
         console.log(`  Done: ${pulled} pulled, ${expired} expired, ${skipped} not due / skipped.`);
       }
     } catch (err) {
