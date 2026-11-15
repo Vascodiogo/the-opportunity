@@ -5,7 +5,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { useWriteContract, useSignMessage, useChainId, useSwitchChain } from "wagmi";
+import { useAccount, useWriteContract, useSignMessage, useChainId, useSwitchChain } from "wagmi";
 import { QRCodeSVG } from "qrcode.react";
 import { createPublicClient, http, fallback } from "viem";
 import { baseSepolia } from "wagmi/chains";
@@ -1849,6 +1849,17 @@ export default function MerchantDashboard({ address }) {
   // scripts/api.js (requireMerchantAuth now requires a JWT, not a
   // self-reported header). See frontend/src/lib/merchantAuth.js.
   const { signMessageAsync } = useSignMessage();
+  // [MOBILE FIX Nov 2026] accountStatus (not just `address`, which wagmi's
+  // reconnectOnMount can populate from localStorage synchronously before the
+  // connector's async handshake finishes) gates every call into
+  // signMessageAsync below. Same race already root-caused and fixed for
+  // MySubscriptions.jsx (see T29 / AUTHONCE-BACKLOG.md) — this component
+  // never got the same guard. During that window the connector object is a
+  // partial placeholder missing methods like getChainId(), so firing a
+  // signature request too early throws "connector.getChainId is not a
+  // function" straight into the merchant-auth error banner below. Found via
+  // a real phone screenshot, see AUTHONCE-BACKLOG.md T50.
+  const { status: accountStatus } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   // [MOBILE FIX Aug 2026] True whenever a wallet is connected but not on
@@ -1864,7 +1875,7 @@ export default function MerchantDashboard({ address }) {
   const [merchantAuthLoading, setMerchantAuthLoading] = useState(false);
 
   const attemptMerchantLogin = useCallback(async () => {
-    if (!address || isWrongNetwork) return;
+    if (!address || isWrongNetwork || accountStatus !== "connected") return;
     setMerchantAuthLoading(true);
     setMerchantAuthError(null);
     const result = await merchantLogin(`${API_BASE}/api/merchant/login`, address, signMessageAsync);
@@ -1875,10 +1886,10 @@ export default function MerchantDashboard({ address }) {
       setMerchantAuthReady(false);
       setMerchantAuthError(result.error);
     }
-  }, [address, signMessageAsync, isWrongNetwork]);
+  }, [address, signMessageAsync, isWrongNetwork, accountStatus]);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address || accountStatus !== "connected") return;
     const tokenWallet = getMerchantWalletFromToken();
     if (tokenWallet && tokenWallet.toLowerCase() === address.toLowerCase()) {
       // Existing session in this tab already matches the connected wallet —
@@ -1893,7 +1904,7 @@ export default function MerchantDashboard({ address }) {
     clearMerchantToken();
     setMerchantAuthReady(false);
     attemptMerchantLogin();
-  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [address, accountStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On-chain approval
   useEffect(() => {
