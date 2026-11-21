@@ -197,6 +197,7 @@ function SubscriptionCard({ sub, token, onCancelled }) {
       const hash = await simulateAndWrite(publicClient, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI,
         functionName: "cancelSubscription",
+        account: address,
         args: [BigInt(sub.subscription_id)],
       });
       setCancelTxHash(hash);
