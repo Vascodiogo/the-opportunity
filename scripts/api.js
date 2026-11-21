@@ -2093,10 +2093,22 @@ app.get("/api/subscriber/subscriptions/:walletAddress", async (req, res) => {
       LEFT JOIN products p ON LOWER(p.merchant_address) = LOWER(s.merchant_address)
                             AND p.amount::numeric = (s.amount::numeric / 1000000)
                             AND p.active = TRUE
-      WHERE LOWER(s.owner_address) = $1
+      WHERE (
+         LOWER(s.owner_address) = $1
          OR LOWER(s.safe_vault)    = $1
+      )
+      -- [T56 fix, 2026-11-21] Previously unscoped by vault_address — same
+      -- stale-id-across-redeployments risk as T38 (scripts/db.js
+      -- getSubscriptionsByMerchant, ~line 780) and keeper.js's due-scan
+      -- query (~line 275), just never applied to this subscriber-facing
+      -- endpoint. Confirmed live: MySubscriptions.jsx's Cancel button sent
+      -- a subscription_id that collided with a row from a superseded vault
+      -- deployment, so the current vault's cancelSubscription() genuinely
+      -- reverted NotAuthorised for a subscription the wallet does own on
+      -- the live vault. Scoping to the currently configured vault fixes it.
+      AND LOWER(s.vault_address) = LOWER($2)
       ORDER BY s.created_at DESC
-    `, [wallet]);
+    `, [wallet, process.env.VAULT_ADDRESS]);
 
     res.json({
       wallet_address: wallet,
