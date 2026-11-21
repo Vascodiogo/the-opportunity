@@ -614,6 +614,7 @@ function PriceChangeModal({ product, address, onClose }) {
         await simulateAndWrite(client, writeContractAsync, {
           address: VAULT_ADDRESS, abi: VAULT_ABI,
           functionName: "setProductExpiry",
+          account: address,
           args: [BigInt(subscriptions[i]), BigInt(expiresAt)],
         });
         setProgress({ done: i + 1, total: subscriptions.length });
@@ -1314,6 +1315,12 @@ function WebhookModal({ merchantAddress, merchantAuthReady, onClose, onSaved }) 
 // PriceChangeModal above, rather than making the merchant open this modal
 // N separate times.
 function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContractAsync }) {
+  // [T57-pattern fix] proposeMerchantChange()'s onchain modifier requires
+  // msg.sender == the CURRENT merchant address — simulateAndWrite's
+  // eth_call needs that as an explicit `account`, same bug class as T57
+  // (MySubscriptions.jsx's Cancel button). This modal had no address of
+  // its own in scope at all (no prop, no hook) before this fix.
+  const { address } = useAccount();
   const [newMerchant, setNewMerchant] = useState("");
   const [saving, setSaving]           = useState(false);
   const [progress, setProgress]       = useState(null);
@@ -1349,6 +1356,7 @@ function ChangePayoutWalletModal({ subscriptionIds, onClose, onSaved, writeContr
         await simulateAndWrite(client, writeContractAsync, {
           address: VAULT_ADDRESS, abi: VAULT_ABI,
           functionName: "proposeMerchantChange",
+          account: address,
           args: [BigInt(idsSnapshot[i]), newMerchant.trim()],
         });
         setProgress({ done: i + 1, total: count });
@@ -2155,6 +2163,7 @@ export default function MerchantDashboard({ address }) {
                         await simulateAndWrite(client, writeContractAsync, {
                           address: VAULT_ADDRESS, abi: VAULT_ABI,
                           functionName: "acceptMerchantChange",
+                          account: address,
                           args: [BigInt(req.subscription_id)],
                         });
                       } catch (err) {
@@ -2205,6 +2214,7 @@ export default function MerchantDashboard({ address }) {
                       await simulateAndWrite(client, writeContractAsync, {
                         address: VAULT_ADDRESS, abi: VAULT_ABI,
                         functionName: "acceptMerchantChange",
+                        account: address,
                         args: [BigInt(req.subscription_id)],
                       });
                       // [FIX — Aug 2026] Same bug class as the Accept All
@@ -2519,7 +2529,7 @@ export default function MerchantDashboard({ address }) {
                             onClick={async () => {
                               try {
                                 // [T9] Simulated first so a real revert decodes to its actual reason.
-                                await simulateAndWrite(client, writeContractAsync, { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "cancelMerchantChange", args: [BigInt(sub.id)] });
+                                await simulateAndWrite(client, writeContractAsync, { address: VAULT_ADDRESS, abi: VAULT_ABI, functionName: "cancelMerchantChange", account: address, args: [BigInt(sub.id)] });
                                 reloadPendingChangesSoon(); // give notifier.js time to index the event
                               } catch (err) { alert(`Could not cancel: ${err.shortMessage || err.message}`); }
                             }}

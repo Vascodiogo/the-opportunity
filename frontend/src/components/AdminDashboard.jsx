@@ -243,6 +243,7 @@ function ManualApprove({ token, onRefresh, registryAddress, basescanBase }) {
         address: registryAddress,
         abi: REGISTRY_ABI,
         functionName,
+        account: connectedAddress,
         args: [address],
       });
     } catch (err) {

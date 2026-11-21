@@ -147,6 +147,7 @@ function CreateSubModal({ address, onClose, onCreated }) {
       const hash = await simulateAndWrite(client, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI,
         functionName: "createSubscription",
+        account: address,
         args: [merchant, address, amountRaw, Number(interval), guardianAddr],
       });
       setStatus(`✅ Transaction sent! Hash: ${hash.slice(0, 10)}...`);
@@ -257,7 +258,7 @@ export default function Dashboard({ address }) {
       // above.
       await simulateAndWrite(client, writeContractAsync, {
         address: VAULT_ADDRESS, abi: VAULT_ABI,
-        functionName: "cancelSubscription", args: [BigInt(id)],
+        functionName: "cancelSubscription", account: address, args: [BigInt(id)],
       });
       setTimeout(fetchData, 3000);
     } catch (err) {
