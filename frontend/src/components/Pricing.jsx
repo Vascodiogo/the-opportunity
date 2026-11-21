@@ -40,7 +40,7 @@ const TIERS = [
         "Configurable grace period (1–30 days)",
         "Branded email notifications",
         "3-day pre-payment subscriber alerts",
-        "Embeddable subscribe widget",
+        "Embeddable subscribe widget ✦",
         "QR code physical access control ✦",
         "Priority support",
       ],
@@ -244,7 +244,7 @@ export default function Pricing({ isDark = false, onToggleTheme, onLaunchApp }) 
 
         {/* ✦ footnote */}
         <p style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 20, fontWeight: 300, fontStyle: "italic" }}>
-          {"✦ Launching at mainnet — September 2026."}
+          {"✦ Planned for mainnet launch. No date set yet."}
         </p>
 
         {/* Enterprise row */}

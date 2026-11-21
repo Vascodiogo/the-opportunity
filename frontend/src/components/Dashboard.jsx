@@ -124,91 +124,20 @@ function EmptyState({ message, sub }) {
   );
 }
 
-// ─── Create Subscription Modal ────────────────────────────────────────────────
-function CreateSubModal({ address, onClose, onCreated }) {
-  const [merchant, setMerchant] = useState("");
-  const [amount, setAmount]     = useState("");
-  const [interval, setInterval] = useState("1");
-  const [guardian, setGuardian] = useState("");
-  const [status, setStatus]     = useState("");
-  const { writeContractAsync }  = useWriteContract();
-
-  const handleCreate = async () => {
-    if (!merchant || !amount) return;
-    setStatus("Sending transaction...");
-    try {
-      const amountRaw    = BigInt(Math.round(parseFloat(amount) * 1_000_000));
-      const guardianAddr = guardian || "0x0000000000000000000000000000000000000000";
-      // [T9] Simulated first so a real revert (e.g. MerchantNotApproved)
-      // decodes to its actual reason instead of a misleading gas-estimation
-      // error. Same pattern already shipped in PayPage.jsx and
-      // MySubscriptions.jsx; reuses this file's own module-level `client`
-      // (already used for reads above) as the public client.
-      const hash = await simulateAndWrite(client, writeContractAsync, {
-        address: VAULT_ADDRESS, abi: VAULT_ABI,
-        functionName: "createSubscription",
-        account: address,
-        args: [merchant, address, amountRaw, Number(interval), guardianAddr],
-      });
-      setStatus(`✅ Transaction sent! Hash: ${hash.slice(0, 10)}...`);
-      setTimeout(() => { onCreated(); onClose(); }, 2000);
-    } catch (err) {
-      setStatus(`❌ ${err.shortMessage || err.message}`);
-    }
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
-      <div style={{ background: "var(--bg-modal)", border: "0.5px solid var(--border-input)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>New Subscription</h2>
-          <button onClick={onClose} style={S.btn.ghost}>✕</button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <label style={S.label}>Merchant address</label>
-            <input placeholder="0x..." value={merchant} onChange={e => setMerchant(e.target.value)} />
-          </div>
-          <div>
-            <label style={S.label}>Amount (USDC)</label>
-            <input type="number" placeholder="15.00" value={amount} onChange={e => setAmount(e.target.value)} />
-          </div>
-          <div>
-            <label style={S.label}>Billing interval</label>
-            <select value={interval} onChange={e => setInterval(e.target.value)}>
-              <option value="0">Weekly</option>
-              <option value="1">Monthly</option>
-              <option value="2">Yearly</option>
-            </select>
-          </div>
-          <div>
-            <label style={S.label}>Guardian address (optional)</label>
-            <input placeholder="0x... or leave blank" value={guardian} onChange={e => setGuardian(e.target.value)} />
-          </div>
-          {status && (
-            <div style={{
-              fontSize: 12, padding: "8px 12px", borderRadius: 8,
-              background: "var(--bg-tag)",
-              color: status.startsWith("✅") ? "var(--green)" : status.startsWith("❌") ? "var(--red)" : "var(--text-secondary)",
-            }}>
-              {status}
-            </div>
-          )}
-          <button onClick={handleCreate} style={{ ...S.btn.primary, padding: "11px", fontSize: 14, marginTop: 4 }}>
-            Create Subscription
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Dashboard ────────────────────────────────────────────────────────────────
+// [T58-follow-up] CreateSubModal removed entirely, not fixed — it called
+// createSubscription with 5 args against the real, current 11-arg
+// contract/ABI signature (confirmed via a live viem encodeFunctionData
+// dry-run: "Expected length (params): 11, Given length (values): 5").
+// This was a dev/test form, broken independently of and in addition to
+// T58's account-field fix. Same disposition as T43's AdminPanel removal:
+// dead/broken admin-adjacent UI removed rather than rebuilt, since nothing
+// in this app's real subscriber flow depends on it (real subscriptions are
+// created via PayPage.jsx, which already passes the correct 11 args).
 export default function Dashboard({ address }) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [vaultUSDC, setVaultUSDC]         = useState(0n);
   const [loading, setLoading]             = useState(false);
-  const [showCreate, setShowCreate]       = useState(false);
   const [cancellingId, setCancellingId]   = useState(null);
   const { writeContractAsync }            = useWriteContract();
 
@@ -296,9 +225,6 @@ export default function Dashboard({ address }) {
           <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
             My Subscriptions · {subscriptions.length}
           </span>
-          <button onClick={() => setShowCreate(true)} style={{ ...S.btn.primary, padding: "7px 16px" }}>
-            + New
-          </button>
         </div>
 
         {loading ? (
@@ -353,15 +279,6 @@ export default function Dashboard({ address }) {
           </>
         )}
       </div>
-
-      {/* Modal */}
-      {showCreate && (
-        <CreateSubModal
-          address={address}
-          onClose={() => setShowCreate(false)}
-          onCreated={fetchData}
-        />
-      )}
     </div>
   );
 }
