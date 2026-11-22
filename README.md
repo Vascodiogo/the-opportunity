@@ -1,7 +1,7 @@
 # AuthOnce Protocol
 [![Base Network](https://img.shields.io/badge/Base-Network-0052FF?style=flat&logo=coinbase&logoColor=white)](https://base.org)
 [![License](https://img.shields.io/badge/License-BUSL--1.1-orange?style=flat)](#license)
-[![Mainnet](https://img.shields.io/badge/Mainnet-Q3%202026-3d399?style=flat)](#)
+[![Mainnet](https://img.shields.io/badge/Mainnet-No%20date%20set-3d399?style=flat)](#)
 [![Testnet](https://img.shields.io/badge/Testnet-Live%20on%20Base%20Sepolia-blue?style=flat)](#)
 
 **Non-custodial recurring payments on Base. Authorize once. Pay forever.**
@@ -65,8 +65,8 @@ frontend/                 — React + Vite merchant and subscriber portal.
 
 | Contract          | Address                                      |
 | ----------------- | -------------------------------------------- |
-| SubscriptionVault | `[deploy pending — Q3 2026]`                 |
-| MerchantRegistry  | `[deploy pending — Q3 2026]`                 |
+| SubscriptionVault | `[deploy pending — no date set]`             |
+| MerchantRegistry  | `[deploy pending — no date set]`             |
 | USDC              | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Protocol Treasury | `0x737D4EeAEF67f776724482a29367615703A2DEB1` |
 
