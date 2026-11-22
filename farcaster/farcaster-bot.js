@@ -155,11 +155,11 @@ Small thing. Big security difference.
   // 5 [builder]
   `AuthOnce update:
 
-✅ Smart contracts audited and redeployed
+✅ Non-custodial subscriptions live on Base Sepolia
 ✅ 3 stablecoins: USDC · USDT · EURC
-✅ Stripe fiat onramp live
-✅ Keeper bot running 24/7 on Base Sepolia
-⏳ Mainnet: Q3 2026
+✅ Keeper bot running 24/7, zero manual intervention
+⏳ Security audit — not started, no funding secured yet
+⏳ Mainnet — no date set
 
 What should I prioritise next?
 

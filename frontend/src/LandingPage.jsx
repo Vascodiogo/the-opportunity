@@ -809,7 +809,7 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
             <div style={{ display: "flex", gap: 32, justifyContent: "center", flexWrap: "wrap", marginBottom: 8 }}>
               {[
                 { val: "Live", label: "on Base Sepolia testnet" },
-                { val: "Sep 2026", label: "targeted mainnet launch" },
+                { val: "Mainnet", label: "no date set yet" },
                 { val: "Verified", label: "contracts on Basescan", href: `https://sepolia.basescan.org/address/${VAULT_ADDRESS}` },
               ].map(({ val, label, href }, i, arr) => {
                 const content = (

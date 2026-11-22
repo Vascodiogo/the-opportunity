@@ -71,11 +71,10 @@ authonce.io
 
 ✅ Smart contracts live on @base Sepolia
 ✅ Keeper bot running 24/7
-✅ Stripe fiat onramp live
 ✅ USDC · USDT · EURC supported
-✅ Google OAuth subscriber portal
-⏳ Smart contract audit — in progress
-⏳ Mainnet — Q3 2026
+✅ Wallet-based subscriber portal
+⏳ Smart contract audit — not started, no funding secured yet
+⏳ Mainnet — no date set
 
 Solo founder. Moving fast.
 

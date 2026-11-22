@@ -149,7 +149,7 @@ export default function Pricing({ isDark = false, onToggleTheme, onLaunchApp }) 
           {"Start free. Scale as you grow. Subscribers always pay exactly the price you set — we never add fees on top."}
         </p>
         <p style={{ fontSize: 13, color: muted, margin: "0 auto", fontStyle: "italic", fontWeight: 300 }}>
-          {"Full feature availability at mainnet — September 2026."}
+          {"Full feature availability at mainnet. No date set yet."}
         </p>
       </section>
 
