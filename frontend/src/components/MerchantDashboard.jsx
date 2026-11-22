@@ -567,7 +567,8 @@ function PriceChangeModal({ product, address, onClose }) {
   const [errorMsg, setErrorMsg]           = useState("");
   const { writeContractAsync }            = useWriteContract();
 
-  const expiresAt  = Math.floor(Date.now() / 1000) + Math.max(parseInt(noticeDays) || 30, 30) * 86400;
+  const NOTICE_SAFETY_BUFFER_SECONDS = 3600; // 1h slack for signing/confirmation latency between computing expiresAt and the tx actually being mined — without it, entering exactly the stated minimum (30) can revert InsufficientNotice depending on how long signing takes (T60)
+  const expiresAt  = Math.floor(Date.now() / 1000) + Math.max(parseInt(noticeDays) || 30, 30) * 86400 + NOTICE_SAFETY_BUFFER_SECONDS;
   const expiryDate = new Date(expiresAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
   useEffect(() => {
