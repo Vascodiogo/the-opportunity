@@ -57,7 +57,7 @@ frontend/                 — React + Vite merchant and subscriber portal.
 
 | Contract          | Address                                      |
 | ----------------- | -------------------------------------------- |
-| SubscriptionVault | `0xd6377Fa4809C4b745F5F1801193e5a90cD4AAE26` |
+| SubscriptionVault | `0xDd41E5C83d000ff63d3e9E8cBBD79609b7029d3C` |
 | MerchantRegistry  | `0x393BA721aB45f4d4DaAC1B914e7F6377508C0299` |
 | USDC (test)       | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 
