@@ -1430,7 +1430,7 @@ const res = await fetch(
               items: [
                 { done: false, active: true,  label: "Security audit", detail: "5 proposals received · Seeking audit grant funding" },
                 { done: false, active: true,  label: "Partnership outreach", detail: "Web3 SaaS platforms · DAO tooling · Analytics providers" },
-                { done: false, active: false, label: "WooCommerce + PrestaShop plugins", detail: "Planned post-audit" },
+                { done: false, active: true,  label: "WooCommerce plugin", detail: "Built & activation-tested on WordPress — checkout flow not yet verified" },
                 { done: false, active: false, label: "Keeper bot v2 — parallel scaling", detail: "25 parallel EOAs · Gelato/Chainlink beyond 50 merchants" },
                 { done: false, active: false, label: "Base Mainnet launch — date not yet set", detail: "Audit-gated · 10 founding spots" },
               ],
