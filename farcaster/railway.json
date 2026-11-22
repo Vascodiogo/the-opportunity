@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node farcaster-bot.js",
-    "restartPolicyType": "ALWAYS"
+    "startCommand": "node -e \"console.log('farcaster-bot paused by Vasco 2026-11-22 — see B17/AUTHONCE-BACKLOG.md'); process.exit(0)\"",
+    "restartPolicyType": "NEVER"
   }
 }
