@@ -1066,61 +1066,6 @@ export default function LandingPage({ onLaunchApp, isDark, onToggleTheme }) {
             ))}
           </div>
         </div>
-        <p style={{ textAlign: "center", color: muted, fontSize: 13, marginTop: 20, fontStyle: "italic", fontWeight: 300 }}>
-          {"Founding merchants are approved personally by the AuthOnce team within 48 hours."}
-        </p>
-      </section>
-
-      {/* ── Founding Offer ── */}
-      <section className="ao-section" style={{ maxWidth: 960, margin: "0 auto", padding: "0 40px 80px" }}>
-        <div className="ao-founding-grid" style={{
-          background: isDark ? "rgba(251,191,36,0.06)" : "rgba(251,191,36,0.04)",
-          border: "0.5px solid rgba(251,191,36,0.25)",
-          borderRadius: 24, padding: "52px",
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "center",
-        }}>
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 700, color: amber, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {"Founding merchant offer"}
-            </p>
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: text, margin: "0 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              {"First 10 merchants pay zero fees for 3 months. First 5 get Growth tier free for 12 months."}
-            </h2>
-            <p style={{ color: muted, fontSize: 15, lineHeight: 1.7, margin: "0 0 28px", fontWeight: 300 }}>
-              {"Standard protocol fee is 0.5% per transaction. No monthly fee. No setup fee. No contract. Founding merchants get 0% for their first 3 months plus Growth tier free for 12 months."}
-            </p>
-            <div style={{ display: "flex", gap: 32 }}>
-              {[
-                { v: "0%",  l: "Fees · 3 months" },
-                { v: "10",  l: "Spots total" },
-                { v: "48h", l: "Review time" },
-              ].map((s, i) => (
-                <div key={i}>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: amber, fontFamily: "'DM Mono', monospace" }}>{s.v}</div>
-                  <div style={{ fontSize: 11, color: muted, marginTop: 3 }}>{s.l}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 14, padding: 28 }}>
-            {[
-              { label: "Months 1–3",        value: "0%",                               color: amber  },
-              { label: "Month 4+",           value: "0.5%",                             color: muted  },
-              { label: "Monthly fee",      value: "None", color: accent },
-              { label: "Setup fee",           value: "None", color: accent },
-              { label: "Contract",         value: "None",  color: accent },
-              { label: "Growth (12 months)", value: "Free",  color: amber  },
-            ].map((row, i) => (
-              <div key={i} style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "11px 0", borderBottom: i < 5 ? `0.5px solid ${border}` : "none",
-              }}>
-                <span style={{ fontSize: 13, color: muted }}>{row.label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: row.color, fontFamily: "'DM Mono', monospace" }}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* ── Product Creator ── */}
