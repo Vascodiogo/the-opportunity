@@ -1293,7 +1293,7 @@ const res = await fetch(
         </div>
       </section>
 
-      {/* ── Founding Merchants + Apply Form (merged) ── */}
+      {/* ── Apply Form ── */}
       <section id="apply" style={{
         borderTop: `0.5px solid ${isDark ? "rgba(52,211,153,0.1)" : "rgba(52,211,153,0.15)"}`,
         padding: "80px 40px",
@@ -1303,100 +1303,18 @@ const res = await fetch(
 
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-              border: `0.5px solid rgba(52,211,153,0.4)`,
-              borderRadius: 99, padding: "6px 18px", marginBottom: 16,
-              fontSize: 12, fontWeight: 600, color: isDark ? accent : "#0d9963",
-            }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: accent, display: "inline-block", animation: "pulse-dot 2s infinite" }}/>
-              {"First 10 get 0% fees for 3 months · First 5 get Growth free for 12 months"}
-            </div>
             <p style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
-              {"Founding Merchants"}
+              {"Get started"}
             </p>
             <h2 style={{ fontSize: 36, fontWeight: 800, color: text, letterSpacing: "-0.03em", marginBottom: 14, lineHeight: 1.2 }}>
-              {"Be one of the first 10 merchants on AuthOnce."}
+              {"Apply to become a merchant."}
             </h2>
-            <p style={{ fontSize: 15, color: muted, lineHeight: 1.7, margin: 0, fontWeight: 300 }}>
-              {"Founding merchants get Growth tier free for 12 months (€49/month value), direct access to the founder, and input on the product roadmap."}
-            </p>
-          </div>
-
-          {/* First 5 spotlight */}
-          <div style={{
-            background: isDark ? "rgba(52,211,153,0.07)" : "rgba(52,211,153,0.08)",
-            border: `1.5px solid rgba(52,211,153,0.35)`,
-            borderRadius: 16, padding: "20px 24px", marginBottom: 14,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <span style={{
-                fontSize: 10, fontWeight: 700, color: "#34d399",
-                background: "rgba(52,211,153,0.15)", border: "0.5px solid rgba(52,211,153,0.4)",
-                borderRadius: 99, padding: "3px 10px", letterSpacing: "0.08em", textTransform: "uppercase",
-              }}>
-                {"First 5 merchants only"}
-              </span>
-              <span style={{ fontSize: 12, color: isDark ? "#34d399" : "#0f6e56", fontWeight: 600 }}>
-                {"Most exclusive tier"}
-              </span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[
-                { icon: "🎁", title: "Growth tier free for 12 months", sub: "€49/month value" },
-                { icon: "✉️", title: "Direct founder access", sub: "WhatsApp / email line" },
-                { icon: "🗺️", title: "Roadmap input", sub: "Shape the product" },
-                { icon: "🏅", title: "Founding merchant badge", sub: "Permanent recognition" },
-              ].map(({ icon, title, sub }) => (
-                <div key={title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: text, margin: "0 0 2px" }}>{title}</p>
-                    <p style={{ fontSize: 11, color: muted, margin: 0 }}>{sub}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Next 5 */}
-          <div style={{
-            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
-            border: `0.5px solid ${border}`,
-            borderRadius: 16, padding: "14px 24px", marginBottom: 32,
-            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{
-                fontSize: 10, fontWeight: 700, color: muted,
-                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
-                borderRadius: 99, padding: "3px 10px", letterSpacing: "0.08em", textTransform: "uppercase",
-              }}>
-                {"Merchants 6–10"}
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              {[
-                { icon: "💸", text: "0% fees for 3 months" },
-                { icon: "✉️", text: "Direct founder access" },
-                { icon: "🏅", text: "Founding badge" },
-              ].map(({ icon, text: t }) => (
-                <span key={t} style={{ fontSize: 12, color: muted, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ fontSize: 13 }}>{icon}</span> {t}
-                </span>
-              ))}
-            </div>
           </div>
 
           {/* Form */}
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 20, padding: 36 }}>
             <ApplyForm isDark={isDark} />
           </div>
-
-          <p style={{ fontSize: 12, color: isDark ? "#64748b" : "#6b7280", textAlign: "center", marginTop: 20 }}>
-            {"10 spots available · Mainnet launch date not yet set"}
-          </p>
         </div>
       </section>
 
